@@ -9,7 +9,10 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "db:provision": "tsx scripts/sqlite/provision.ts",
-    "db:seed": "tsx scripts/sqlite/seed.ts"
+    "db:seed": "tsx scripts/sqlite/seed.ts",
+    "db:clear": "tsx scripts/sqlite/clear.ts",
+    "db:migrate": "tsx scripts/sqlite/migrate.ts",
+    "db:reset": "tsx scripts/sqlite/reset.ts"
   },
   "dependencies": {
     "@azure/cosmos": "^4.8.0",

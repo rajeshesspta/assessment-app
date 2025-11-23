@@ -2,7 +2,7 @@ import type { Tenant } from '../../common/types.js';
 import type { SQLiteTenantClient } from '../../infrastructure/sqlite/client.js';
 import type { TenantRepository } from './tenant.repository.js';
 
-const DIRECTORY_ID = '__tenant_directory__';
+export const TENANT_DIRECTORY_ID = '__tenant_directory__';
 
 interface TenantRow {
   id: string;
@@ -34,7 +34,7 @@ function mapRow(row: TenantRow): Tenant {
   };
 }
 
-export function createSQLiteTenantRepository(client: SQLiteTenantClient, directoryId = DIRECTORY_ID): TenantRepository {
+export function createSQLiteTenantRepository(client: SQLiteTenantClient, directoryId = TENANT_DIRECTORY_ID): TenantRepository {
   const getDb = () => client.getConnection(directoryId);
 
   function ensureSlugAvailable(slug: string, id: string) {

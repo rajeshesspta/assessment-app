@@ -9,19 +9,6 @@ function safeRollback(db: SQLiteDatabase) {
   }
 }
 
-export function clearTenantData(db: SQLiteDatabase, tenantId: string): void {
-  db.exec('BEGIN');
-  try {
-    db.prepare('DELETE FROM attempts WHERE tenant_id = ?').run(tenantId);
-    db.prepare('DELETE FROM assessments WHERE tenant_id = ?').run(tenantId);
-    db.prepare('DELETE FROM items WHERE tenant_id = ?').run(tenantId);
-    db.exec('COMMIT');
-  } catch (error) {
-    safeRollback(db);
-    throw error;
-  }
-}
-
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
     INSERT INTO items (id, tenant_id, kind, prompt, choices_json, correct_index, created_at, updated_at)
