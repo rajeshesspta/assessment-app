@@ -14,6 +14,7 @@ describe('loadConfig', () => {
     delete process.env.API_KEY_CACHE_TTL_MS;
     delete process.env.API_KEY;
     delete process.env.API_TENANT_ID;
+    delete process.env.DB_PROVIDER;
   });
 
   it('returns defaults when env vars absent', () => {
@@ -31,6 +32,7 @@ describe('loadConfig', () => {
         cacheTtlMs: 60000,
         seedKeys: [{ key: 'dev-key', tenantId: 'dev-tenant' }],
       },
+      persistence: { provider: 'memory' },
     });
   });
 
@@ -43,6 +45,7 @@ describe('loadConfig', () => {
     process.env.API_KEY_CACHE_TTL_MS = '120000';
     process.env.API_KEY = 'seed-key';
     process.env.API_TENANT_ID = 'tenant-123';
+    process.env.DB_PROVIDER = 'cosmos';
 
     const config = loadConfig();
 
@@ -57,15 +60,18 @@ describe('loadConfig', () => {
       cacheTtlMs: 120000,
       seedKeys: [{ key: 'seed-key', tenantId: 'tenant-123' }],
     });
+    expect(config.persistence).toEqual({ provider: 'cosmos' });
   });
 
   it('ignores invalid numeric env values', () => {
     process.env.COSMOS_THROUGHPUT = 'not-a-number';
     process.env.API_KEY_CACHE_TTL_MS = 'NaN';
+    process.env.DB_PROVIDER = 'unknown';
 
     const config = loadConfig();
 
     expect(config.cosmos.throughput).toBeUndefined();
     expect(config.auth.cacheTtlMs).toBe(60000);
+    expect(config.persistence.provider).toBe('memory');
   });
 });

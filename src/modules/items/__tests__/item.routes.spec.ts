@@ -8,13 +8,6 @@ const { saveMock, getMock, publishMock, uuidMock } = vi.hoisted(() => ({
   uuidMock: vi.fn(),
 }));
 
-vi.mock('../item.repository.js', () => ({
-  itemRepository: {
-    save: saveMock,
-    get: getMock,
-  },
-}));
-
 vi.mock('../../../common/event-bus.js', () => ({
   eventBus: {
     publish: publishMock,
@@ -32,7 +25,13 @@ async function buildTestApp() {
   app.addHook('onRequest', async request => {
     (request as any).tenantId = 'tenant-1';
   });
-  await app.register(itemRoutes, { prefix: '/items' });
+  await app.register(itemRoutes, {
+    prefix: '/items',
+    repository: {
+      save: saveMock,
+      get: getMock,
+    },
+  });
   return app;
 }
 

@@ -2,15 +2,22 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { createAttempt } from './attempt.model.js';
-import { attemptRepository } from './attempt.repository.js';
-import { assessmentRepository } from '../assessments/assessment.repository.js';
-import { itemRepository } from '../items/item.repository.js';
+import type { AttemptRepository } from './attempt.repository.js';
+import type { AssessmentRepository } from '../assessments/assessment.repository.js';
+import type { ItemRepository } from '../items/item.repository.js';
 import { eventBus } from '../../common/event-bus.js';
 
 const startSchema = z.object({ assessmentId: z.string(), userId: z.string() });
 const responsesSchema = z.object({ responses: z.array(z.object({ itemId: z.string(), answerIndex: z.number().int().nonnegative().optional() })) });
 
-export async function attemptRoutes(app: FastifyInstance) {
+export interface AttemptRoutesOptions {
+  attemptRepository: AttemptRepository;
+  assessmentRepository: AssessmentRepository;
+  itemRepository: ItemRepository;
+}
+
+export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
+  const { attemptRepository, assessmentRepository, itemRepository } = options;
   app.post('/', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
     const parsed = startSchema.parse(req.body);

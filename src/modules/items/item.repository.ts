@@ -1,10 +1,19 @@
 import { Item } from '../../common/types.js';
 
-class ItemRepository {
-  private store = new Map<string, Item>();
-
-  save(item: Item) { this.store.set(item.id, item); return item; }
-  get(id: string) { return this.store.get(id); }
+export interface ItemRepository {
+  save(item: Item): Item;
+  get(id: string): Item | undefined;
 }
 
-export const itemRepository = new ItemRepository();
+export function createInMemoryItemRepository(): ItemRepository {
+  const store = new Map<string, Item>();
+  return {
+    save(item) {
+      store.set(item.id, item);
+      return item;
+    },
+    get(id) {
+      return store.get(id);
+    },
+  };
+}

@@ -11,30 +11,14 @@ const mocks = vi.hoisted(() => {
     }),
     getMock: vi.fn((id: string) => attemptStore.get(id)),
     assessmentGetMock: vi.fn(),
+    assessmentSaveMock: vi.fn(),
     itemGetMock: vi.fn(),
+    itemSaveMock: vi.fn(),
     publishMock: vi.fn(),
     uuidMock: vi.fn(),
+    listByAssessmentMock: vi.fn(),
   };
 });
-
-vi.mock('../attempt.repository.js', () => ({
-  attemptRepository: {
-    save: mocks.saveMock,
-    get: mocks.getMock,
-  },
-}));
-
-vi.mock('../../assessments/assessment.repository.js', () => ({
-  assessmentRepository: {
-    get: mocks.assessmentGetMock,
-  },
-}));
-
-vi.mock('../../items/item.repository.js', () => ({
-  itemRepository: {
-    get: mocks.itemGetMock,
-  },
-}));
 
 vi.mock('../../../common/event-bus.js', () => ({
   eventBus: {
@@ -53,7 +37,22 @@ async function buildApp() {
   app.addHook('onRequest', async request => {
     (request as any).tenantId = 'tenant-1';
   });
-  await app.register(attemptRoutes, { prefix: '/attempts' });
+  await app.register(attemptRoutes, {
+    prefix: '/attempts',
+    attemptRepository: {
+      save: mocks.saveMock,
+      get: mocks.getMock,
+      listByAssessment: mocks.listByAssessmentMock,
+    },
+    assessmentRepository: {
+      save: mocks.assessmentSaveMock,
+      get: mocks.assessmentGetMock,
+    },
+    itemRepository: {
+      save: mocks.itemSaveMock,
+      get: mocks.itemGetMock,
+    },
+  });
   return app;
 }
 

@@ -1,8 +1,23 @@
 import { Attempt } from '../../common/types.js';
 
-class AttemptRepository {
-  private store = new Map<string, Attempt>();
-  save(a: Attempt) { this.store.set(a.id, a); return a; }
-  get(id: string) { return this.store.get(id); }
+export interface AttemptRepository {
+  save(attempt: Attempt): Attempt;
+  get(id: string): Attempt | undefined;
+  listByAssessment(assessmentId: string): Attempt[];
 }
-export const attemptRepository = new AttemptRepository();
+
+export function createInMemoryAttemptRepository(): AttemptRepository {
+  const store = new Map<string, Attempt>();
+  return {
+    save(attempt) {
+      store.set(attempt.id, attempt);
+      return attempt;
+    },
+    get(id) {
+      return store.get(id);
+    },
+    listByAssessment(assessmentId) {
+      return Array.from(store.values()).filter(a => a.assessmentId === assessmentId);
+    },
+  };
+}

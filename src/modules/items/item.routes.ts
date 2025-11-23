@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { createItem } from './item.model.js';
-import { itemRepository } from './item.repository.js';
+import type { ItemRepository } from './item.repository.js';
 import { eventBus } from '../../common/event-bus.js';
 
 const createSchema = z.object({
@@ -11,7 +11,12 @@ const createSchema = z.object({
   correctIndex: z.number().int().nonnegative(),
 });
 
-export async function itemRoutes(app: FastifyInstance) {
+export interface ItemRoutesOptions {
+  repository: ItemRepository;
+}
+
+export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOptions) {
+  const { repository } = options;
   app.post('/', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
     const parsed = createSchema.parse(req.body);
@@ -21,7 +26,7 @@ export async function itemRoutes(app: FastifyInstance) {
     }
     const id = uuid();
     const item = createItem({ id, tenantId, kind: 'MCQ', ...parsed });
-    itemRepository.save(item);
+    repository.save(item);
     eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
     reply.code(201);
     return item;
@@ -29,7 +34,7 @@ export async function itemRoutes(app: FastifyInstance) {
 
   app.get('/:id', async (req, reply) => {
     const id = (req.params as any).id as string;
-    const item = itemRepository.get(id);
+    const item = repository.get(id);
     if (!item) { reply.code(404); return { error: 'Not found' }; }
     return item;
   });

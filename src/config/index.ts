@@ -14,6 +14,13 @@ export interface AuthConfig {
 export interface AppConfig {
   cosmos: CosmosConfig;
   auth: AuthConfig;
+  persistence: PersistenceConfig;
+}
+
+export type PersistenceProvider = 'memory' | 'cosmos';
+
+export interface PersistenceConfig {
+  provider: PersistenceProvider;
 }
 
 function readIntFromEnv(envName: string): number | undefined {
@@ -25,6 +32,11 @@ function readIntFromEnv(envName: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function readProviderFromEnv(envName: string): PersistenceProvider {
+  const raw = (process.env[envName] ?? 'memory').toLowerCase();
+  return raw === 'cosmos' ? 'cosmos' : 'memory';
+}
+
 export function loadConfig(): AppConfig {
   const endpoint = process.env.COSMOS_ENDPOINT || 'https://localhost:8081';
   const key = process.env.COSMOS_KEY || 'C2y6yDjf5/R+ob0N8A7Cgv30VRDjEwef4zE3DUdh2PQ==';
@@ -32,6 +44,7 @@ export function loadConfig(): AppConfig {
   const apiKeysContainer = process.env.COSMOS_API_KEYS_CONTAINER || 'api-keys';
   const throughput = readIntFromEnv('COSMOS_THROUGHPUT');
   const cacheTtlMs = readIntFromEnv('API_KEY_CACHE_TTL_MS') ?? 60_000;
+  const provider = readProviderFromEnv('DB_PROVIDER');
 
   const envSeedKey = process.env.API_KEY;
   const envSeedTenant = process.env.API_TENANT_ID;
@@ -42,5 +55,6 @@ export function loadConfig(): AppConfig {
   return {
     cosmos: { endpoint, key, databaseId, apiKeysContainer, throughput },
     auth: { cacheTtlMs, seedKeys },
+    persistence: { provider },
   };
 }

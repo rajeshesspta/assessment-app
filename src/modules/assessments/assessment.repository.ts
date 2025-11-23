@@ -1,8 +1,19 @@
 import { Assessment } from '../../common/types.js';
 
-class AssessmentRepository {
-  private store = new Map<string, Assessment>();
-  save(a: Assessment) { this.store.set(a.id, a); return a; }
-  get(id: string) { return this.store.get(id); }
+export interface AssessmentRepository {
+  save(assessment: Assessment): Assessment;
+  get(id: string): Assessment | undefined;
 }
-export const assessmentRepository = new AssessmentRepository();
+
+export function createInMemoryAssessmentRepository(): AssessmentRepository {
+  const store = new Map<string, Assessment>();
+  return {
+    save(assessment) {
+      store.set(assessment.id, assessment);
+      return assessment;
+    },
+    get(id) {
+      return store.get(id);
+    },
+  };
+}

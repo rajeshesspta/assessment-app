@@ -1,21 +1,30 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { store } = vi.hoisted(() => ({
-  store: new Map<string, any>(),
-}));
-
-vi.mock('../../attempts/attempt.repository.js', () => ({
-  attemptRepository: {
-    store,
-  },
-}));
+const { attemptStore, listByAssessmentMock, saveMock, getMock } = vi.hoisted(() => {
+  const attemptStore: any[] = [];
+  return {
+    attemptStore,
+    listByAssessmentMock: vi.fn((assessmentId: string) =>
+      attemptStore.filter(attempt => attempt.assessmentId === assessmentId)
+    ),
+    saveMock: vi.fn(),
+    getMock: vi.fn(),
+  };
+});
 
 import { analyticsRoutes } from '../analytics.routes.js';
 
 async function buildApp() {
   const app = Fastify();
-  await app.register(analyticsRoutes, { prefix: '/analytics' });
+  await app.register(analyticsRoutes, {
+    prefix: '/analytics',
+    attemptRepository: {
+      save: saveMock,
+      get: getMock,
+      listByAssessment: listByAssessmentMock,
+    },
+  });
   return app;
 }
 
@@ -23,7 +32,8 @@ describe('analyticsRoutes', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
 
   beforeEach(async () => {
-    store.clear();
+    vi.clearAllMocks();
+    attemptStore.length = 0;
     app = await buildApp();
   });
 
@@ -32,25 +42,25 @@ describe('analyticsRoutes', () => {
   });
 
   it('computes attempt count and average only from scored attempts', async () => {
-    store.set('attempt-1', {
+    attemptStore.push({
       id: 'attempt-1',
       assessmentId: 'assessment-1',
       status: 'scored',
       score: 3,
     });
-    store.set('attempt-2', {
+    attemptStore.push({
       id: 'attempt-2',
       assessmentId: 'assessment-1',
       status: 'scored',
       score: 5,
     });
-    store.set('attempt-3', {
+    attemptStore.push({
       id: 'attempt-3',
       assessmentId: 'assessment-1',
       status: 'in_progress',
       score: 10,
     });
-    store.set('attempt-4', {
+    attemptStore.push({
       id: 'attempt-4',
       assessmentId: 'assessment-2',
       status: 'scored',
@@ -68,7 +78,7 @@ describe('analyticsRoutes', () => {
   });
 
   it('returns zero metrics when no scored attempts', async () => {
-    store.set('attempt-5', {
+    attemptStore.push({
       id: 'attempt-5',
       assessmentId: 'assessment-2',
       status: 'in_progress',

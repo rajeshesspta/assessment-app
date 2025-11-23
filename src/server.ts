@@ -1,8 +1,12 @@
 import { buildApp } from './app.js';
+import { loadConfig } from './config/index.js';
+import { createRepositoryBundleFromConfig } from './infrastructure/repositories.js';
 import { initApiKeyStore } from './modules/auth/api-key.store.js';
 
 const start = async () => {
-  const app = buildApp();
+  const config = loadConfig();
+  const repositories = createRepositoryBundleFromConfig(config);
+  const app = buildApp({ repositories });
   const port = Number(process.env.PORT || 3000);
   try {
     await initApiKeyStore();
