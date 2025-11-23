@@ -8,14 +8,21 @@ import {
   createInMemoryRepositoryBundle,
   type RepositoryBundle,
 } from './infrastructure/repositories.js';
+import { tenantRoutes } from './modules/tenants/tenant.routes.js';
+import {
+  createInMemoryTenantRepository,
+  type TenantRepository,
+} from './modules/tenants/tenant.repository.js';
 
 export interface AppDependencies {
   repositories?: RepositoryBundle;
+  tenantRepository?: TenantRepository;
 }
 
 export function buildApp(deps: AppDependencies = {}) {
   const app = Fastify({ logger: true });
   const repositories = deps.repositories ?? createInMemoryRepositoryBundle();
+  const tenantRepository = deps.tenantRepository ?? createInMemoryTenantRepository();
 
   // Register auth & tenant enforcement
   app.addHook('onRequest', registerAuth);
@@ -30,10 +37,14 @@ export function buildApp(deps: AppDependencies = {}) {
     itemRepository: repositories.item,
   });
   app.register(analyticsRoutes, { prefix: '/analytics', attemptRepository: repositories.attempt });
+  app.register(tenantRoutes, { prefix: '/tenants', repository: tenantRepository });
 
   app.addHook('onClose', async () => {
     if (repositories.dispose) {
       await repositories.dispose();
+    }
+    if (tenantRepository.dispose) {
+      await tenantRepository.dispose();
     }
   });
 
