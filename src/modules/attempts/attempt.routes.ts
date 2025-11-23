@@ -21,7 +21,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
   app.post('/', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
     const parsed = startSchema.parse(req.body);
-    const assessment = assessmentRepository.get(parsed.assessmentId);
+    const assessment = assessmentRepository.getById(tenantId, parsed.assessmentId);
     if (!assessment) { reply.code(400); return { error: 'Invalid assessmentId' }; }
     const id = uuid();
     const attempt = createAttempt({ id, tenantId, assessmentId: assessment.id, userId: parsed.userId });
@@ -33,7 +33,8 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
 
   app.patch('/:id/responses', async (req, reply) => {
     const id = (req.params as any).id as string;
-    const attempt = attemptRepository.get(id);
+    const tenantId = (req as any).tenantId as string;
+    const attempt = attemptRepository.getById(tenantId, id);
     if (!attempt) { reply.code(404); return { error: 'Not found' }; }
     if (attempt.status !== 'in_progress') { reply.code(400); return { error: 'Attempt not editable' }; }
     const parsed = responsesSchema.parse(req.body);
@@ -48,14 +49,15 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
 
   app.post('/:id/submit', async (req, reply) => {
     const id = (req.params as any).id as string;
-    const attempt = attemptRepository.get(id);
+    const tenantId = (req as any).tenantId as string;
+    const attempt = attemptRepository.getById(tenantId, id);
     if (!attempt) { reply.code(404); return { error: 'Not found' }; }
     if (attempt.status !== 'in_progress') { reply.code(400); return { error: 'Already submitted' }; }
-    const assessment = assessmentRepository.get(attempt.assessmentId)!;
+    const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId)!;
     // Auto scoring MCQ
     let score = 0; let maxScore = assessment.itemIds.length;
     for (const itemId of assessment.itemIds) {
-      const item = itemRepository.get(itemId); if (!item) continue;
+      const item = itemRepository.getById(tenantId, itemId); if (!item) continue;
       const response = attempt.responses.find(r => r.itemId === itemId);
       if (response && response.answerIndex === item.correctIndex) score++;
     }
@@ -68,7 +70,8 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
 
   app.get('/:id', async (req, reply) => {
     const id = (req.params as any).id as string;
-    const attempt = attemptRepository.get(id);
+    const tenantId = (req as any).tenantId as string;
+    const attempt = attemptRepository.getById(tenantId, id);
     if (!attempt) { reply.code(404); return { error: 'Not found' }; }
     return attempt;
   });

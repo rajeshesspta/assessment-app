@@ -34,7 +34,8 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
 
   app.get('/:id', async (req, reply) => {
     const id = (req.params as any).id as string;
-    const item = repository.get(id);
+    const tenantId = (req as any).tenantId as string;
+    const item = repository.getById(tenantId, id);
     if (!item) { reply.code(404); return { error: 'Not found' }; }
     return item;
   });

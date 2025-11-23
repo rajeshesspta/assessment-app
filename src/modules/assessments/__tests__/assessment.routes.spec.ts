@@ -1,9 +1,9 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { saveMock, getMock, publishMock, uuidMock } = vi.hoisted(() => ({
+const { saveMock, getByIdMock, publishMock, uuidMock } = vi.hoisted(() => ({
   saveMock: vi.fn(),
-  getMock: vi.fn(),
+  getByIdMock: vi.fn(),
   publishMock: vi.fn(),
   uuidMock: vi.fn(),
 }));
@@ -29,7 +29,7 @@ async function buildTestApp() {
     prefix: '/assessments',
     repository: {
       save: saveMock,
-      get: getMock,
+      getById: getByIdMock,
     },
   });
   return app;
@@ -87,21 +87,22 @@ describe('assessmentRoutes', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
     };
-    getMock.mockReturnValueOnce(existing);
+    getByIdMock.mockReturnValueOnce(existing);
 
     const response = await app.inject({ method: 'GET', url: '/assessments/assessment-1' });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(existing);
-    expect(getMock).toHaveBeenCalledWith('assessment-1');
+    expect(getByIdMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
   });
 
   it('returns 404 when assessment missing', async () => {
-    getMock.mockReturnValueOnce(undefined);
+    getByIdMock.mockReturnValueOnce(undefined);
 
     const response = await app.inject({ method: 'GET', url: '/assessments/missing' });
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'Not found' });
+    expect(getByIdMock).toHaveBeenCalledWith('tenant-1', 'missing');
   });
 });

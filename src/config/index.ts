@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 export interface CosmosConfig {
   endpoint: string;
   key: string;
@@ -17,10 +19,18 @@ export interface AppConfig {
   persistence: PersistenceConfig;
 }
 
-export type PersistenceProvider = 'memory' | 'cosmos';
+export type PersistenceProvider = 'memory' | 'cosmos' | 'sqlite';
 
 export interface PersistenceConfig {
   provider: PersistenceProvider;
+  sqlite: SqliteConfig;
+}
+
+export interface SqliteConfig {
+  dbRoot: string;
+  filePattern: string;
+  migrationsDir: string;
+  seedDefaultTenant: boolean;
 }
 
 function readIntFromEnv(envName: string): number | undefined {
@@ -33,8 +43,16 @@ function readIntFromEnv(envName: string): number | undefined {
 }
 
 function readProviderFromEnv(envName: string): PersistenceProvider {
-  const raw = (process.env[envName] ?? 'memory').toLowerCase();
-  return raw === 'cosmos' ? 'cosmos' : 'memory';
+  const raw = (process.env[envName] ?? 'sqlite').toLowerCase();
+  if (raw === 'cosmos') return 'cosmos';
+  if (raw === 'memory') return 'memory';
+  return 'sqlite';
+}
+
+function readBooleanFromEnv(envName: string, defaultValue: boolean): boolean {
+  const raw = process.env[envName];
+  if (raw === undefined) return defaultValue;
+  return ['1', 'true', 'yes', 'on'].includes(raw.toLowerCase());
 }
 
 export function loadConfig(): AppConfig {
@@ -45,6 +63,10 @@ export function loadConfig(): AppConfig {
   const throughput = readIntFromEnv('COSMOS_THROUGHPUT');
   const cacheTtlMs = readIntFromEnv('API_KEY_CACHE_TTL_MS') ?? 60_000;
   const provider = readProviderFromEnv('DB_PROVIDER');
+  const dbRoot = process.env.SQLITE_DB_ROOT || path.resolve(process.cwd(), 'data', 'sqlite');
+  const filePattern = process.env.SQLITE_DB_FILE_PATTERN || '{tenantId}.db';
+  const migrationsDir = process.env.SQLITE_MIGRATIONS_DIR || path.resolve(process.cwd(), 'migrations', 'sqlite');
+  const seedDefaultTenant = readBooleanFromEnv('SQLITE_SEED_DEFAULT_TENANT', true);
 
   const envSeedKey = process.env.API_KEY;
   const envSeedTenant = process.env.API_TENANT_ID;
@@ -55,6 +77,14 @@ export function loadConfig(): AppConfig {
   return {
     cosmos: { endpoint, key, databaseId, apiKeysContainer, throughput },
     auth: { cacheTtlMs, seedKeys },
-    persistence: { provider },
+    persistence: {
+      provider,
+      sqlite: {
+        dbRoot,
+        filePattern,
+        migrationsDir,
+        seedDefaultTenant,
+      },
+    },
   };
 }

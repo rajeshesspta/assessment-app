@@ -31,6 +31,12 @@ export function buildApp(deps: AppDependencies = {}) {
   });
   app.register(analyticsRoutes, { prefix: '/analytics', attemptRepository: repositories.attempt });
 
+  app.addHook('onClose', async () => {
+    if (repositories.dispose) {
+      await repositories.dispose();
+    }
+  });
+
   app.get('/health', async () => ({ status: 'ok' }));
   return app;
 }

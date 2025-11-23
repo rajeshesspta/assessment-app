@@ -16,6 +16,12 @@ const baseConfig: AppConfig = {
   },
   persistence: {
     provider: 'memory',
+    sqlite: {
+      dbRoot: './tmp/sqlite',
+      filePattern: '{tenantId}.db',
+      migrationsDir: './migrations/sqlite',
+      seedDefaultTenant: true,
+    },
   },
 };
 
@@ -23,14 +29,33 @@ describe('createRepositoryBundleFromConfig', () => {
   it('returns in-memory bundle when provider is memory', () => {
     const bundle = createRepositoryBundleFromConfig(baseConfig);
     expect(typeof bundle.item.save).toBe('function');
-    expect(typeof bundle.assessment.get).toBe('function');
+    expect(typeof bundle.assessment.getById).toBe('function');
     expect(typeof bundle.attempt.listByAssessment).toBe('function');
+  });
+
+  it('returns sqlite bundle when provider is sqlite', () => {
+    const sqliteConfig: AppConfig = {
+      ...baseConfig,
+      persistence: {
+        ...baseConfig.persistence,
+        provider: 'sqlite',
+      },
+    };
+    const bundle = createRepositoryBundleFromConfig(sqliteConfig);
+    expect(typeof bundle.item.save).toBe('function');
+    expect(typeof bundle.assessment.getById).toBe('function');
+    expect(typeof bundle.attempt.listByAssessment).toBe('function');
+    expect(typeof bundle.dispose).toBe('function');
+    bundle.dispose?.();
   });
 
   it('throws for cosmos provider until implemented', () => {
     const cosmosConfig: AppConfig = {
       ...baseConfig,
-      persistence: { provider: 'cosmos' },
+      persistence: {
+        ...baseConfig.persistence,
+        provider: 'cosmos',
+      },
     };
     expect(() => createRepositoryBundleFromConfig(cosmosConfig)).toThrow('Cosmos repository bundle not implemented yet');
   });

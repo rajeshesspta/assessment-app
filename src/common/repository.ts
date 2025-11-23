@@ -1,2 +1,5 @@
-// Generic repository interface for future Cosmos DB implementation.
-export interface Repository<T> { save(entity: T): T; get(id: string): T | undefined; }
+// Generic repository contract matching the tenant-aware repositories.
+export interface Repository<T> {
+	save(entity: T): T;
+	getById(tenantId: string, id: string): T | undefined;
+}

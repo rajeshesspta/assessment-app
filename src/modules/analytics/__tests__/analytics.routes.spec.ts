@@ -5,8 +5,8 @@ const { attemptStore, listByAssessmentMock, saveMock, getMock } = vi.hoisted(() 
   const attemptStore: any[] = [];
   return {
     attemptStore,
-    listByAssessmentMock: vi.fn((assessmentId: string) =>
-      attemptStore.filter(attempt => attempt.assessmentId === assessmentId)
+    listByAssessmentMock: vi.fn((tenantId: string, assessmentId: string) =>
+      attemptStore.filter(attempt => attempt.tenantId === tenantId && attempt.assessmentId === assessmentId)
     ),
     saveMock: vi.fn(),
     getMock: vi.fn(),
@@ -17,11 +17,14 @@ import { analyticsRoutes } from '../analytics.routes.js';
 
 async function buildApp() {
   const app = Fastify();
+  app.addHook('onRequest', async request => {
+    (request as any).tenantId = 'tenant-1';
+  });
   await app.register(analyticsRoutes, {
     prefix: '/analytics',
     attemptRepository: {
       save: saveMock,
-      get: getMock,
+      getById: getMock,
       listByAssessment: listByAssessmentMock,
     },
   });
@@ -44,24 +47,28 @@ describe('analyticsRoutes', () => {
   it('computes attempt count and average only from scored attempts', async () => {
     attemptStore.push({
       id: 'attempt-1',
+      tenantId: 'tenant-1',
       assessmentId: 'assessment-1',
       status: 'scored',
       score: 3,
     });
     attemptStore.push({
       id: 'attempt-2',
+      tenantId: 'tenant-1',
       assessmentId: 'assessment-1',
       status: 'scored',
       score: 5,
     });
     attemptStore.push({
       id: 'attempt-3',
+      tenantId: 'tenant-1',
       assessmentId: 'assessment-1',
       status: 'in_progress',
       score: 10,
     });
     attemptStore.push({
       id: 'attempt-4',
+      tenantId: 'tenant-2',
       assessmentId: 'assessment-2',
       status: 'scored',
       score: 7,
@@ -70,6 +77,7 @@ describe('analyticsRoutes', () => {
     const response = await app.inject({ method: 'GET', url: '/analytics/assessments/assessment-1' });
 
     expect(response.statusCode).toBe(200);
+    expect(listByAssessmentMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
     expect(response.json()).toEqual({
       assessmentId: 'assessment-1',
       attemptCount: 2,
@@ -80,6 +88,7 @@ describe('analyticsRoutes', () => {
   it('returns zero metrics when no scored attempts', async () => {
     attemptStore.push({
       id: 'attempt-5',
+      tenantId: 'tenant-2',
       assessmentId: 'assessment-2',
       status: 'in_progress',
     });
@@ -87,6 +96,7 @@ describe('analyticsRoutes', () => {
     const response = await app.inject({ method: 'GET', url: '/analytics/assessments/assessment-2' });
 
     expect(response.statusCode).toBe(200);
+    expect(listByAssessmentMock).toHaveBeenCalledWith('tenant-1', 'assessment-2');
     expect(response.json()).toEqual({
       assessmentId: 'assessment-2',
       attemptCount: 0,

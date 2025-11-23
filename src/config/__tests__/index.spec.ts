@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../index.js';
 
@@ -15,10 +16,17 @@ describe('loadConfig', () => {
     delete process.env.API_KEY;
     delete process.env.API_TENANT_ID;
     delete process.env.DB_PROVIDER;
+    delete process.env.SQLITE_DB_ROOT;
+    delete process.env.SQLITE_DB_FILE_PATTERN;
+    delete process.env.SQLITE_MIGRATIONS_DIR;
+    delete process.env.SQLITE_SEED_DEFAULT_TENANT;
   });
 
   it('returns defaults when env vars absent', () => {
     const config = loadConfig();
+
+    const defaultRoot = path.resolve(process.cwd(), 'data', 'sqlite');
+    const defaultMigrations = path.resolve(process.cwd(), 'migrations', 'sqlite');
 
     expect(config).toEqual({
       cosmos: {
@@ -32,7 +40,15 @@ describe('loadConfig', () => {
         cacheTtlMs: 60000,
         seedKeys: [{ key: 'dev-key', tenantId: 'dev-tenant' }],
       },
-      persistence: { provider: 'memory' },
+      persistence: {
+        provider: 'sqlite',
+        sqlite: {
+          dbRoot: defaultRoot,
+          filePattern: '{tenantId}.db',
+          migrationsDir: defaultMigrations,
+          seedDefaultTenant: true,
+        },
+      },
     });
   });
 
@@ -46,6 +62,10 @@ describe('loadConfig', () => {
     process.env.API_KEY = 'seed-key';
     process.env.API_TENANT_ID = 'tenant-123';
     process.env.DB_PROVIDER = 'cosmos';
+    process.env.SQLITE_DB_ROOT = 'C:/db/root';
+    process.env.SQLITE_DB_FILE_PATTERN = 'db-{tenantId}.sqlite';
+    process.env.SQLITE_MIGRATIONS_DIR = 'C:/db/migrations';
+    process.env.SQLITE_SEED_DEFAULT_TENANT = 'false';
 
     const config = loadConfig();
 
@@ -60,18 +80,28 @@ describe('loadConfig', () => {
       cacheTtlMs: 120000,
       seedKeys: [{ key: 'seed-key', tenantId: 'tenant-123' }],
     });
-    expect(config.persistence).toEqual({ provider: 'cosmos' });
+    expect(config.persistence).toEqual({
+      provider: 'cosmos',
+      sqlite: {
+        dbRoot: 'C:/db/root',
+        filePattern: 'db-{tenantId}.sqlite',
+        migrationsDir: 'C:/db/migrations',
+        seedDefaultTenant: false,
+      },
+    });
   });
 
   it('ignores invalid numeric env values', () => {
     process.env.COSMOS_THROUGHPUT = 'not-a-number';
     process.env.API_KEY_CACHE_TTL_MS = 'NaN';
     process.env.DB_PROVIDER = 'unknown';
+    process.env.SQLITE_SEED_DEFAULT_TENANT = 'off';
 
     const config = loadConfig();
 
     expect(config.cosmos.throughput).toBeUndefined();
     expect(config.auth.cacheTtlMs).toBe(60000);
-    expect(config.persistence.provider).toBe('memory');
+    expect(config.persistence.provider).toBe('sqlite');
+    expect(config.persistence.sqlite.seedDefaultTenant).toBe(false);
   });
 });

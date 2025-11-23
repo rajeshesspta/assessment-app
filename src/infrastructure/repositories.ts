@@ -1,21 +1,26 @@
 import type { AppConfig } from '../config/index.js';
 import {
   createInMemoryItemRepository,
+  createSQLiteItemRepository,
   type ItemRepository,
 } from '../modules/items/item.repository.js';
 import {
   createInMemoryAssessmentRepository,
+  createSQLiteAssessmentRepository,
   type AssessmentRepository,
 } from '../modules/assessments/assessment.repository.js';
 import {
   createInMemoryAttemptRepository,
+  createSQLiteAttemptRepository,
   type AttemptRepository,
 } from '../modules/attempts/attempt.repository.js';
+import { createSQLiteTenantClient } from './sqlite/client.js';
 
 export interface RepositoryBundle {
   item: ItemRepository;
   assessment: AssessmentRepository;
   attempt: AttemptRepository;
+  dispose?: () => void | Promise<void>;
 }
 
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
@@ -23,6 +28,17 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     item: createInMemoryItemRepository(),
     assessment: createInMemoryAssessmentRepository(),
     attempt: createInMemoryAttemptRepository(),
+    dispose: () => {},
+  };
+}
+
+export function createSQLiteRepositoryBundle(config: AppConfig): RepositoryBundle {
+  const client = createSQLiteTenantClient(config.persistence.sqlite);
+  return {
+    item: createSQLiteItemRepository(client),
+    assessment: createSQLiteAssessmentRepository(client),
+    attempt: createSQLiteAttemptRepository(client),
+    dispose: () => client.closeAll(),
   };
 }
 
@@ -31,8 +47,13 @@ export function createCosmosRepositoryBundle(_config: AppConfig): RepositoryBund
 }
 
 export function createRepositoryBundleFromConfig(config: AppConfig): RepositoryBundle {
-  if (config.persistence.provider === 'cosmos') {
-    return createCosmosRepositoryBundle(config);
+  switch (config.persistence.provider) {
+    case 'cosmos':
+      return createCosmosRepositoryBundle(config);
+    case 'memory':
+      return createInMemoryRepositoryBundle();
+    case 'sqlite':
+    default:
+      return createSQLiteRepositoryBundle(config);
   }
-  return createInMemoryRepositoryBundle();
 }

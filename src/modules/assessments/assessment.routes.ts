@@ -29,7 +29,8 @@ export async function assessmentRoutes(app: FastifyInstance, options: Assessment
 
   app.get('/:id', async (req, reply) => {
     const id = (req.params as any).id as string;
-    const a = repository.get(id);
+    const tenantId = (req as any).tenantId as string;
+    const a = repository.getById(tenantId, id);
     if (!a) { reply.code(404); return { error: 'Not found' }; }
     return a;
   });

@@ -9,10 +9,13 @@ const mocks = vi.hoisted(() => {
       attemptStore.set(attempt.id, attempt);
       return attempt;
     }),
-    getMock: vi.fn((id: string) => attemptStore.get(id)),
-    assessmentGetMock: vi.fn(),
+    getByIdMock: vi.fn((tenantId: string, id: string) => {
+      const attempt = attemptStore.get(id);
+      return attempt?.tenantId === tenantId ? attempt : undefined;
+    }),
+    assessmentGetByIdMock: vi.fn(),
     assessmentSaveMock: vi.fn(),
-    itemGetMock: vi.fn(),
+    itemGetByIdMock: vi.fn(),
     itemSaveMock: vi.fn(),
     publishMock: vi.fn(),
     uuidMock: vi.fn(),
@@ -41,16 +44,16 @@ async function buildApp() {
     prefix: '/attempts',
     attemptRepository: {
       save: mocks.saveMock,
-      get: mocks.getMock,
+      getById: mocks.getByIdMock,
       listByAssessment: mocks.listByAssessmentMock,
     },
     assessmentRepository: {
       save: mocks.assessmentSaveMock,
-      get: mocks.assessmentGetMock,
+      getById: mocks.assessmentGetByIdMock,
     },
     itemRepository: {
       save: mocks.itemSaveMock,
-      get: mocks.itemGetMock,
+      getById: mocks.itemGetByIdMock,
     },
   });
   return app;
@@ -70,7 +73,7 @@ describe('attemptRoutes', () => {
   });
 
   it('starts an attempt for a valid assessment', async () => {
-    mocks.assessmentGetMock.mockReturnValueOnce({
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
       id: 'assessment-1',
       tenantId: 'tenant-1',
       itemIds: ['item-1'],
@@ -102,10 +105,11 @@ describe('attemptRoutes', () => {
       type: 'AttemptStarted',
       payload: { attemptId: 'attempt-1' },
     }));
+    expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
   });
 
   it('rejects start when assessment missing', async () => {
-    mocks.assessmentGetMock.mockReturnValueOnce(undefined);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce(undefined);
 
     const response = await app.inject({
       method: 'POST',
@@ -119,6 +123,7 @@ describe('attemptRoutes', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: 'Invalid assessmentId' });
     expect(mocks.publishMock).not.toHaveBeenCalled();
+    expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'unknown');
   });
 
   it('updates responses on patch', async () => {
@@ -202,12 +207,12 @@ describe('attemptRoutes', () => {
       updatedAt: '2025-01-01T00:00:00.000Z',
     };
     mocks.attemptStore.set('attempt-1', attempt);
-    mocks.assessmentGetMock.mockReturnValueOnce({
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
       id: 'assessment-1',
       tenantId: 'tenant-1',
       itemIds: ['item-1', 'item-2'],
     });
-    mocks.itemGetMock.mockImplementation((itemId: string) => {
+    mocks.itemGetByIdMock.mockImplementation((_tenantId: string, itemId: string) => {
       if (itemId === 'item-1') {
         return { id: 'item-1', correctIndex: 0 };
       }
@@ -233,6 +238,8 @@ describe('attemptRoutes', () => {
       type: 'AttemptScored',
       payload: { attemptId: 'attempt-1', score: 1 },
     }));
+    expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
+    expect(mocks.itemGetByIdMock).toHaveBeenCalledWith('tenant-1', 'item-1');
   });
 
   it('returns 404 when submitting missing attempt', async () => {
@@ -273,11 +280,13 @@ describe('attemptRoutes', () => {
     const response = await app.inject({ method: 'GET', url: '/attempts/attempt-1' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(attempt);
+    expect(mocks.getByIdMock).toHaveBeenCalledWith('tenant-1', 'attempt-1');
   });
 
   it('returns 404 when attempt missing on GET', async () => {
     const response = await app.inject({ method: 'GET', url: '/attempts/missing' });
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'Not found' });
+    expect(mocks.getByIdMock).toHaveBeenCalledWith('tenant-1', 'missing');
   });
 });
