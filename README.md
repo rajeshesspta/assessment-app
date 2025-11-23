@@ -34,9 +34,9 @@ Server listens on `http://127.0.0.1:3000` by default.
 
 ### Database Provisioning (SQLite)
 
-- `npm run db:provision -- --tenant=<tenantId>`: create the tenant database, run migrations, and seed defaults when enabled.
-- `npm run db:seed -- --tenant=<tenantId>`: re-run migrations and seed baseline data for the tenant.
-- SQLite persistence uses the WebAssembly-powered [`sql.js`](https://github.com/sql-js/sql.js) runtime, so no native toolchains or Python installs are required.
+- `npm run db:provision -- --tenant=<tenantId>`: create or update the tenant database, apply migrations, and (by default) seed a sample item and assessment. Pass `--seed=false` to skip seeding when you only want schema changes.
+- `npm run db:seed -- --tenant=<tenantId>`: idempotently upsert the sample content for the tenant. Safe to re-run after clearing data or rotating tenants.
+- SQLite persistence uses the WebAssembly-powered [`sql.js`](https://github.com/sql-js/sql.js) runtime, so no native toolchains or Python installs are required. Databases are materialized as files under `data/sqlite/` using the configured file pattern.
 
 ## Configuration
 
