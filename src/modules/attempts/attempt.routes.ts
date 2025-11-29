@@ -15,6 +15,8 @@ const responseSchema = z.object({
   answerIndexes: z.array(z.number().int().nonnegative()).optional(),
   textAnswer: z.string().optional(),
   textAnswers: z.array(z.string()).optional(),
+  matchingAnswers: z.array(z.object({ promptId: z.string(), targetId: z.string() })).optional(),
+  orderingAnswer: z.array(z.string()).optional(),
 });
 
 const responsesSchema = z.object({ responses: z.array(responseSchema) });
@@ -82,13 +84,21 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         answerIndexes = [r.answerIndex];
       }
       const textAnswers = normalizeTextAnswers(r.textAnswer, r.textAnswers);
-      return { itemId: r.itemId, answerIndexes, textAnswers };
+      const matchingAnswers = r.matchingAnswers && r.matchingAnswers.length > 0
+        ? r.matchingAnswers.map(answer => ({ promptId: answer.promptId, targetId: answer.targetId }))
+        : undefined;
+      const orderingAnswer = r.orderingAnswer && r.orderingAnswer.length > 0
+        ? Array.from(new Set(r.orderingAnswer.map(value => value?.trim()).filter((value): value is string => Boolean(value))))
+        : undefined;
+      return { itemId: r.itemId, answerIndexes, textAnswers, matchingAnswers, orderingAnswer };
     });
     for (const r of normalized) {
       const existing = attempt.responses.find(x => x.itemId === r.itemId);
       if (existing) {
         existing.answerIndexes = r.answerIndexes;
         existing.textAnswers = r.textAnswers;
+        existing.matchingAnswers = r.matchingAnswers;
+        existing.orderingAnswer = r.orderingAnswer;
       } else {
         attempt.responses.push(r);
       }
@@ -129,6 +139,64 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
             score += 1;
           }
         }
+        continue;
+      }
+      if (item.kind === 'MATCHING') {
+        const prompts = item.prompts ?? [];
+        if (item.scoring.mode === 'partial') {
+          maxScore += prompts.length;
+        } else {
+          maxScore += 1;
+        }
+        const provided = response?.matchingAnswers ?? [];
+        const correctByPrompt = new Map(prompts.map(prompt => [prompt.id, prompt.correctTargetId] as const));
+        const matches = provided.reduce((total, pair) => {
+          const expected = correctByPrompt.get(pair.promptId);
+          return expected && expected === pair.targetId ? total + 1 : total;
+        }, 0);
+        if (item.scoring.mode === 'partial') {
+          score += matches;
+        } else if (matches === prompts.length && prompts.length > 0) {
+          score += 1;
+        }
+        continue;
+      }
+      if (item.kind === 'ORDERING') {
+        const totalPairs = item.correctOrder.length * (item.correctOrder.length - 1) / 2;
+        if (item.scoring.mode === 'partial_pairs') {
+          maxScore += totalPairs;
+        } else {
+          maxScore += 1;
+        }
+        if (item.scoring.customEvaluatorId) {
+          continue;
+        }
+        const provided = response?.orderingAnswer ?? [];
+        if (item.scoring.mode === 'all') {
+          const isCorrect = provided.length === item.correctOrder.length
+            && item.correctOrder.every((value, index) => value === provided[index]);
+          if (isCorrect && item.correctOrder.length > 0) {
+            score += 1;
+          }
+          continue;
+        }
+        const providedIndex = new Map(provided.map((optionId, index) => [optionId, index] as const));
+        let correctPairs = 0;
+        for (let i = 0; i < item.correctOrder.length; i += 1) {
+          for (let j = i + 1; j < item.correctOrder.length; j += 1) {
+            const first = item.correctOrder[i];
+            const second = item.correctOrder[j];
+            const posFirst = providedIndex.get(first);
+            const posSecond = providedIndex.get(second);
+            if (posFirst === undefined || posSecond === undefined) {
+              continue;
+            }
+            if (posFirst < posSecond) {
+              correctPairs += 1;
+            }
+          }
+        }
+        score += correctPairs;
         continue;
       }
       maxScore += 1;

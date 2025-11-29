@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item, MatchingItem } from '../../src/common/types.js';
+import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item, MatchingItem, OrderingItem } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -201,16 +201,57 @@ function buildRandomMatchingItem(tenantId: string): Item {
   } satisfies Item;
 }
 
+  const orderingTemplates = [
+    {
+      prompt: 'Rank the following planets from closest to farthest from the sun',
+      options: ['Mercury', 'Venus', 'Earth', 'Mars'],
+    },
+    {
+      prompt: 'Arrange the historical events chronologically',
+      options: ['World War I', 'World War II', 'Moon Landing', 'Fall of Berlin Wall'],
+    },
+    {
+      prompt: 'Order the data storage units from smallest to largest',
+      options: ['Kilobyte', 'Megabyte', 'Gigabyte', 'Terabyte'],
+    },
+  ];
+
+  function buildRandomOrderingItem(tenantId: string): Item {
+    const template = orderingTemplates[randomInt(orderingTemplates.length)];
+    const options = template.options.map((text, index) => ({ id: `opt-${index + 1}`, text }));
+    const correctOrder = options.map(option => option.id);
+    const now = new Date().toISOString();
+    const shouldAllowPartial = Math.random() > 0.5;
+    return {
+      id: `random-ordering-item-${randomUUID()}`,
+      tenantId,
+      kind: 'ORDERING',
+      prompt: template.prompt,
+      options,
+      correctOrder,
+      scoring: { mode: shouldAllowPartial ? 'partial_pairs' : 'all' },
+      createdAt: now,
+      updatedAt: now,
+    } satisfies Item;
+  }
+
 function buildRandomItem(tenantId: string, index: number): Item {
-  const builders = [buildRandomMCQItem, buildRandomTrueFalseItem, buildRandomFillBlankItem, buildRandomMatchingItem] as const;
+    const builders = [
+      buildRandomMCQItem,
+      buildRandomTrueFalseItem,
+      buildRandomFillBlankItem,
+      buildRandomMatchingItem,
+      buildRandomOrderingItem,
+    ] as const;
   if (index < builders.length) {
     return builders[index](tenantId);
   }
   const roll = Math.random();
-  if (roll < 0.25) return buildRandomFillBlankItem(tenantId);
-  if (roll < 0.5) return buildRandomTrueFalseItem(tenantId);
-  if (roll < 0.75) return buildRandomMatchingItem(tenantId);
-  return buildRandomMCQItem(tenantId);
+    if (roll < 0.2) return buildRandomFillBlankItem(tenantId);
+    if (roll < 0.4) return buildRandomTrueFalseItem(tenantId);
+    if (roll < 0.6) return buildRandomMatchingItem(tenantId);
+    if (roll < 0.8) return buildRandomOrderingItem(tenantId);
+    return buildRandomMCQItem(tenantId);
 }
 
 function buildRandomAssessment(tenantId: string, items: Item[], index: number): Assessment {
@@ -239,6 +280,10 @@ function isMatchingItem(item: Item): item is MatchingItem {
   return item.kind === 'MATCHING';
 }
 
+function isOrderingItem(item: Item): item is OrderingItem {
+  return item.kind === 'ORDERING';
+}
+
 function buildRandomAttempt(
   tenantId: string,
   assessment: Assessment,
@@ -251,6 +296,11 @@ function buildRandomAttempt(
     const item = itemById.get(itemId);
     if (!item) {
       return { itemId };
+    }
+    if (isOrderingItem(item)) {
+      const correct = item.correctOrder;
+      const shuffled = Math.random() > 0.4 ? [...correct] : shuffle([...item.options.map(option => option.id)]);
+      return { itemId, orderingAnswer: shuffled };
     }
     if (isMatchingItem(item)) {
       const answers = item.prompts.map(prompt => {
@@ -288,6 +338,11 @@ function buildRandomAttempt(
   const maxScore = assessment.itemIds.reduce((total, itemId) => {
     const item = itemById.get(itemId);
     if (!item) return total;
+    if (isOrderingItem(item)) {
+      const optionCount = item.correctOrder.length;
+      const pairScore = optionCount * (optionCount - 1) / 2;
+      return item.scoring.mode === 'partial_pairs' ? total + pairScore : total + 1;
+    }
     if (isMatchingItem(item)) {
       return item.scoring.mode === 'partial' ? total + item.prompts.length : total + 1;
     }
@@ -328,6 +383,35 @@ function buildRandomAttempt(
             return total + matches;
           }
           return matches === item.prompts.length && item.prompts.length > 0 ? total + 1 : total;
+        }
+        if (isOrderingItem(item)) {
+          if (item.scoring.customEvaluatorId) {
+            return total; // defer to external scorer
+          }
+          const provided = response.orderingAnswer ?? [];
+          if (item.scoring.mode === 'all') {
+            const isCorrect = provided.length === item.correctOrder.length
+              && item.correctOrder.every((optionId, index) => optionId === provided[index]);
+            return isCorrect ? total + 1 : total;
+          }
+          const expectedIndex = new Map(item.correctOrder.map((optionId, index) => [optionId, index] as const));
+          const providedIndex = new Map(provided.map((optionId, index) => [optionId, index] as const));
+          let correctPairs = 0;
+          for (let i = 0; i < item.correctOrder.length; i += 1) {
+            for (let j = i + 1; j < item.correctOrder.length; j += 1) {
+              const first = item.correctOrder[i];
+              const second = item.correctOrder[j];
+              const posFirst = providedIndex.get(first);
+              const posSecond = providedIndex.get(second);
+              if (posFirst === undefined || posSecond === undefined) {
+                continue;
+              }
+              if (posFirst < posSecond) {
+                correctPairs += 1;
+              }
+            }
+          }
+          return total + correctPairs;
         }
         if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
           return total;

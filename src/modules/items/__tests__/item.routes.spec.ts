@@ -242,6 +242,43 @@ describe('itemRoutes', () => {
     expect(saveMock).not.toHaveBeenCalled();
   });
 
+  it('creates an ordering item with validation', async () => {
+    uuidMock.mockReturnValueOnce('ordering-item-id').mockReturnValueOnce('event-id-4');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'ORDERING',
+        prompt: 'Rank the phases',
+        options: [
+          { id: 'opt-1', text: 'Plan' },
+          { id: 'opt-2', text: 'Execute' },
+          { id: 'opt-3', text: 'Review' },
+        ],
+        correctOrder: ['opt-1', 'opt-2', 'opt-3'],
+        scoring: { mode: 'partial_pairs' },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body).toMatchObject({
+      id: 'ordering-item-id',
+      tenantId: 'tenant-1',
+      kind: 'ORDERING',
+      prompt: 'Rank the phases',
+      options: [
+        { id: 'opt-1', text: 'Plan' },
+        { id: 'opt-2', text: 'Execute' },
+        { id: 'opt-3', text: 'Review' },
+      ],
+      correctOrder: ['opt-1', 'opt-2', 'opt-3'],
+      scoring: { mode: 'partial_pairs' },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'ORDERING' }));
+  });
+
   it('returns an item when found', async () => {
     const storedItem = {
       id: 'item-123',

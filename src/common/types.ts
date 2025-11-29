@@ -6,7 +6,7 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
-export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING';
+export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING';
 
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
@@ -52,7 +52,21 @@ export interface MatchingItem extends BaseItemEntity {
 	scoring: MatchingScoringRule;
 }
 
-export type Item = ChoiceItem | FillBlankItem | MatchingItem;
+export interface OrderingOption { id: string; text: string; }
+
+export interface OrderingScoringRule {
+	mode: 'all' | 'partial_pairs';
+	customEvaluatorId?: string;
+}
+
+export interface OrderingItem extends BaseItemEntity {
+	kind: 'ORDERING';
+	options: OrderingOption[];
+	correctOrder: string[];
+	scoring: OrderingScoringRule;
+}
+
+export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem;
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
@@ -61,6 +75,7 @@ export interface AttemptResponse {
 	answerIndexes?: number[];
 	textAnswers?: string[];
 	matchingAnswers?: { promptId: string; targetId: string }[];
+	orderingAnswer?: string[];
 }
 
 export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }

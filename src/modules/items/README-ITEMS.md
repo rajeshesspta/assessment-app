@@ -56,6 +56,19 @@
 	],
 	"scoring": { "mode": "partial" }
 }
+
+// Ordering / Ranking (clients submit orderingAnswer as an array of option ids)
+{
+	"kind": "ORDERING",
+	"prompt": "Rank the software lifecycle stages",
+	"options": [
+		{ "id": "opt-plan", "text": "Plan" },
+		{ "id": "opt-build", "text": "Build" },
+		{ "id": "opt-test", "text": "Test" }
+	],
+	"correctOrder": ["opt-plan", "opt-build", "opt-test"],
+	"scoring": { "mode": "partial_pairs", "customEvaluatorId": null }
+}
 ```
 
 TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, which keeps downstream scoring logic untouched.
@@ -63,6 +76,8 @@ TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, whi
 Fill-in-the-blank items define one or more blanks, each with acceptable answers (exact or regex). Attempts submit `textAnswers` for those blanks in order; multi-blank items can use `scoring.mode = "partial"` to award credit per blank or `"all"` to require every blank to match.
 
 Matching items persist their prompt/target schema inside `matching_schema_json`. Attempts provide `matchingAnswers` shaped as `{ promptId, targetId }[]`; scoring awards either per-prompt (partial) or requires a perfect set (all).
+
+Ordering items persist their schema inside `ordering_schema_json` and expect clients to submit `orderingAnswer` arrays preserving the option ids. Built-in scoring supports binary (`mode: "all"`) or pairwise partial credit (`"partial_pairs"`, Kendall-tau style). Set `scoring.customEvaluatorId` to a known handler name when delegating scoring to an external service—built-in scoring will skip those items but they still contribute to `maxScore`.
 
 `GET /items` supports optional query params: `search` (full-text on prompts) and `kind`, enabling callers to fetch only a specific item type.
 

@@ -6,7 +6,7 @@ Headless assessment platform MVP in TypeScript + Fastify.
 
 - Auth (API key)
 - Tenant enforcement (header `x-tenant-id`)
-- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching)
+- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking)
 - Assessment Authoring (static list of item IDs)
 - Attempt & Response Capture
 - Scoring (auto for MCQ)
@@ -67,8 +67,9 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 
 ## API (Summary)
 
-- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching)
-- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING` filter)
+- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering)
+- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING` filter)
+- Ordering responses submit `orderingAnswer` (array of option ids) and support either binary (`mode: all`) or partial pairwise credit (`mode: partial_pairs`).
 - GET /items/:id
 - POST /assessments
 - GET /assessments/:id

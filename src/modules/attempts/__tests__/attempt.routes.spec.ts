@@ -426,6 +426,46 @@ describe('attemptRoutes', () => {
     expect(response.json()).toMatchObject({ score: 1, maxScore: 2, status: 'scored' });
   });
 
+  it('scores ordering items with pairwise credit', async () => {
+    const attempt = {
+      id: 'attempt-ordering',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-ordering',
+      userId: 'user-5',
+      status: 'in_progress' as const,
+      responses: [{ itemId: 'ordering-item', orderingAnswer: ['opt-1', 'opt-3', 'opt-2'] }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-ordering', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-ordering',
+      tenantId: 'tenant-1',
+      itemIds: ['ordering-item'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'ordering-item',
+      tenantId: 'tenant-1',
+      kind: 'ORDERING',
+      prompt: 'Rank numbers',
+      options: [
+        { id: 'opt-1', text: 'One' },
+        { id: 'opt-2', text: 'Two' },
+        { id: 'opt-3', text: 'Three' },
+      ],
+      correctOrder: ['opt-1', 'opt-2', 'opt-3'],
+      scoring: { mode: 'partial_pairs' },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('ordering-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-ordering/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ score: 2, maxScore: 3, status: 'scored' });
+  });
+
   it('returns 404 when submitting missing attempt', async () => {
     const response = await app.inject({ method: 'POST', url: '/attempts/missing/submit' });
     expect(response.statusCode).toBe(404);

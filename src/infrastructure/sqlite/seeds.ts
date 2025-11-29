@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from './client.js';
-import type { Assessment, Attempt, FillBlankItem, Item, MatchingItem } from '../../common/types.js';
+import type { Assessment, Attempt, FillBlankItem, Item, MatchingItem, OrderingItem } from '../../common/types.js';
 
 function isFillBlankItem(item: Item): item is FillBlankItem {
   return item.kind === 'FILL_IN_THE_BLANK';
@@ -9,10 +9,14 @@ function isMatchingItem(item: Item): item is MatchingItem {
   return item.kind === 'MATCHING';
 }
 
+function isOrderingItem(item: Item): item is OrderingItem {
+  return item.kind === 'ORDERING';
+}
+
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
@@ -22,6 +26,7 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
       correct_indexes_json = excluded.correct_indexes_json,
       blank_schema_json = excluded.blank_schema_json,
       matching_schema_json = excluded.matching_schema_json,
+      ordering_schema_json = excluded.ordering_schema_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -29,11 +34,12 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.tenantId,
     item.kind,
     item.prompt,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) ? [] : item.choices),
-    isFillBlankItem(item) || isMatchingItem(item) ? 'single' : item.answerMode,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) ? [] : item.correctIndexes),
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) ? [] : item.choices),
+    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) ? 'single' : item.answerMode,
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) ? [] : item.correctIndexes),
     isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
     isMatchingItem(item) ? JSON.stringify({ prompts: item.prompts, targets: item.targets, scoring: item.scoring }) : null,
+    isOrderingItem(item) ? JSON.stringify({ options: item.options, correctOrder: item.correctOrder, scoring: item.scoring }) : null,
     item.createdAt,
     item.updatedAt,
   );
@@ -92,7 +98,7 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
@@ -122,6 +128,20 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
       prompts: schema?.prompts ?? [],
       targets: schema?.targets ?? [],
       scoring: schema?.scoring ?? { mode: 'partial' },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    } as Item;
+  }
+  if (row.kind === 'ORDERING') {
+    const schema = row.orderingSchemaJson ? JSON.parse(row.orderingSchemaJson) : undefined;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      kind: 'ORDERING',
+      prompt: row.prompt,
+      options: schema?.options ?? [],
+      correctOrder: schema?.correctOrder ?? [],
+      scoring: schema?.scoring ?? { mode: 'all' },
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     } as Item;
@@ -197,6 +217,18 @@ function tenantSampleItems(seedTenantId: string) {
       ],
       scoring: { mode: 'partial' },
     },
+    {
+      id: 'sample-item-7',
+      kind: 'ORDERING' as Item['kind'],
+      prompt: 'Rank the planets from closest to farthest from the sun',
+      options: [
+        { id: 'opt-1', text: 'Mercury' },
+        { id: 'opt-2', text: 'Venus' },
+        { id: 'opt-3', text: 'Earth' },
+      ],
+      correctOrder: ['opt-1', 'opt-2', 'opt-3'],
+      scoring: { mode: 'partial_pairs' },
+    },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
 
@@ -230,6 +262,20 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
         prompt: item.prompt,
         prompts: item.prompts,
         targets: item.targets,
+        scoring: item.scoring,
+        createdAt: now,
+        updatedAt: now,
+      } as Item);
+      continue;
+    }
+    if (item.kind === 'ORDERING') {
+      insertItem(db, {
+        id: item.id,
+        tenantId,
+        kind: 'ORDERING',
+        prompt: item.prompt,
+        options: item.options,
+        correctOrder: item.correctOrder,
         scoring: item.scoring,
         createdAt: now,
         updatedAt: now,

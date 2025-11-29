@@ -1,6 +1,6 @@
 import type { ItemRepository } from './item.repository.js';
 import type { SQLiteTenantClient } from '../../infrastructure/sqlite/client.js';
-import type { ChoiceItem, FillBlankItem, Item, MatchingItem } from '../../common/types.js';
+import type { ChoiceItem, FillBlankItem, Item, MatchingItem, OrderingItem } from '../../common/types.js';
 
 function isChoiceItem(item: Item): item is ChoiceItem {
   return item.kind === 'MCQ' || item.kind === 'TRUE_FALSE';
@@ -14,13 +14,17 @@ function isMatchingItem(item: Item): item is MatchingItem {
   return item.kind === 'MATCHING';
 }
 
+function isOrderingItem(item: Item): item is OrderingItem {
+  return item.kind === 'ORDERING';
+}
+
 export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepository {
   return {
     save(item) {
       const db = client.getConnection(item.tenantId);
       db.prepare(`
-        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           kind = excluded.kind,
           prompt = excluded.prompt,
@@ -29,6 +33,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           correct_indexes_json = excluded.correct_indexes_json,
           blank_schema_json = excluded.blank_schema_json,
           matching_schema_json = excluded.matching_schema_json,
+          ordering_schema_json = excluded.ordering_schema_json,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `).run(
@@ -41,6 +46,9 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
         JSON.stringify(isChoiceItem(item) ? item.correctIndexes : []),
         isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
         isMatchingItem(item) ? JSON.stringify({ prompts: item.prompts, targets: item.targets, scoring: item.scoring }) : null,
+        isOrderingItem(item)
+          ? JSON.stringify({ options: item.options, correctOrder: item.correctOrder, scoring: item.scoring })
+          : null,
         item.createdAt,
         item.updatedAt,
       );
@@ -49,7 +57,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
     getById(tenantId, id) {
       const db = client.getConnection(tenantId);
       const row = db.prepare(`
-        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, created_at as createdAt, updated_at as updatedAt
+        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, created_at as createdAt, updated_at as updatedAt
         FROM items
         WHERE id = ? AND tenant_id = ?
       `).get(id, tenantId);
@@ -85,6 +93,20 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           updatedAt: row.updatedAt,
         } satisfies Item;
       }
+      if (row.kind === 'ORDERING') {
+        const schema = row.orderingSchemaJson ? JSON.parse(row.orderingSchemaJson) : undefined;
+        return {
+          id: row.id,
+          tenantId: row.tenantId,
+          kind: 'ORDERING',
+          prompt: row.prompt,
+          options: schema?.options ?? [],
+          correctOrder: schema?.correctOrder ?? [],
+          scoring: schema?.scoring ?? { mode: 'all' },
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        } satisfies Item;
+      }
       const choices = JSON.parse(row.choicesJson) as ChoiceItem['choices'];
       return {
         id: row.id,
@@ -115,7 +137,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
       params.push(limit, offset);
       const rows = db
         .prepare(`
-          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, created_at as createdAt, updated_at as updatedAt
+          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, created_at as createdAt, updated_at as updatedAt
           FROM items
           WHERE ${clauses.join(' AND ')}
           ORDER BY created_at DESC
@@ -146,6 +168,20 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             prompts: schema?.prompts ?? [],
             targets: schema?.targets ?? [],
             scoring: schema?.scoring ?? { mode: 'partial' },
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          } satisfies Item;
+        }
+        if (row.kind === 'ORDERING') {
+          const schema = row.orderingSchemaJson ? JSON.parse(row.orderingSchemaJson) : undefined;
+          return {
+            id: row.id,
+            tenantId: row.tenantId,
+            kind: 'ORDERING',
+            prompt: row.prompt,
+            options: schema?.options ?? [],
+            correctOrder: schema?.correctOrder ?? [],
+            scoring: schema?.scoring ?? { mode: 'all' },
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
