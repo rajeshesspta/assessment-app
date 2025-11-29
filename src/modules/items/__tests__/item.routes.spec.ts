@@ -322,6 +322,74 @@ describe('itemRoutes', () => {
     expect(saveMock).not.toHaveBeenCalled();
   });
 
+  it('creates an essay item with rubric sections and length guidance', async () => {
+    uuidMock.mockReturnValueOnce('essay-item-id').mockReturnValueOnce('event-id-6');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'ESSAY',
+        prompt: 'Discuss AI ethics.',
+        length: { minWords: 300, maxWords: 800, recommendedWords: 500 },
+        rubric: {
+          keywords: ['ethics', 'privacy', 'ethics'],
+          guidance: 'Address privacy and fairness.',
+          sections: [
+            { id: 'intro', title: 'Introduction', maxScore: 3, keywords: ['intro', 'hook', 'intro'] },
+            { id: 'analysis', title: 'Analysis', maxScore: 5 },
+          ],
+        },
+        scoring: { mode: 'manual', maxScore: 10 },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: 'essay-item-id',
+      kind: 'ESSAY',
+      length: { minWords: 300, maxWords: 800, recommendedWords: 500 },
+      rubric: {
+        keywords: ['ethics', 'privacy'],
+        sections: [
+          { id: 'intro', title: 'Introduction', maxScore: 3, keywords: ['intro', 'hook'] },
+          { id: 'analysis', title: 'Analysis', maxScore: 5 },
+        ],
+      },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'ESSAY' }));
+  });
+
+  it('rejects essay payloads with invalid word bounds', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'ESSAY',
+        prompt: 'Discuss AI ethics.',
+        length: { minWords: 900, maxWords: 500 },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  it('requires aiEvaluatorId for essay ai_rubric mode', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'ESSAY',
+        prompt: 'Discuss AI ethics.',
+        scoring: { mode: 'ai_rubric', maxScore: 12 },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it('returns an item when found', async () => {
     const storedItem = {
       id: 'item-123',

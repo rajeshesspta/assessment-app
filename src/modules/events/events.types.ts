@@ -4,5 +4,5 @@ export const EVENT_TYPES = {
   AssessmentCreated: 'AssessmentCreated',
   AttemptStarted: 'AttemptStarted',
   AttemptScored: 'AttemptScored',
-  ShortAnswerEvaluationRequested: 'ShortAnswerEvaluationRequested'
+  FreeResponseEvaluationRequested: 'FreeResponseEvaluationRequested'
 } as const;

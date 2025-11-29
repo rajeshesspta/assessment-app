@@ -17,6 +17,7 @@ const responseSchema = z.object({
   textAnswers: z.array(z.string()).optional(),
   matchingAnswers: z.array(z.object({ promptId: z.string(), targetId: z.string() })).optional(),
   orderingAnswer: z.array(z.string()).optional(),
+  essayAnswer: z.string().optional(),
 });
 
 const responsesSchema = z.object({ responses: z.array(responseSchema) });
@@ -90,7 +91,15 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       const orderingAnswer = r.orderingAnswer && r.orderingAnswer.length > 0
         ? Array.from(new Set(r.orderingAnswer.map(value => value?.trim()).filter((value): value is string => Boolean(value))))
         : undefined;
-      return { itemId: r.itemId, answerIndexes, textAnswers, matchingAnswers, orderingAnswer };
+      const essayAnswer = typeof r.essayAnswer === 'string' ? r.essayAnswer.trim() : undefined;
+      return {
+        itemId: r.itemId,
+        answerIndexes,
+        textAnswers,
+        matchingAnswers,
+        orderingAnswer,
+        essayAnswer: essayAnswer && essayAnswer.length > 0 ? essayAnswer : undefined,
+      };
     });
     for (const r of normalized) {
       const existing = attempt.responses.find(x => x.itemId === r.itemId);
@@ -99,6 +108,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         existing.textAnswers = r.textAnswers;
         existing.matchingAnswers = r.matchingAnswers;
         existing.orderingAnswer = r.orderingAnswer;
+        existing.essayAnswer = r.essayAnswer;
       } else {
         attempt.responses.push(r);
       }
@@ -116,15 +126,18 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     if (attempt.status !== 'in_progress') { reply.code(400); return { error: 'Already submitted' }; }
     const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId)!;
     let score = 0; let maxScore = 0;
-    const pendingShortAnswerEvaluations: Array<{
+    const pendingFreeResponseEvaluations: Array<{
       attemptId: string;
       itemId: string;
+      itemKind: 'SHORT_ANSWER' | 'ESSAY';
       prompt: string;
       mode: 'manual' | 'ai_rubric';
       maxScore: number;
       aiEvaluatorId?: string;
       rubricKeywords?: string[];
       rubricGuidance?: string;
+      rubricSections?: { id: string; title: string; description?: string; maxScore: number; keywords?: string[] }[];
+      lengthExpectation?: { minWords?: number; maxWords?: number; recommendedWords?: number };
       responseText?: string;
     }> = [];
     for (const itemId of assessment.itemIds) {
@@ -213,9 +226,10 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       if (item.kind === 'SHORT_ANSWER') {
         const shortAnswerScore = item.scoring?.maxScore ?? 1;
         maxScore += shortAnswerScore;
-        pendingShortAnswerEvaluations.push({
+        pendingFreeResponseEvaluations.push({
           attemptId: attempt.id,
           itemId: item.id,
+          itemKind: 'SHORT_ANSWER',
           prompt: item.prompt,
           mode: item.scoring.mode,
           maxScore: shortAnswerScore,
@@ -223,6 +237,25 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
           rubricKeywords: item.rubric?.keywords,
           rubricGuidance: item.rubric?.guidance,
           responseText: response?.textAnswers?.[0]?.trim(),
+        });
+        continue;
+      }
+      if (item.kind === 'ESSAY') {
+        const essayScore = item.scoring?.maxScore ?? 10;
+        maxScore += essayScore;
+        pendingFreeResponseEvaluations.push({
+          attemptId: attempt.id,
+          itemId: item.id,
+          itemKind: 'ESSAY',
+          prompt: item.prompt,
+          mode: item.scoring.mode,
+          maxScore: essayScore,
+          aiEvaluatorId: item.scoring.aiEvaluatorId,
+          rubricKeywords: item.rubric?.keywords,
+          rubricGuidance: item.rubric?.guidance,
+          rubricSections: item.rubric?.sections,
+          lengthExpectation: item.length,
+          responseText: response?.essayAnswer?.trim(),
         });
         continue;
       }
@@ -239,26 +272,29 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       }
     }
     attempt.score = score; attempt.maxScore = maxScore;
-    const hasPendingShortAnswer = pendingShortAnswerEvaluations.length > 0;
-    attempt.status = hasPendingShortAnswer ? 'submitted' : 'scored';
+    const hasPendingFreeResponse = pendingFreeResponseEvaluations.length > 0;
+    attempt.status = hasPendingFreeResponse ? 'submitted' : 'scored';
     attempt.updatedAt = new Date().toISOString();
     attemptRepository.save(attempt);
-    if (hasPendingShortAnswer) {
-      for (const evaluation of pendingShortAnswerEvaluations) {
+    if (hasPendingFreeResponse) {
+      for (const evaluation of pendingFreeResponseEvaluations) {
         eventBus.publish({
           id: uuid(),
-          type: 'ShortAnswerEvaluationRequested',
+          type: 'FreeResponseEvaluationRequested',
           occurredAt: new Date().toISOString(),
           tenantId: attempt.tenantId,
           payload: {
             attemptId: evaluation.attemptId,
             itemId: evaluation.itemId,
+            itemKind: evaluation.itemKind,
             prompt: evaluation.prompt,
             mode: evaluation.mode,
             maxScore: evaluation.maxScore,
             aiEvaluatorId: evaluation.aiEvaluatorId,
             rubricKeywords: evaluation.rubricKeywords,
             rubricGuidance: evaluation.rubricGuidance,
+            rubricSections: evaluation.rubricSections,
+            lengthExpectation: evaluation.lengthExpectation,
             responseText: evaluation.responseText,
           },
         });

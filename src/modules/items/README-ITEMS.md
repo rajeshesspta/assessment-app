@@ -83,6 +83,29 @@
 		"maxScore": 3
 	}
 }
+
+// Essay / Long form (captures length expectations + rubric sections)
+{
+	"kind": "ESSAY",
+	"prompt": "Discuss the long-term impacts of industrialization on urban planning.",
+	"length": {
+		"minWords": 250,
+		"maxWords": 600,
+		"recommendedWords": 400
+	},
+	"rubric": {
+		"guidance": "Address infrastructure, social change, and sustainability.",
+		"sections": [
+			{ "id": "structure", "title": "Structure", "maxScore": 3 },
+			{ "id": "analysis", "title": "Analysis", "maxScore": 4 },
+			{ "id": "evidence", "title": "Evidence", "maxScore": 3 }
+		]
+	},
+	"scoring": {
+		"mode": "manual",
+		"maxScore": 10
+	}
+}
 ```
 
 TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, which keeps downstream scoring logic untouched.
@@ -93,7 +116,9 @@ Matching items persist their prompt/target schema inside `matching_schema_json`.
 
 Ordering items persist their schema inside `ordering_schema_json` and expect clients to submit `orderingAnswer` arrays preserving the option ids. Built-in scoring supports binary (`mode: "all"`) or pairwise partial credit (`"partial_pairs"`, Kendall-tau style). Set `scoring.customEvaluatorId` to a known handler name when delegating scoring to an external service—built-in scoring will skip those items but they still contribute to `maxScore`.
 
-Short-answer items store their rubric + scoring metadata inside `short_answer_schema_json`. Attempts simply provide `textAnswer`/`textAnswers[0]`. When an attempt is submitted, the API records `maxScore`, keeps the attempt in `submitted` status, and publishes a `ShortAnswerEvaluationRequested` event (containing prompt, rubric keywords, and response text) so a manual reviewer or AI evaluator can award the final score.
+Short-answer items store their rubric + scoring metadata inside `short_answer_schema_json`. Attempts simply provide `textAnswer`/`textAnswers[0]`. When an attempt is submitted, the API records `maxScore`, keeps the attempt in `submitted` status, and publishes a `FreeResponseEvaluationRequested` event (containing prompt, rubric keywords, and response text) so a manual reviewer or AI evaluator can award the final score.
+
+Essay items persist their metadata inside `essay_schema_json`, including optional rubric sections and length expectations (min/max/recommended word counts). Attempts send `essayAnswer` strings; submission triggers the same deferred-scoring workflow, emitting a `FreeResponseEvaluationRequested` event that contains rubric sections, keywords, and length guidance for downstream graders.
 
 `GET /items` supports optional query params: `search` (full-text on prompts) and `kind`, enabling callers to fetch only a specific item type.
 

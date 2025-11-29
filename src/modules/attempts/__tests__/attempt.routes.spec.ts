@@ -370,13 +370,66 @@ describe('attemptRoutes', () => {
     expect(response.json()).toMatchObject({ status: 'submitted', score: 1, maxScore: 4 });
     expect(mocks.publishMock).toHaveBeenCalledTimes(1);
     expect(mocks.publishMock).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'ShortAnswerEvaluationRequested',
+      type: 'FreeResponseEvaluationRequested',
       payload: expect.objectContaining({
         attemptId: 'attempt-sa',
         itemId: 'item-sa',
+        itemKind: 'SHORT_ANSWER',
         mode: 'manual',
         maxScore: 3,
         responseText: 'Earth tilt drives the seasons.',
+      }),
+    }));
+  });
+
+  it('defers scoring for essay items and forwards rubric metadata', async () => {
+    const attempt = {
+      id: 'attempt-essay',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-essay',
+      userId: 'user-2',
+      status: 'in_progress' as const,
+      responses: [
+        { itemId: 'item-essay', essayAnswer: 'Industrialization reshaped transit and housing.' },
+      ],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-essay', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-essay',
+      tenantId: 'tenant-1',
+      itemIds: ['item-essay'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'item-essay',
+      tenantId: 'tenant-1',
+      kind: 'ESSAY' as const,
+      prompt: 'Describe urban planning shifts.',
+      rubric: {
+        guidance: 'Mention transit and zoning.',
+        sections: [{ id: 'analysis', title: 'Analysis', maxScore: 5 }],
+      },
+      length: { minWords: 300, maxWords: 900 },
+      scoring: { mode: 'manual', maxScore: 10 },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('essay-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-essay/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'submitted', score: 0, maxScore: 10 });
+    expect(mocks.publishMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'FreeResponseEvaluationRequested',
+      payload: expect.objectContaining({
+        attemptId: 'attempt-essay',
+        itemId: 'item-essay',
+        itemKind: 'ESSAY',
+        rubricSections: [{ id: 'analysis', title: 'Analysis', maxScore: 5 }],
+        lengthExpectation: { minWords: 300, maxWords: 900 },
+        responseText: 'Industrialization reshaped transit and housing.',
       }),
     }));
   });

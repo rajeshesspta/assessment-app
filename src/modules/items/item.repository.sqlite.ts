@@ -1,6 +1,6 @@
 import type { ItemRepository } from './item.repository.js';
 import type { SQLiteTenantClient } from '../../infrastructure/sqlite/client.js';
-import type { ChoiceItem, FillBlankItem, Item, MatchingItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
+import type { ChoiceItem, EssayItem, FillBlankItem, Item, MatchingItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
 
 function isChoiceItem(item: Item): item is ChoiceItem {
   return item.kind === 'MCQ' || item.kind === 'TRUE_FALSE';
@@ -22,13 +22,17 @@ function isShortAnswerItem(item: Item): item is ShortAnswerItem {
   return item.kind === 'SHORT_ANSWER';
 }
 
+function isEssayItem(item: Item): item is EssayItem {
+  return item.kind === 'ESSAY';
+}
+
 export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepository {
   return {
     save(item) {
       const db = client.getConnection(item.tenantId);
       db.prepare(`
-        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           kind = excluded.kind,
           prompt = excluded.prompt,
@@ -39,6 +43,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           matching_schema_json = excluded.matching_schema_json,
           ordering_schema_json = excluded.ordering_schema_json,
           short_answer_schema_json = excluded.short_answer_schema_json,
+          essay_schema_json = excluded.essay_schema_json,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `).run(
@@ -57,6 +62,9 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
         isShortAnswerItem(item)
           ? JSON.stringify({ rubric: item.rubric, scoring: item.scoring })
           : null,
+        isEssayItem(item)
+          ? JSON.stringify({ rubric: item.rubric, length: item.length, scoring: item.scoring })
+          : null,
         item.createdAt,
         item.updatedAt,
       );
@@ -65,7 +73,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
     getById(tenantId, id) {
       const db = client.getConnection(tenantId);
       const row = db.prepare(`
-        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, created_at as createdAt, updated_at as updatedAt
+        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, created_at as createdAt, updated_at as updatedAt
         FROM items
         WHERE id = ? AND tenant_id = ?
       `).get(id, tenantId);
@@ -128,6 +136,20 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           updatedAt: row.updatedAt,
         } satisfies Item;
       }
+      if (row.kind === 'ESSAY') {
+        const schema = row.essaySchemaJson ? JSON.parse(row.essaySchemaJson) : undefined;
+        return {
+          id: row.id,
+          tenantId: row.tenantId,
+          kind: 'ESSAY',
+          prompt: row.prompt,
+          rubric: schema?.rubric,
+          length: schema?.length,
+          scoring: schema?.scoring ?? { mode: 'manual', maxScore: 10 },
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        } satisfies Item;
+      }
       const choices = JSON.parse(row.choicesJson) as ChoiceItem['choices'];
       return {
         id: row.id,
@@ -158,7 +180,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
       params.push(limit, offset);
       const rows = db
         .prepare(`
-          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, created_at as createdAt, updated_at as updatedAt
+          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, created_at as createdAt, updated_at as updatedAt
           FROM items
           WHERE ${clauses.join(' AND ')}
           ORDER BY created_at DESC
@@ -216,6 +238,20 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             prompt: row.prompt,
             rubric: schema?.rubric,
             scoring: schema?.scoring ?? { mode: 'manual', maxScore: 1 },
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          } satisfies Item;
+        }
+        if (row.kind === 'ESSAY') {
+          const schema = row.essaySchemaJson ? JSON.parse(row.essaySchemaJson) : undefined;
+          return {
+            id: row.id,
+            tenantId: row.tenantId,
+            kind: 'ESSAY',
+            prompt: row.prompt,
+            rubric: schema?.rubric,
+            length: schema?.length,
+            scoring: schema?.scoring ?? { mode: 'manual', maxScore: 10 },
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;

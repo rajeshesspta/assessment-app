@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item, MatchingItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
+import type { Assessment, Attempt, ChoiceItem, EssayItem, FillBlankItem, Item, MatchingItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -201,39 +201,39 @@ function buildRandomMatchingItem(tenantId: string): Item {
   } satisfies Item;
 }
 
-  const orderingTemplates = [
-    {
-      prompt: 'Rank the following planets from closest to farthest from the sun',
-      options: ['Mercury', 'Venus', 'Earth', 'Mars'],
-    },
-    {
-      prompt: 'Arrange the historical events chronologically',
-      options: ['World War I', 'World War II', 'Moon Landing', 'Fall of Berlin Wall'],
-    },
-    {
-      prompt: 'Order the data storage units from smallest to largest',
-      options: ['Kilobyte', 'Megabyte', 'Gigabyte', 'Terabyte'],
-    },
-  ];
+const orderingTemplates = [
+  {
+    prompt: 'Rank the following planets from closest to farthest from the sun',
+    options: ['Mercury', 'Venus', 'Earth', 'Mars'],
+  },
+  {
+    prompt: 'Arrange the historical events chronologically',
+    options: ['World War I', 'World War II', 'Moon Landing', 'Fall of Berlin Wall'],
+  },
+  {
+    prompt: 'Order the data storage units from smallest to largest',
+    options: ['Kilobyte', 'Megabyte', 'Gigabyte', 'Terabyte'],
+  },
+];
 
-  function buildRandomOrderingItem(tenantId: string): Item {
-    const template = orderingTemplates[randomInt(orderingTemplates.length)];
-    const options = template.options.map((text, index) => ({ id: `opt-${index + 1}`, text }));
-    const correctOrder = options.map(option => option.id);
-    const now = new Date().toISOString();
-    const shouldAllowPartial = Math.random() > 0.5;
-    return {
-      id: `random-ordering-item-${randomUUID()}`,
-      tenantId,
-      kind: 'ORDERING',
-      prompt: template.prompt,
-      options,
-      correctOrder,
-      scoring: { mode: shouldAllowPartial ? 'partial_pairs' : 'all' },
-      createdAt: now,
-      updatedAt: now,
-    } satisfies Item;
-  }
+function buildRandomOrderingItem(tenantId: string): Item {
+  const template = orderingTemplates[randomInt(orderingTemplates.length)];
+  const options = template.options.map((text, index) => ({ id: `opt-${index + 1}`, text }));
+  const correctOrder = options.map(option => option.id);
+  const now = new Date().toISOString();
+  const shouldAllowPartial = Math.random() > 0.5;
+  return {
+    id: `random-ordering-item-${randomUUID()}`,
+    tenantId,
+    kind: 'ORDERING',
+    prompt: template.prompt,
+    options,
+    correctOrder,
+    scoring: { mode: shouldAllowPartial ? 'partial_pairs' : 'all' },
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
 
 const shortAnswerTemplates = [
   {
@@ -274,25 +274,65 @@ function buildRandomShortAnswerItem(tenantId: string): Item {
   } satisfies Item;
 }
 
+const essayTemplates = [
+  {
+    prompt: 'Discuss the societal implications of ubiquitous AI assistants.',
+    keywords: ['ethics', 'privacy', 'productivity'],
+  },
+  {
+    prompt: 'Explain how climate change affects coastal urban planning over 50 years.',
+    keywords: ['sea level', 'infrastructure', 'migration'],
+  },
+  {
+    prompt: 'Evaluate the impact of social media on political discourse.',
+    keywords: ['polarization', 'engagement', 'misinformation'],
+  },
+];
+
+function buildRandomEssayItem(tenantId: string): Item {
+  const template = essayTemplates[randomInt(essayTemplates.length)];
+  const now = new Date().toISOString();
+  const maxScore = 12;
+  const rubricSections = [
+    { id: 'intro', title: 'Introduction', maxScore: 3 },
+    { id: 'analysis', title: 'Analysis', maxScore: 5 },
+    { id: 'conclusion', title: 'Conclusion', maxScore: 4 },
+  ];
+  const length = { minWords: 400, maxWords: 900, recommendedWords: 600 };
+  return {
+    id: `random-essay-item-${randomUUID()}`,
+    tenantId,
+    kind: 'ESSAY',
+    prompt: template.prompt,
+    rubric: { keywords: template.keywords, sections: rubricSections },
+    length,
+    scoring: { mode: 'manual', maxScore },
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
 function buildRandomItem(tenantId: string, index: number): Item {
-    const builders = [
-      buildRandomMCQItem,
-      buildRandomTrueFalseItem,
-      buildRandomFillBlankItem,
-      buildRandomMatchingItem,
-      buildRandomOrderingItem,
-      buildRandomShortAnswerItem,
-    ] as const;
+  const builders = [
+    buildRandomMCQItem,
+    buildRandomTrueFalseItem,
+    buildRandomFillBlankItem,
+    buildRandomMatchingItem,
+    buildRandomOrderingItem,
+    buildRandomShortAnswerItem,
+    buildRandomEssayItem,
+  ] as const;
   if (index < builders.length) {
     return builders[index](tenantId);
   }
   const roll = Math.random();
-    if (roll < 0.17) return buildRandomFillBlankItem(tenantId);
-    if (roll < 0.34) return buildRandomTrueFalseItem(tenantId);
-    if (roll < 0.51) return buildRandomMatchingItem(tenantId);
-    if (roll < 0.68) return buildRandomOrderingItem(tenantId);
-    if (roll < 0.85) return buildRandomShortAnswerItem(tenantId);
-    return buildRandomMCQItem(tenantId);
+  if (roll < 0.15) return buildRandomFillBlankItem(tenantId);
+  if (roll < 0.3) return buildRandomTrueFalseItem(tenantId);
+  if (roll < 0.45) return buildRandomMatchingItem(tenantId);
+  if (roll < 0.6) return buildRandomOrderingItem(tenantId);
+  if (roll < 0.75) return buildRandomShortAnswerItem(tenantId);
+  if (roll < 0.9) return buildRandomEssayItem(tenantId);
+  return buildRandomMCQItem(tenantId);
 }
 
 function buildRandomAssessment(tenantId: string, items: Item[], index: number): Assessment {
@@ -329,6 +369,10 @@ function isShortAnswerItem(item: Item): item is ShortAnswerItem {
   return item.kind === 'SHORT_ANSWER';
 }
 
+function isEssayItem(item: Item): item is EssayItem {
+  return item.kind === 'ESSAY';
+}
+
 function buildRandomAttempt(
   tenantId: string,
   assessment: Assessment,
@@ -337,11 +381,11 @@ function buildRandomAttempt(
   const statuses: Attempt['status'][] = ['in_progress', 'submitted', 'scored'];
   let status = statuses[randomInt(statuses.length)];
   const now = new Date().toISOString();
-  const containsShortAnswer = assessment.itemIds.some(itemId => {
+  const containsFreeResponse = assessment.itemIds.some(itemId => {
     const item = itemById.get(itemId);
-    return item ? isShortAnswerItem(item) : false;
+    return item ? isShortAnswerItem(item) || isEssayItem(item) : false;
   });
-  if (containsShortAnswer && status === 'scored') {
+  if (containsFreeResponse && status === 'scored') {
     status = 'submitted';
   }
   const responses = assessment.itemIds.map(itemId => {
@@ -382,6 +426,14 @@ function buildRandomAttempt(
         : 'Need to research more before answering.';
       return { itemId, textAnswers: [responseText] };
     }
+    if (isEssayItem(item)) {
+      const paragraphs = [
+        'Technological change often outpaces policy, forcing cities to rethink how residents live and work.',
+        'Stakeholders must balance economic growth with sustainability and equity.',
+      ];
+      const essayText = paragraphs.join(' ');
+      return { itemId, essayAnswer: essayText };
+    }
     if (isChoiceItem(item) && item.answerMode === 'single') {
       return { itemId, answerIndexes: [randomInt(item.choices.length)] };
     }
@@ -410,84 +462,87 @@ function buildRandomAttempt(
     if (isShortAnswerItem(item)) {
       return total + (item.scoring?.maxScore ?? 1);
     }
+    if (isEssayItem(item)) {
+      return total + (item.scoring?.maxScore ?? 10);
+    }
     return total + 1;
   }, 0);
   const score = status === 'scored'
     ? responses.reduce((total, response) => {
-        const item = itemById.get(response.itemId);
-        if (!item) return total;
-        if (isShortAnswerItem(item)) {
-          return total;
+      const item = itemById.get(response.itemId);
+      if (!item) return total;
+      if (isShortAnswerItem(item) || isEssayItem(item)) {
+        return total;
+      }
+      if (isFillBlankItem(item)) {
+        const provided = response.textAnswers ?? [];
+        const blanksCorrect = item.blanks.reduce((count, blank, index) => {
+          const candidate = provided[index];
+          if (!candidate) return count;
+          const matcher = blank.acceptableAnswers[0];
+          if (!matcher) return count;
+          if (matcher.type === 'exact' && matcher.value.localeCompare(candidate, undefined, { sensitivity: matcher.caseSensitive ? 'case' : 'accent' }) === 0) {
+            return count + 1;
+          }
+          return count;
+        }, 0);
+        if (item.scoring.mode === 'partial') {
+          return total + blanksCorrect;
         }
-        if (isFillBlankItem(item)) {
-          const provided = response.textAnswers ?? [];
-          const blanksCorrect = item.blanks.reduce((count, blank, index) => {
-            const candidate = provided[index];
-            if (!candidate) return count;
-            const matcher = blank.acceptableAnswers[0];
-            if (!matcher) return count;
-            if (matcher.type === 'exact' && matcher.value.localeCompare(candidate, undefined, { sensitivity: matcher.caseSensitive ? 'case' : 'accent' }) === 0) {
-              return count + 1;
+        return blanksCorrect === item.blanks.length && item.blanks.length > 0 ? total + 1 : total;
+      }
+      if (isMatchingItem(item)) {
+        const provided = response.matchingAnswers ?? [];
+        const correctByPrompt = new Map(item.prompts.map(prompt => [prompt.id, prompt.correctTargetId] as const));
+        const matches = provided.reduce((count, pair) => {
+          const expected = correctByPrompt.get(pair.promptId);
+          return expected && expected === pair.targetId ? count + 1 : count;
+        }, 0);
+        if (item.scoring.mode === 'partial') {
+          return total + matches;
+        }
+        return matches === item.prompts.length && item.prompts.length > 0 ? total + 1 : total;
+      }
+      if (isOrderingItem(item)) {
+        if (item.scoring.customEvaluatorId) {
+          return total; // defer to external scorer
+        }
+        const provided = response.orderingAnswer ?? [];
+        if (item.scoring.mode === 'all') {
+          const isCorrect = provided.length === item.correctOrder.length
+            && item.correctOrder.every((optionId, index) => optionId === provided[index]);
+          return isCorrect ? total + 1 : total;
+        }
+        const expectedIndex = new Map(item.correctOrder.map((optionId, index) => [optionId, index] as const));
+        const providedIndex = new Map(provided.map((optionId, index) => [optionId, index] as const));
+        let correctPairs = 0;
+        for (let i = 0; i < item.correctOrder.length; i += 1) {
+          for (let j = i + 1; j < item.correctOrder.length; j += 1) {
+            const first = item.correctOrder[i];
+            const second = item.correctOrder[j];
+            const posFirst = providedIndex.get(first);
+            const posSecond = providedIndex.get(second);
+            if (posFirst === undefined || posSecond === undefined) {
+              continue;
             }
-            return count;
-          }, 0);
-          if (item.scoring.mode === 'partial') {
-            return total + blanksCorrect;
-          }
-          return blanksCorrect === item.blanks.length && item.blanks.length > 0 ? total + 1 : total;
-        }
-        if (isMatchingItem(item)) {
-          const provided = response.matchingAnswers ?? [];
-          const correctByPrompt = new Map(item.prompts.map(prompt => [prompt.id, prompt.correctTargetId] as const));
-          const matches = provided.reduce((count, pair) => {
-            const expected = correctByPrompt.get(pair.promptId);
-            return expected && expected === pair.targetId ? count + 1 : count;
-          }, 0);
-          if (item.scoring.mode === 'partial') {
-            return total + matches;
-          }
-          return matches === item.prompts.length && item.prompts.length > 0 ? total + 1 : total;
-        }
-        if (isOrderingItem(item)) {
-          if (item.scoring.customEvaluatorId) {
-            return total; // defer to external scorer
-          }
-          const provided = response.orderingAnswer ?? [];
-          if (item.scoring.mode === 'all') {
-            const isCorrect = provided.length === item.correctOrder.length
-              && item.correctOrder.every((optionId, index) => optionId === provided[index]);
-            return isCorrect ? total + 1 : total;
-          }
-          const expectedIndex = new Map(item.correctOrder.map((optionId, index) => [optionId, index] as const));
-          const providedIndex = new Map(provided.map((optionId, index) => [optionId, index] as const));
-          let correctPairs = 0;
-          for (let i = 0; i < item.correctOrder.length; i += 1) {
-            for (let j = i + 1; j < item.correctOrder.length; j += 1) {
-              const first = item.correctOrder[i];
-              const second = item.correctOrder[j];
-              const posFirst = providedIndex.get(first);
-              const posSecond = providedIndex.get(second);
-              if (posFirst === undefined || posSecond === undefined) {
-                continue;
-              }
-              if (posFirst < posSecond) {
-                correctPairs += 1;
-              }
+            if (posFirst < posSecond) {
+              correctPairs += 1;
             }
           }
-          return total + correctPairs;
         }
-        if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
-          return total;
-        }
-        const answers = Array.from(new Set(response.answerIndexes)).sort((x, y) => x - y);
-        const expected = [...item.correctIndexes].sort((x, y) => x - y);
-        if (item.answerMode === 'single') {
-          return answers.length === 1 && answers[0] === expected[0] ? total + 1 : total;
-        }
-        const matches = answers.length === expected.length && expected.every((value, idx) => value === answers[idx]);
-        return matches ? total + 1 : total;
-      }, 0)
+        return total + correctPairs;
+      }
+      if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
+        return total;
+      }
+      const answers = Array.from(new Set(response.answerIndexes)).sort((x, y) => x - y);
+      const expected = [...item.correctIndexes].sort((x, y) => x - y);
+      if (item.answerMode === 'single') {
+        return answers.length === 1 && answers[0] === expected[0] ? total + 1 : total;
+      }
+      const matches = answers.length === expected.length && expected.every((value, idx) => value === answers[idx]);
+      return matches ? total + 1 : total;
+    }, 0)
     : undefined;
 
   return {

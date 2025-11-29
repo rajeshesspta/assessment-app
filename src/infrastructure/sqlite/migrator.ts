@@ -17,6 +17,19 @@ function safeRollback(db: SQLiteDatabase) {
   }
 }
 
+function shouldSkipMigration(db: SQLiteDatabase, fileName: string): boolean {
+  if (fileName === '003_items_multi_answer.sql') {
+    try {
+      const rows = db.prepare('PRAGMA table_info(items)').all() as Array<{ name: string }>;
+      const hasLegacyColumn = rows.some(row => row.name === 'correct_index');
+      return !hasLegacyColumn;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 export function runMigrations(db: SQLiteDatabase, migrationsDir: string): void {
   if (!migrationsDir) {
     throw new Error('SQLite migrations directory not configured');
@@ -33,6 +46,10 @@ export function runMigrations(db: SQLiteDatabase, migrationsDir: string): void {
   for (const file of files) {
     const alreadyApplied = db.prepare('SELECT 1 FROM __migrations WHERE name = ? LIMIT 1').get(file);
     if (alreadyApplied) {
+      continue;
+    }
+    if (shouldSkipMigration(db, file)) {
+      db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
       continue;
     }
     const fullPath = path.join(resolvedDir, file);

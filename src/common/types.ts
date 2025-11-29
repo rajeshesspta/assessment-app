@@ -6,7 +6,7 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
-export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER';
+export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY';
 
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
@@ -83,7 +83,38 @@ export interface ShortAnswerItem extends BaseItemEntity {
 	scoring: ShortAnswerScoringRule;
 }
 
-export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem;
+export interface EssayLengthExpectation {
+	minWords?: number;
+	maxWords?: number;
+	recommendedWords?: number;
+}
+
+export interface EssayRubricSection {
+	id: string;
+	title: string;
+	description?: string;
+	maxScore: number;
+	keywords?: string[];
+}
+
+export interface EssayRubric extends ShortAnswerRubric {
+	sections?: EssayRubricSection[];
+}
+
+export interface EssayScoringRule {
+	mode: 'manual' | 'ai_rubric';
+	maxScore: number;
+	aiEvaluatorId?: string;
+}
+
+export interface EssayItem extends BaseItemEntity {
+	kind: 'ESSAY';
+	rubric?: EssayRubric;
+	length?: EssayLengthExpectation;
+	scoring: EssayScoringRule;
+}
+
+export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem;
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
@@ -93,6 +124,7 @@ export interface AttemptResponse {
 	textAnswers?: string[];
 	matchingAnswers?: { promptId: string; targetId: string }[];
 	orderingAnswer?: string[];
+	essayAnswer?: string;
 }
 
 export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }

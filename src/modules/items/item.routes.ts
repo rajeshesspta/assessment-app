@@ -79,13 +79,57 @@ const shortAnswerSchema = z.object({
     }),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema]);
+const essayLengthSchema = z.object({
+  minWords: z.number().int().positive().max(2000).optional(),
+  maxWords: z.number().int().positive().max(5000).optional(),
+  recommendedWords: z.number().int().positive().max(5000).optional(),
+}).refine(data => {
+  if (data.minWords && data.maxWords && data.minWords > data.maxWords) {
+    return false;
+  }
+  if (data.recommendedWords) {
+    if (data.minWords && data.recommendedWords < data.minWords) {
+      return false;
+    }
+    if (data.maxWords && data.recommendedWords > data.maxWords) {
+      return false;
+    }
+  }
+  return true;
+}, { message: 'Word counts must satisfy min <= recommended <= max' });
+
+const essaySchema = z.object({
+  kind: z.literal('ESSAY'),
+  prompt: z.string().min(1),
+  length: essayLengthSchema.optional(),
+  rubric: z
+    .object({
+      keywords: z.array(z.string().min(1).max(120)).max(20).optional(),
+      guidance: z.string().min(1).max(2000).optional(),
+      sections: z.array(z.object({
+        id: z.string().min(1),
+        title: z.string().min(1),
+        description: z.string().max(1000).optional(),
+        maxScore: z.number().int().positive().max(20),
+        keywords: z.array(z.string().min(1).max(120)).max(10).optional(),
+      })).max(10).optional(),
+    })
+    .optional(),
+  scoring: z
+    .object({
+      mode: z.enum(['manual', 'ai_rubric']).default('manual'),
+      maxScore: z.number().int().positive().max(50).default(10),
+      aiEvaluatorId: z.string().min(1).optional(),
+    }),
+});
+
+const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
-  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER']).optional(),
+  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY']).optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -101,7 +145,16 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
   });
   app.post('/', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
-    const parsed = createSchema.parse(req.body ?? {});
+    let parsed: z.infer<typeof createSchema>;
+    try {
+      parsed = createSchema.parse(req.body ?? {});
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return { error: 'Invalid request body', issues: error.issues };
+      }
+      throw error;
+    }
     const id = uuid();
     if (parsed.kind === 'MCQ') {
       const unique = new Set(parsed.correctIndexes);
@@ -269,6 +322,36 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         kind: 'SHORT_ANSWER',
         prompt: parsed.prompt,
         rubric,
+        scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    if (parsed.kind === 'ESSAY') {
+      if (parsed.scoring.mode === 'ai_rubric' && !parsed.scoring.aiEvaluatorId) {
+        reply.code(400);
+        return { error: 'ai_rubric scoring requires aiEvaluatorId' };
+      }
+      const keywords = parsed.rubric?.keywords
+        ?.map(keyword => keyword.trim())
+        .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index);
+      const sections = parsed.rubric?.sections?.map(section => ({
+        ...section,
+        keywords: section.keywords
+          ?.map(keyword => keyword.trim())
+          .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index),
+      }));
+      const rubric = parsed.rubric ? { ...parsed.rubric, keywords, sections } : undefined;
+      const item = createItem({
+        id,
+        tenantId,
+        kind: 'ESSAY',
+        prompt: parsed.prompt,
+        rubric,
+        length: parsed.length,
         scoring: parsed.scoring,
       });
       repository.save(item);
