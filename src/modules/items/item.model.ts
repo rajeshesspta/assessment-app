@@ -1,5 +1,6 @@
-import { Item } from '../../common/types.js';
-export function createItem(data: Omit<Item, 'id' | 'createdAt' | 'updatedAt'> & { id: string }): Item {
+import type { Item } from '../../common/types.js';
+
+export function createItem<TItem extends Item>(data: Omit<TItem, 'id' | 'createdAt' | 'updatedAt'> & { id: string }): TItem {
   const now = new Date().toISOString();
-  return { ...data, createdAt: now, updatedAt: now };
+  return { ...data, createdAt: now, updatedAt: now } as TItem;
 }

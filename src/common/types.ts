@@ -6,7 +6,7 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
-export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY' | 'NUMERIC_ENTRY';
+export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY' | 'NUMERIC_ENTRY' | 'HOTSPOT';
 
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
@@ -130,7 +130,34 @@ export interface NumericEntryItem extends BaseItemEntity {
 	units?: NumericUnitsMetadata;
 }
 
-export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem;
+export interface HotspotPoint { x: number; y: number; }
+
+export interface HotspotRegion {
+	id: string;
+	label?: string;
+	points: HotspotPoint[];
+}
+
+export interface HotspotImageMeta {
+	url: string;
+	width: number;
+	height: number;
+	alt?: string;
+}
+
+export interface HotspotScoringRule {
+	mode: 'all' | 'partial';
+	maxSelections?: number;
+}
+
+export interface HotspotItem extends BaseItemEntity {
+	kind: 'HOTSPOT';
+	image: HotspotImageMeta;
+	hotspots: HotspotRegion[];
+	scoring: HotspotScoringRule;
+}
+
+export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem | HotspotItem;
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
@@ -142,6 +169,7 @@ export interface AttemptResponse {
 	orderingAnswer?: string[];
 	essayAnswer?: string;
 	numericAnswer?: { value: number; unit?: string };
+	hotspotAnswers?: HotspotPoint[];
 }
 
 export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }

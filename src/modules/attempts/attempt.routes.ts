@@ -5,7 +5,7 @@ import { createAttempt } from './attempt.model.js';
 import type { AttemptRepository } from './attempt.repository.js';
 import type { AssessmentRepository } from '../assessments/assessment.repository.js';
 import type { ItemRepository } from '../items/item.repository.js';
-import type { FillBlankMatcher } from '../../common/types.js';
+import type { FillBlankMatcher, HotspotPoint } from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
 
 const startSchema = z.object({ assessmentId: z.string(), userId: z.string() });
@@ -19,6 +19,7 @@ const responseSchema = z.object({
   orderingAnswer: z.array(z.string()).optional(),
   essayAnswer: z.string().optional(),
   numericAnswer: z.object({ value: z.number(), unit: z.string().min(1).max(40).optional() }).optional(),
+  hotspotAnswers: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).optional(),
 });
 
 const responsesSchema = z.object({ responses: z.array(responseSchema) });
@@ -54,6 +55,25 @@ function matchesFillBlankAnswer(value: string, matcher: FillBlankMatcher): boole
   } catch {
     return false;
   }
+}
+
+function isPointInPolygon(point: HotspotPoint, polygon: HotspotPoint[]): boolean {
+  if (!polygon || polygon.length < 3) {
+    return false;
+  }
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const intersects = ((yi > point.y) !== (yj > point.y))
+      && (point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
@@ -96,6 +116,18 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       const numericAnswer = typeof r.numericAnswer?.value === 'number' && Number.isFinite(r.numericAnswer.value)
         ? { value: r.numericAnswer.value, unit: r.numericAnswer.unit?.trim() || undefined }
         : undefined;
+      let hotspotAnswers = r.hotspotAnswers && r.hotspotAnswers.length > 0
+        ? r.hotspotAnswers
+            .map(point => ({ x: Number(point.x), y: Number(point.y) }))
+            .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y))
+            .map(point => ({
+              x: Number(Math.min(1, Math.max(0, point.x)).toFixed(6)),
+              y: Number(Math.min(1, Math.max(0, point.y)).toFixed(6)),
+            }))
+        : undefined;
+      if (hotspotAnswers && hotspotAnswers.length === 0) {
+        hotspotAnswers = undefined;
+      }
       return {
         itemId: r.itemId,
         answerIndexes,
@@ -104,6 +136,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         orderingAnswer,
         essayAnswer: essayAnswer && essayAnswer.length > 0 ? essayAnswer : undefined,
         numericAnswer,
+        hotspotAnswers,
       };
     });
     for (const r of normalized) {
@@ -115,6 +148,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         existing.orderingAnswer = r.orderingAnswer;
         existing.essayAnswer = r.essayAnswer;
         existing.numericAnswer = r.numericAnswer;
+        existing.hotspotAnswers = r.hotspotAnswers;
       } else {
         attempt.responses.push(r);
       }
@@ -279,6 +313,36 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
           if (isCorrect) {
             score += 1;
           }
+        }
+        continue;
+      }
+      if (item.kind === 'HOTSPOT') {
+        const hotspotCount = item.hotspots.length;
+        if (hotspotCount === 0) {
+          continue;
+        }
+        const selectionLimit = item.scoring.maxSelections ?? hotspotCount;
+        const selectionBudget = Math.min(hotspotCount, Math.max(1, selectionLimit));
+        if (item.scoring.mode === 'partial') {
+          maxScore += selectionBudget;
+        } else {
+          maxScore += 1;
+        }
+        const provided = (response?.hotspotAnswers ?? []).slice(0, selectionBudget);
+        if (provided.length === 0) {
+          continue;
+        }
+        const matched = new Set<string>();
+        for (const answer of provided) {
+          const region = item.hotspots.find(hotspot => isPointInPolygon(answer, hotspot.points));
+          if (region) {
+            matched.add(region.id);
+          }
+        }
+        if (item.scoring.mode === 'partial') {
+          score += matched.size;
+        } else if (matched.size === hotspotCount && hotspotCount > 0) {
+          score += 1;
         }
         continue;
       }

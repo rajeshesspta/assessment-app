@@ -114,6 +114,30 @@
 	"validation": { "mode": "exact", "value": 12.5, "tolerance": 0.1 },
 	"units": { "label": "Volts", "symbol": "V", "precision": 2 }
 }
+
+// Hotspot / image region (clients click coordinates that must land inside known polygons)
+{
+	"kind": "HOTSPOT",
+	"prompt": "Identify the highlighted regions on the map.",
+	"image": {
+		"url": "https://example.com/world.png",
+		"width": 1200,
+		"height": 675,
+		"alt": "World map outline"
+	},
+	"hotspots": [
+		{
+			"id": "region-a",
+			"label": "Region A",
+			"points": [
+				{ "x": 0.12, "y": 0.18 },
+				{ "x": 0.28, "y": 0.2 },
+				{ "x": 0.2, "y": 0.32 }
+			]
+		}
+	],
+	"scoring": { "mode": "partial", "maxSelections": 2 }
+}
 ```
 
 TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, which keeps downstream scoring logic untouched.
@@ -129,6 +153,8 @@ Short-answer items store their rubric + scoring metadata inside `short_answer_sc
 Essay items persist their metadata inside `essay_schema_json`, including optional rubric sections and length expectations (min/max/recommended word counts). Attempts send `essayAnswer` strings; submission triggers the same deferred-scoring workflow, emitting a `FreeResponseEvaluationRequested` event that contains rubric sections, keywords, and length guidance for downstream graders.
 
 Numeric entry items persist validation + units metadata in `numeric_schema_json`. Validation supports two modes: `exact` (value plus optional absolute `tolerance`) and `range` (inclusive `min`/`max`). Units metadata is optional but can expose UI hints such as `label`, `symbol`, or preferred decimal `precision`. Attempts submit `numericAnswer.value` (and optionally `numericAnswer.unit`) and are auto-scored immediately during submission.
+
+Hotspot items persist their image metadata, region polygons, and scoring rules inside `hotspot_schema_json`. Points are normalized to the `[0, 1]` coordinate space relative to the background image dimensions, which keeps scoring resolution independent of pixel density. Attempts submit `hotspotAnswers` arrays containing normalized `{ x, y }` coordinates. During submission, the API counts how many clicks land inside the configured polygons: `scoring.mode = "all"` requires every hotspot to be identified (awarding a single point), whereas `mode = "partial"` awards up to `maxSelections` points—one per correctly identified region.
 
 `GET /items` supports optional query params: `search` (full-text on prompts) and `kind`, enabling callers to fetch only a specific item type.
 

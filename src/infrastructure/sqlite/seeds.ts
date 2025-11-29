@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from './client.js';
-import type { Assessment, Attempt, EssayItem, FillBlankItem, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
+import type { Assessment, Attempt, EssayItem, FillBlankItem, HotspotItem, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
 
 function isFillBlankItem(item: Item): item is FillBlankItem {
   return item.kind === 'FILL_IN_THE_BLANK';
@@ -25,10 +25,14 @@ function isNumericItem(item: Item): item is NumericEntryItem {
   return item.kind === 'NUMERIC_ENTRY';
 }
 
+function isHotspotItem(item: Item): item is HotspotItem {
+  return item.kind === 'HOTSPOT';
+}
+
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
@@ -42,6 +46,7 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
       short_answer_schema_json = excluded.short_answer_schema_json,
       essay_schema_json = excluded.essay_schema_json,
       numeric_schema_json = excluded.numeric_schema_json,
+      hotspot_schema_json = excluded.hotspot_schema_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -49,15 +54,16 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.tenantId,
     item.kind,
     item.prompt,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) ? [] : item.choices),
-    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) ? 'single' : item.answerMode,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) ? [] : item.correctIndexes),
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) ? [] : item.choices),
+    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) ? 'single' : item.answerMode,
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) ? [] : item.correctIndexes),
     isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
     isMatchingItem(item) ? JSON.stringify({ prompts: item.prompts, targets: item.targets, scoring: item.scoring }) : null,
     isOrderingItem(item) ? JSON.stringify({ options: item.options, correctOrder: item.correctOrder, scoring: item.scoring }) : null,
     isShortAnswerItem(item) ? JSON.stringify({ rubric: item.rubric, scoring: item.scoring }) : null,
     isEssayItem(item) ? JSON.stringify({ rubric: item.rubric, length: item.length, scoring: item.scoring }) : null,
     isNumericItem(item) ? JSON.stringify({ validation: item.validation, units: item.units }) : null,
+    isHotspotItem(item) ? JSON.stringify({ image: item.image, hotspots: item.hotspots, scoring: item.scoring }) : null,
     item.createdAt,
     item.updatedAt,
   );
@@ -116,7 +122,7 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
@@ -200,6 +206,20 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
       prompt: row.prompt,
       validation: schema?.validation,
       units: schema?.units,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    } as Item;
+  }
+  if (row.kind === 'HOTSPOT') {
+    const schema = row.hotspotSchemaJson ? JSON.parse(row.hotspotSchemaJson) : undefined;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      kind: 'HOTSPOT',
+      prompt: row.prompt,
+      image: schema?.image,
+      hotspots: schema?.hotspots ?? [],
+      scoring: schema?.scoring ?? { mode: 'all' },
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     } as Item;
@@ -320,6 +340,25 @@ function tenantSampleItems(seedTenantId: string) {
       validation: { mode: 'exact', value: 9.81, tolerance: 0.05 },
       units: { label: 'Meters per second squared', symbol: 'm/s^2', precision: 2 },
     },
+    {
+      id: 'sample-item-11',
+      kind: 'HOTSPOT' as Item['kind'],
+      prompt: 'Identify the continents highlighted on the map.',
+      image: { url: 'https://example.com/world-map.png', width: 1200, height: 675, alt: 'World map outline' },
+      hotspots: [
+        {
+          id: 'americas',
+          label: 'Americas',
+          points: [{ x: 0.18, y: 0.25 }, { x: 0.32, y: 0.22 }, { x: 0.34, y: 0.55 }, { x: 0.2, y: 0.6 }],
+        },
+        {
+          id: 'europe',
+          label: 'Europe',
+          points: [{ x: 0.56, y: 0.18 }, { x: 0.61, y: 0.18 }, { x: 0.63, y: 0.26 }, { x: 0.57, y: 0.28 }],
+        },
+      ],
+      scoring: { mode: 'partial', maxSelections: 3 },
+    },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
 
@@ -408,6 +447,20 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
         prompt: item.prompt,
         validation: item.validation,
         units: item.units,
+        createdAt: now,
+        updatedAt: now,
+      } as Item);
+      continue;
+    }
+    if (item.kind === 'HOTSPOT') {
+      insertItem(db, {
+        id: item.id,
+        tenantId,
+        kind: 'HOTSPOT',
+        prompt: item.prompt,
+        image: item.image,
+        hotspots: item.hotspots,
+        scoring: item.scoring,
         createdAt: now,
         updatedAt: now,
       } as Item);

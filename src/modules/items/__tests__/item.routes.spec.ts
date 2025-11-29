@@ -414,6 +414,37 @@ describe('itemRoutes', () => {
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'NUMERIC_ENTRY' }));
   });
 
+  it('creates a hotspot item with polygon metadata', async () => {
+    uuidMock.mockReturnValueOnce('hotspot-item-id').mockReturnValueOnce('event-id-8');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'HOTSPOT',
+        prompt: 'Identify the two highlighted regions.',
+        image: { url: 'https://example.com/map.png', width: 800, height: 600, alt: ' Map  ' },
+        hotspots: [
+          { id: 'region-a', label: 'Region A', points: [{ x: 0.1, y: 0.2 }, { x: 0.25, y: 0.2 }, { x: 0.18, y: 0.35 }] },
+          { id: 'region-b', points: [{ x: 0.6, y: 0.1 }, { x: 0.75, y: 0.1 }, { x: 0.68, y: 0.28 }] },
+        ],
+        scoring: { mode: 'partial', maxSelections: 2 },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: 'hotspot-item-id',
+      kind: 'HOTSPOT',
+      image: { alt: 'Map' },
+      hotspots: expect.arrayContaining([
+        expect.objectContaining({ id: 'region-a', points: expect.any(Array) }),
+      ]),
+      scoring: { mode: 'partial', maxSelections: 2 },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'HOTSPOT' }));
+  });
+
   it('rejects numeric entry payloads when range bounds are invalid', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -426,6 +457,27 @@ describe('itemRoutes', () => {
     });
 
     expect(response.statusCode).toBe(400);
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects hotspot payloads when selection settings are invalid', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'HOTSPOT',
+        prompt: 'Find the areas',
+        image: { url: 'https://example.com/map.png', width: 800, height: 600 },
+        hotspots: [
+          { id: 'region-a', points: [{ x: 0.1, y: 0.2 }, { x: 0.25, y: 0.2 }, { x: 0.18, y: 0.35 }] },
+          { id: 'region-b', points: [{ x: 0.6, y: 0.1 }, { x: 0.75, y: 0.1 }, { x: 0.68, y: 0.28 }] },
+        ],
+        scoring: { mode: 'all', maxSelections: 1 },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'maxSelections must allow selecting every hotspot' });
     expect(saveMock).not.toHaveBeenCalled();
   });
 

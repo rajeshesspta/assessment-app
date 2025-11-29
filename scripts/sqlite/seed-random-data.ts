@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, ChoiceItem, EssayItem, FillBlankItem, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
+import type { Assessment, Attempt, ChoiceItem, EssayItem, FillBlankItem, HotspotItem, HotspotPoint, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -235,6 +235,57 @@ function buildRandomOrderingItem(tenantId: string): Item {
   } satisfies Item;
 }
 
+const hotspotTemplates = [
+  {
+    prompt: 'Identify the continents that are highlighted on the map.',
+    image: { url: 'https://example.com/maps/world-01.png', width: 1200, height: 675, alt: 'World map' },
+    hotspots: [
+      { id: 'americas', points: [{ x: 0.15, y: 0.25 }, { x: 0.32, y: 0.24 }, { x: 0.35, y: 0.6 }, { x: 0.18, y: 0.62 }] },
+      { id: 'europe', points: [{ x: 0.55, y: 0.2 }, { x: 0.61, y: 0.2 }, { x: 0.63, y: 0.28 }, { x: 0.56, y: 0.32 }] },
+    ],
+    scoring: { mode: 'partial', maxSelections: 2 } as HotspotItem['scoring'],
+  },
+  {
+    prompt: 'Tap the regions with active volcano clusters.',
+    image: { url: 'https://example.com/maps/volcanoes.png', width: 1024, height: 768, alt: 'Volcano heatmap' },
+    hotspots: [
+      { id: 'ring-of-fire', points: [{ x: 0.12, y: 0.4 }, { x: 0.3, y: 0.35 }, { x: 0.35, y: 0.65 }, { x: 0.18, y: 0.7 }] },
+      { id: 'mediterranean', points: [{ x: 0.52, y: 0.33 }, { x: 0.58, y: 0.31 }, { x: 0.6, y: 0.4 }, { x: 0.54, y: 0.42 }] },
+      { id: 'iceland', points: [{ x: 0.48, y: 0.15 }, { x: 0.52, y: 0.15 }, { x: 0.53, y: 0.2 }, { x: 0.49, y: 0.2 }] },
+    ],
+    scoring: { mode: 'all', maxSelections: 3 } as HotspotItem['scoring'],
+  },
+  {
+    prompt: 'Highlight the protected wildlife zones.',
+    image: { url: 'https://example.com/maps/wildlife.png', width: 960, height: 540, alt: 'Wildlife reserves' },
+    hotspots: [
+      { id: 'savannah', points: [{ x: 0.4, y: 0.55 }, { x: 0.55, y: 0.5 }, { x: 0.53, y: 0.7 }, { x: 0.42, y: 0.72 }] },
+      { id: 'rainforest', points: [{ x: 0.2, y: 0.45 }, { x: 0.3, y: 0.4 }, { x: 0.32, y: 0.58 }, { x: 0.22, y: 0.62 }] },
+    ],
+    scoring: { mode: 'partial', maxSelections: 2 } as HotspotItem['scoring'],
+  },
+];
+
+function buildRandomHotspotItem(tenantId: string): Item {
+  const template = hotspotTemplates[randomInt(hotspotTemplates.length)];
+  const now = new Date().toISOString();
+  return {
+    id: `random-hotspot-item-${randomUUID()}`,
+    tenantId,
+    kind: 'HOTSPOT',
+    prompt: template.prompt,
+    image: template.image,
+    hotspots: template.hotspots.map(region => ({
+      id: `${region.id}-${randomUUID().slice(0, 6)}`,
+      label: region.id.replace(/-/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase()),
+      points: region.points.map(point => ({ ...point })),
+    })),
+    scoring: template.scoring,
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
 const shortAnswerTemplates = [
   {
     prompt: 'Explain how photosynthesis converts sunlight into chemical energy.',
@@ -353,6 +404,7 @@ function buildRandomItem(tenantId: string, index: number): Item {
     buildRandomShortAnswerItem,
     buildRandomEssayItem,
     buildRandomNumericItem,
+    buildRandomHotspotItem,
   ] as const;
   if (index < builders.length) {
     return builders[index](tenantId);
@@ -363,8 +415,9 @@ function buildRandomItem(tenantId: string, index: number): Item {
   if (roll < 0.36) return buildRandomMatchingItem(tenantId);
   if (roll < 0.48) return buildRandomOrderingItem(tenantId);
   if (roll < 0.6) return buildRandomShortAnswerItem(tenantId);
-  if (roll < 0.75) return buildRandomEssayItem(tenantId);
-  if (roll < 0.9) return buildRandomNumericItem(tenantId);
+  if (roll < 0.72) return buildRandomEssayItem(tenantId);
+  if (roll < 0.84) return buildRandomNumericItem(tenantId);
+  if (roll < 0.95) return buildRandomHotspotItem(tenantId);
   return buildRandomMCQItem(tenantId);
 }
 
@@ -408,6 +461,41 @@ function isEssayItem(item: Item): item is EssayItem {
 
 function isNumericItem(item: Item): item is NumericEntryItem {
   return item.kind === 'NUMERIC_ENTRY';
+}
+
+function isHotspotItem(item: Item): item is HotspotItem {
+  return item.kind === 'HOTSPOT';
+}
+
+function pointCentroid(points: HotspotPoint[]): HotspotPoint {
+  if (!points || points.length === 0) {
+    return { x: 0.5, y: 0.5 };
+  }
+  const sum = points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), { x: 0, y: 0 });
+  const count = points.length;
+  return {
+    x: Number((sum.x / count).toFixed(6)),
+    y: Number((sum.y / count).toFixed(6)),
+  };
+}
+
+function isPointInsidePolygon(point: HotspotPoint, polygon: HotspotPoint[]): boolean {
+  if (!polygon || polygon.length < 3) {
+    return false;
+  }
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const intersects = ((yi > point.y) !== (yj > point.y))
+      && (point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 function buildRandomAttempt(
@@ -494,6 +582,27 @@ function buildRandomAttempt(
       const preferredUnit = item.units?.symbol ?? item.units?.label;
       return { itemId, numericAnswer: { value, unit: preferredUnit } };
     }
+    if (isHotspotItem(item)) {
+      const selectionLimit = item.scoring.maxSelections ?? item.hotspots.length;
+      const selectionBudget = Math.min(item.hotspots.length, Math.max(1, selectionLimit));
+      if (selectionBudget === 0) {
+        return { itemId };
+      }
+      const answers: HotspotPoint[] = [];
+      for (let i = 0; i < selectionBudget; i += 1) {
+        const provideCorrect = Math.random() > 0.35 && item.hotspots.length > 0;
+        if (provideCorrect) {
+          const region = item.hotspots[randomInt(item.hotspots.length)];
+          answers.push(pointCentroid(region.points));
+        } else {
+          answers.push({
+            x: Number(Math.random().toFixed(3)),
+            y: Number(Math.random().toFixed(3)),
+          });
+        }
+      }
+      return { itemId, hotspotAnswers: answers };
+    }
     if (isChoiceItem(item) && item.answerMode === 'single') {
       return { itemId, answerIndexes: [randomInt(item.choices.length)] };
     }
@@ -527,6 +636,14 @@ function buildRandomAttempt(
     }
     if (isNumericItem(item)) {
       return total + 1;
+    }
+    if (isHotspotItem(item)) {
+      if (item.hotspots.length === 0) {
+        return total;
+      }
+      const selectionLimit = item.scoring.maxSelections ?? item.hotspots.length;
+      const selectionBudget = Math.min(item.hotspots.length, Math.max(1, selectionLimit));
+      return item.scoring.mode === 'partial' ? total + selectionBudget : total + 1;
     }
     return total + 1;
   }, 0);
@@ -606,6 +723,28 @@ function buildRandomAttempt(
           return delta <= tolerance ? total + 1 : total;
         }
         return provided >= item.validation.min && provided <= item.validation.max ? total + 1 : total;
+      }
+      if (isHotspotItem(item)) {
+        if (item.hotspots.length === 0) {
+          return total;
+        }
+        const selectionLimit = item.scoring.maxSelections ?? item.hotspots.length;
+        const selectionBudget = Math.min(item.hotspots.length, Math.max(1, selectionLimit));
+        const provided = (response.hotspotAnswers ?? []).slice(0, selectionBudget);
+        if (provided.length === 0) {
+          return total;
+        }
+        const matched = new Set<string>();
+        for (const answer of provided) {
+          const region = item.hotspots.find(hotspot => isPointInsidePolygon(answer, hotspot.points));
+          if (region) {
+            matched.add(region.id);
+          }
+        }
+        if (item.scoring.mode === 'partial') {
+          return total + matched.size;
+        }
+        return matched.size === item.hotspots.length ? total + 1 : total;
       }
       if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
         return total;

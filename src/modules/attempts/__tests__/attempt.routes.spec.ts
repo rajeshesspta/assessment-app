@@ -239,6 +239,36 @@ describe('attemptRoutes', () => {
     ]);
   });
 
+  it('stores hotspot answers when provided', async () => {
+    const attempt = {
+      id: 'attempt-hotspot',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-hotspot',
+      userId: 'user-4',
+      status: 'in_progress' as const,
+      responses: [],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-hotspot', attempt);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/attempts/attempt-hotspot/responses',
+      payload: {
+        responses: [{
+          itemId: 'item-hotspot',
+          hotspotAnswers: [{ x: 0.3333333333, y: 0.6666666666 }],
+        }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().responses).toEqual([
+      { itemId: 'item-hotspot', hotspotAnswers: [{ x: 0.333333, y: 0.666667 }] },
+    ]);
+  });
+
   it('returns 404 when patching missing attempt', async () => {
     const response = await app.inject({
       method: 'PATCH',
@@ -339,6 +369,94 @@ describe('attemptRoutes', () => {
     }));
     expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
     expect(mocks.itemGetByIdMock).toHaveBeenCalledWith('tenant-1', 'item-1');
+  });
+
+  it('scores hotspot responses with all-or-nothing grading', async () => {
+    const attempt = {
+      id: 'attempt-hotspot',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-hotspot',
+      userId: 'user-9',
+      status: 'in_progress' as const,
+      responses: [{
+        itemId: 'item-hotspot',
+        hotspotAnswers: [{ x: 0.18, y: 0.32 }, { x: 0.62, y: 0.2 }],
+      }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-hotspot', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-hotspot',
+      tenantId: 'tenant-1',
+      itemIds: ['item-hotspot'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'item-hotspot',
+      tenantId: 'tenant-1',
+      kind: 'HOTSPOT' as const,
+      prompt: 'Locate the two highlighted regions.',
+      image: { url: 'https://example.com/map.png', width: 1000, height: 600 },
+      hotspots: [
+        { id: 'region-a', points: [{ x: 0.1, y: 0.2 }, { x: 0.25, y: 0.2 }, { x: 0.18, y: 0.4 }] },
+        { id: 'region-b', points: [{ x: 0.55, y: 0.15 }, { x: 0.7, y: 0.15 }, { x: 0.63, y: 0.28 }] },
+      ],
+      scoring: { mode: 'all', maxSelections: 2 },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('hotspot-score-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-hotspot/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'scored', score: 1, maxScore: 1 });
+    expect(mocks.publishMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'AttemptScored',
+      payload: { attemptId: 'attempt-hotspot', score: 1 },
+    }));
+  });
+
+  it('awards partial credit for hotspot responses based on selection budget', async () => {
+    const attempt = {
+      id: 'attempt-hotspot-partial',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-hotspot',
+      userId: 'user-10',
+      status: 'in_progress' as const,
+      responses: [{
+        itemId: 'item-hotspot',
+        hotspotAnswers: [{ x: 0.12, y: 0.18 }, { x: 0.62, y: 0.22 }],
+      }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-hotspot-partial', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-hotspot',
+      tenantId: 'tenant-1',
+      itemIds: ['item-hotspot'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'item-hotspot',
+      tenantId: 'tenant-1',
+      kind: 'HOTSPOT' as const,
+      prompt: 'Find any two regions.',
+      image: { url: 'https://example.com/map.png', width: 1000, height: 600 },
+      hotspots: [
+        { id: 'region-a', points: [{ x: 0.05, y: 0.1 }, { x: 0.2, y: 0.1 }, { x: 0.12, y: 0.25 }] },
+        { id: 'region-b', points: [{ x: 0.6, y: 0.15 }, { x: 0.72, y: 0.15 }, { x: 0.65, y: 0.3 }] },
+      ],
+      scoring: { mode: 'partial', maxSelections: 1 },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('hotspot-partial-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-hotspot-partial/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'scored', score: 1, maxScore: 1 });
   });
 
   it('defers scoring when short-answer items require review', async () => {

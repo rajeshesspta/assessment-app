@@ -3,6 +3,16 @@ import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { createItem } from './item.model.js';
 import type { ItemRepository } from './item.repository.js';
+import type {
+  ChoiceItem,
+  EssayItem,
+  FillBlankItem,
+  HotspotItem,
+  MatchingItem,
+  NumericEntryItem,
+  OrderingItem,
+  ShortAnswerItem,
+} from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
 
 const mcqSchema = z.object({
@@ -139,13 +149,38 @@ const numericEntrySchema = z.object({
   units: numericUnitsSchema.optional(),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema, numericEntrySchema]);
+const hotspotPointSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
+const hotspotSchema = z.object({
+  kind: z.literal('HOTSPOT'),
+  prompt: z.string().min(1),
+  image: z.object({
+    url: z.string().url(),
+    width: z.number().int().positive().max(10000),
+    height: z.number().int().positive().max(10000),
+    alt: z.string().min(1).max(200).optional(),
+  }),
+  hotspots: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1).max(120).optional(),
+    points: z.array(hotspotPointSchema).min(3),
+  })).min(1),
+  scoring: z.object({
+    mode: z.enum(['all', 'partial']).default('all'),
+    maxSelections: z.number().int().positive().max(20).optional(),
+  }).default({ mode: 'all' }),
+});
+
+const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema, numericEntrySchema, hotspotSchema]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
-  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY', 'NUMERIC_ENTRY']).optional(),
+  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY', 'NUMERIC_ENTRY', 'HOTSPOT']).optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -191,7 +226,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         reply.code(400);
         return { error: 'Multi-answer items require at least two correct indexes' };
       }
-      const item = createItem({
+      const item = createItem<ChoiceItem>({
         id,
         tenantId,
         kind: 'MCQ',
@@ -209,7 +244,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
     if (parsed.kind === 'TRUE_FALSE') {
       const tfChoices = [{ text: 'True' }, { text: 'False' }];
       const correctIndexes = [parsed.answerIsTrue ? 0 : 1];
-      const item = createItem({
+      const item = createItem<ChoiceItem>({
         id,
         tenantId,
         kind: 'TRUE_FALSE',
@@ -231,7 +266,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         return { error: 'Blank ids must be unique' };
       }
 
-      const blanks = parsed.blanks.map(blank => ({
+      const blanks: FillBlankItem['blanks'] = parsed.blanks.map(blank => ({
         id: blank.id,
         acceptableAnswers: blank.answers.map(answer => (
           answer.type === 'exact'
@@ -240,7 +275,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         )),
       }));
 
-      const item = createItem({
+      const item = createItem<FillBlankItem>({
         id,
         tenantId,
         kind: 'FILL_IN_THE_BLANK',
@@ -270,7 +305,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         return { error: `Unknown target id: ${invalidReference.correctTargetId}` };
       }
 
-      const item = createItem({
+      const item = createItem<MatchingItem>({
         id,
         tenantId,
         kind: 'MATCHING',
@@ -308,7 +343,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         }
         seen.add(id);
       }
-      const item = createItem({
+      const item = createItem<OrderingItem>({
         id,
         tenantId,
         kind: 'ORDERING',
@@ -332,7 +367,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         ?.map(keyword => keyword.trim())
         .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index);
       const rubric = parsed.rubric ? { ...parsed.rubric, keywords } : undefined;
-      const item = createItem({
+      const item = createItem<ShortAnswerItem>({
         id,
         tenantId,
         kind: 'SHORT_ANSWER',
@@ -361,7 +396,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
           .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index),
       }));
       const rubric = parsed.rubric ? { ...parsed.rubric, keywords, sections } : undefined;
-      const item = createItem({
+      const item = createItem<EssayItem>({
         id,
         tenantId,
         kind: 'ESSAY',
@@ -394,13 +429,53 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
             return candidate;
           })()
         : undefined;
-      const item = createItem({
+      const item = createItem<NumericEntryItem>({
         id,
         tenantId,
         kind: 'NUMERIC_ENTRY',
         prompt: parsed.prompt,
         validation: parsed.validation,
         units: normalizedUnits,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    if (parsed.kind === 'HOTSPOT') {
+      const regionIds = new Set(parsed.hotspots.map(region => region.id));
+      if (regionIds.size !== parsed.hotspots.length) {
+        reply.code(400);
+        return { error: 'Hotspot ids must be unique' };
+      }
+      if (parsed.scoring.maxSelections && parsed.scoring.maxSelections > parsed.hotspots.length) {
+        reply.code(400);
+        return { error: 'maxSelections cannot exceed hotspot count' };
+      }
+      if (parsed.scoring.mode === 'all' && parsed.scoring.maxSelections && parsed.scoring.maxSelections < parsed.hotspots.length) {
+        reply.code(400);
+        return { error: 'maxSelections must allow selecting every hotspot' };
+      }
+      const hotspots = parsed.hotspots.map(region => ({
+        id: region.id,
+        label: region.label?.trim() || undefined,
+        points: region.points.map(point => ({ x: Number(point.x.toFixed(6)), y: Number(point.y.toFixed(6)) })),
+      }));
+      const image = {
+        url: parsed.image.url,
+        width: parsed.image.width,
+        height: parsed.image.height,
+        alt: parsed.image.alt?.trim() || undefined,
+      };
+      const item = createItem<HotspotItem>({
+        id,
+        tenantId,
+        kind: 'HOTSPOT',
+        prompt: parsed.prompt,
+        image,
+        hotspots,
+        scoring: parsed.scoring,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
