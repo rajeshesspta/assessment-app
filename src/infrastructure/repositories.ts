@@ -14,12 +14,18 @@ import {
   createSQLiteAttemptRepository,
   type AttemptRepository,
 } from '../modules/attempts/attempt.repository.js';
+import {
+  createInMemoryUserRepository,
+  createSQLiteUserRepository,
+  type UserRepository,
+} from '../modules/users/user.repository.js';
 import { createSQLiteTenantClient } from './sqlite/client.js';
 
 export interface RepositoryBundle {
   item: ItemRepository;
   assessment: AssessmentRepository;
   attempt: AttemptRepository;
+  user: UserRepository;
   dispose?: () => void | Promise<void>;
 }
 
@@ -28,6 +34,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     item: createInMemoryItemRepository(),
     assessment: createInMemoryAssessmentRepository(),
     attempt: createInMemoryAttemptRepository(),
+    user: createInMemoryUserRepository(),
     dispose: () => {},
   };
 }
@@ -38,6 +45,7 @@ export function createSQLiteRepositoryBundle(config: AppConfig): RepositoryBundl
     item: createSQLiteItemRepository(client),
     assessment: createSQLiteAssessmentRepository(client),
     attempt: createSQLiteAttemptRepository(client),
+    user: createSQLiteUserRepository(client),
     dispose: () => client.closeAll(),
   };
 }

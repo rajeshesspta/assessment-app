@@ -1,6 +1,9 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { AuthError, TenantError } from '../../common/errors.js';
 import { apiKeyStore } from './api-key.store.js';
+import { loadConfig } from '../../config/index.js';
+
+const { auth: { superAdminTenantId } } = loadConfig();
 
 export async function registerAuth(req: FastifyRequest, reply: FastifyReply) {
   const apiKey = req.headers['x-api-key'];
@@ -25,9 +28,12 @@ export async function registerAuth(req: FastifyRequest, reply: FastifyReply) {
     reply.code(400);
     throw new TenantError('Missing x-tenant-id header');
   }
-  if (tenantId !== record.tenantId) {
+  const isSuperAdmin = record.tenantId === superAdminTenantId;
+  if (!isSuperAdmin && tenantId !== record.tenantId) {
     reply.code(403);
     throw new TenantError('Tenant mismatch for API key');
   }
   (req as any).tenantId = tenantId;
+  (req as any).actorTenantId = record.tenantId;
+  (req as any).isSuperAdmin = isSuperAdmin;
 }

@@ -2,9 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { TenantRepository } from './tenant.repository.js';
 import { createTenant, updateTenant } from './tenant.model.js';
+import type { UserRepository } from '../users/user.repository.js';
+import { createUser } from '../users/user.model.js';
 
 export interface TenantRoutesOptions {
   repository: TenantRepository;
+  userRepository: UserRepository;
 }
 
 const rateLimitSchema = z.object({
@@ -15,6 +18,8 @@ const rateLimitSchema = z.object({
 const persistenceSchema = z.object({
   provider: z.enum(['sqlite', 'memory', 'cosmos']),
 });
+
+const userStatusSchema = z.enum(['active', 'invited', 'disabled']);
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -31,8 +36,14 @@ const updateSchema = createSchema.partial().refine(data => Object.keys(data).len
   message: 'At least one field must be provided',
 });
 
+const createTenantAdminSchema = z.object({
+  email: z.string().email(),
+  displayName: z.string().min(1).max(120),
+  status: userStatusSchema.optional(),
+});
+
 function isAdmin(request: any): boolean {
-  return request.tenantId === 'admin';
+  return Boolean(request.isSuperAdmin);
 }
 
 function ensureAdmin(request: any, reply: any): boolean {
@@ -45,7 +56,7 @@ function ensureAdmin(request: any, reply: any): boolean {
 }
 
 export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOptions) {
-  const { repository } = options;
+  const { repository, userRepository } = options;
 
   app.get('/current', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
@@ -143,5 +154,37 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
     }
     repository.delete(existing.id);
     reply.code(204);
+  });
+
+  app.post('/:id/admins', async (req, reply) => {
+    if (!ensureAdmin(req, reply)) return;
+    const paramId = (req.params as any).id as string;
+    const tenant = repository.getById(paramId) ?? repository.getBySlug(paramId);
+    if (!tenant) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+    const tenantHeader = (req as any).tenantId as string;
+    if (tenantHeader !== tenant.id && tenantHeader !== tenant.slug) {
+      reply.code(400);
+      return { error: 'x-tenant-id must match target tenant' };
+    }
+    const parsed = createTenantAdminSchema.parse(req.body);
+    const existing = userRepository.getByEmail(tenant.id, parsed.email);
+    if (existing) {
+      reply.code(409);
+      return { error: 'User with email already exists' };
+    }
+    const adminUser = createUser({
+      tenantId: tenant.id,
+      role: 'TENANT_ADMIN',
+      email: parsed.email,
+      displayName: parsed.displayName,
+      status: parsed.status ?? 'invited',
+      createdBy: 'super-admin',
+    });
+    userRepository.save(adminUser);
+    reply.code(201);
+    return adminUser;
   });
 }

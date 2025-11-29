@@ -14,6 +14,7 @@ export interface AuthConfig {
   provider: AuthProvider;
   cacheTtlMs: number;
   seedKeys: Array<{ key: string; tenantId: string }>;
+  superAdminTenantId: string;
 }
 
 export interface AppConfig {
@@ -79,13 +80,20 @@ export function loadConfig(): AppConfig {
 
   const envSeedKey = process.env.API_KEY;
   const envSeedTenant = process.env.API_TENANT_ID;
-  const seedKeys = envSeedKey && envSeedTenant
-    ? [{ key: envSeedKey, tenantId: envSeedTenant }]
-    : [{ key: 'dev-key', tenantId: 'dev-tenant' }];
+  const superAdminTenantId = process.env.SUPER_ADMIN_TENANT_ID || 'sys-tenant';
+  const superAdminApiKey = process.env.SUPER_ADMIN_API_KEY || 'sys-admin-key';
+  const seedKeys: Array<{ key: string; tenantId: string }> = [
+    { key: superAdminApiKey, tenantId: superAdminTenantId },
+  ];
+  if (envSeedKey && envSeedTenant) {
+    seedKeys.push({ key: envSeedKey, tenantId: envSeedTenant });
+  } else {
+    seedKeys.push({ key: 'dev-key', tenantId: 'dev-tenant' });
+  }
 
   return {
     cosmos: { endpoint, key, databaseId, apiKeysContainer, throughput },
-    auth: { provider: authProvider, cacheTtlMs, seedKeys },
+    auth: { provider: authProvider, cacheTtlMs, seedKeys, superAdminTenantId },
     persistence: {
       provider,
       sqlite: {

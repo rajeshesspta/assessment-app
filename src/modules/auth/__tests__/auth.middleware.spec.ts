@@ -92,5 +92,19 @@ describe('registerAuth middleware', () => {
     await expect(registerAuth(req, reply)).resolves.toBeUndefined();
     expect(reply.code).not.toHaveBeenCalled();
     expect((req as any).tenantId).toBe('tenant-1');
+    expect((req as any).actorTenantId).toBe('tenant-1');
+    expect((req as any).isSuperAdmin).toBe(false);
+  });
+
+  it('allows super admin to impersonate any tenant', async () => {
+    getMock.mockResolvedValueOnce({ key: 'sys-admin-key', tenantId: 'sys-tenant' });
+    const req = createRequest({ 'x-api-key': 'sys-admin-key', 'x-tenant-id': 'tenant-123' });
+    const reply = createReply();
+
+    await expect(registerAuth(req, reply)).resolves.toBeUndefined();
+    expect(reply.code).not.toHaveBeenCalled();
+    expect((req as any).tenantId).toBe('tenant-123');
+    expect((req as any).actorTenantId).toBe('sys-tenant');
+    expect((req as any).isSuperAdmin).toBe(true);
   });
 });

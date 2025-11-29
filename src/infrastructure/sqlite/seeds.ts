@@ -12,6 +12,7 @@ import type {
   OrderingItem,
   ScenarioTaskItem,
   ShortAnswerItem,
+  User,
 } from '../../common/types.js';
 
 function isFillBlankItem(item: Item): item is FillBlankItem {
@@ -185,6 +186,33 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
     attempt.updatedAt,
   );
   return attempt;
+}
+
+export function insertUser(db: SQLiteDatabase, user: User): User {
+  db.prepare(`
+    INSERT INTO users (id, tenant_id, role, email, display_name, status, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      tenant_id = excluded.tenant_id,
+      role = excluded.role,
+      email = excluded.email,
+      display_name = excluded.display_name,
+      status = excluded.status,
+      created_by = excluded.created_by,
+      created_at = excluded.created_at,
+      updated_at = excluded.updated_at
+  `).run(
+    user.id,
+    user.tenantId,
+    user.role,
+    user.email,
+    user.displayName ?? null,
+    user.status,
+    user.createdBy ?? null,
+    user.createdAt,
+    user.updatedAt,
+  );
+  return user;
 }
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
@@ -661,4 +689,21 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
     createdAt: now,
     updatedAt: now,
   });
+
+  const adminExists = db
+    .prepare('SELECT id FROM users WHERE tenant_id = ? AND role = ? LIMIT 1')
+    .get(tenantId, 'TENANT_ADMIN') as { id: string } | undefined;
+  if (!adminExists) {
+    insertUser(db, {
+      id: `seed-admin-${tenantId}`,
+      tenantId,
+      role: 'TENANT_ADMIN',
+      email: `seed-admin+${tenantId}@example.com`,
+      displayName: `Seed Admin (${tenantId})`,
+      status: 'active',
+      createdBy: 'seed-script',
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 }

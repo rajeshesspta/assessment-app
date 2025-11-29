@@ -2,6 +2,18 @@ export interface TenantScoped { tenantId: string; }
 
 export interface BaseEntity extends TenantScoped { id: string; createdAt: string; updatedAt: string; }
 
+export type UserRole = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'CONTENT_AUTHOR' | 'LEARNER';
+
+export type UserStatus = 'active' | 'invited' | 'disabled';
+
+export interface User extends BaseEntity {
+	role: UserRole;
+	email: string;
+	displayName?: string;
+	status: UserStatus;
+	createdBy?: string;
+}
+
 export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';

@@ -15,6 +15,8 @@ describe('loadConfig', () => {
     delete process.env.API_KEY_CACHE_TTL_MS;
     delete process.env.API_KEY;
     delete process.env.API_TENANT_ID;
+    delete process.env.SUPER_ADMIN_API_KEY;
+    delete process.env.SUPER_ADMIN_TENANT_ID;
     delete process.env.AUTH_PROVIDER;
     delete process.env.DB_PROVIDER;
     delete process.env.SQLITE_DB_ROOT;
@@ -40,7 +42,11 @@ describe('loadConfig', () => {
       auth: {
         provider: 'memory',
         cacheTtlMs: 60000,
-        seedKeys: [{ key: 'dev-key', tenantId: 'dev-tenant' }],
+        seedKeys: [
+          { key: 'sys-admin-key', tenantId: 'sys-tenant' },
+          { key: 'dev-key', tenantId: 'dev-tenant' },
+        ],
+        superAdminTenantId: 'sys-tenant',
       },
       persistence: {
         provider: 'sqlite',
@@ -64,6 +70,8 @@ describe('loadConfig', () => {
     process.env.API_KEY = 'seed-key';
     process.env.API_TENANT_ID = 'tenant-123';
     process.env.AUTH_PROVIDER = 'cosmos';
+    process.env.SUPER_ADMIN_TENANT_ID = 'platform-admin';
+    process.env.SUPER_ADMIN_API_KEY = 'platform-key';
     process.env.DB_PROVIDER = 'cosmos';
     process.env.SQLITE_DB_ROOT = 'C:/db/root';
     process.env.SQLITE_DB_FILE_PATTERN = 'db-{tenantId}.sqlite';
@@ -82,7 +90,11 @@ describe('loadConfig', () => {
     expect(config.auth).toEqual({
       provider: 'cosmos',
       cacheTtlMs: 120000,
-      seedKeys: [{ key: 'seed-key', tenantId: 'tenant-123' }],
+      seedKeys: [
+        { key: 'platform-key', tenantId: 'platform-admin' },
+        { key: 'seed-key', tenantId: 'tenant-123' },
+      ],
+      superAdminTenantId: 'platform-admin',
     });
     expect(config.persistence).toEqual({
       provider: 'cosmos',
@@ -107,6 +119,7 @@ describe('loadConfig', () => {
     expect(config.cosmos.throughput).toBeUndefined();
     expect(config.auth.cacheTtlMs).toBe(60000);
     expect(config.auth.provider).toBe('memory');
+    expect(config.auth.superAdminTenantId).toBe('sys-tenant');
     expect(config.persistence.provider).toBe('sqlite');
     expect(config.persistence.sqlite.seedDefaultTenant).toBe(false);
   });

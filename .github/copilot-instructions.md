@@ -2,7 +2,7 @@
 
 ## Architecture & Patterns
 
-- Fastify + TypeScript (native ESM) app rooted in `src/`; `buildApp` wires auth, tenant routing, and per-module routes (`src/modules/**`). Each module exposes `*.routes.ts`, repositories, and tests in `__tests__`.
+- Fastify + TypeScript (native ESM) app rooted in `src/`; `buildApp` wires auth, tenant routing, and per-module routes (`src/modules/**`). Each module exposes `*.routes.ts`, repositories, and tests in `__tests__`. The new `users` module follows the same pattern—inject its repository and register routes alongside items/assessments/attempts/tenants.
 - Persistence is abstracted behind repository bundles. Default provider is SQLite via `sql.js` (see `src/infrastructure/sqlite/**`), but memory and Cosmos implementations exist; do not instantiate databases directly—inject the appropriate repository through options.
 - Multi-tenant enforcement relies on the `x-tenant-id` header and repositories expect the tenant id as their first parameter. Always preserve this signature when adding repository APIs.
 - Validation consistently uses `zod` schemas near route handlers. Follow the pattern in `src/modules/items/item.routes.ts` and `src/modules/attempts/attempt.routes.ts` when introducing new endpoints.
@@ -10,14 +10,15 @@
 
 ## Domain Terminology
 
-- Tenant Admin provisions tenants, rotates API keys, and manages cohorts + access policies.
+- Super Admin resides in the system tenant (`sys-tenant`), oversees the platform, provisions tenants, rotates global API keys, and can impersonate tenant scopes to manage only their tenant admins. Calls to `POST /tenants/:id/admins` must set `x-tenant-id` to the tenant being managed or they fail with HTTP 400.
+- Tenant Admin provisions tenants, rotates API keys, and manages cohorts + access policies. They create Content Authors/Learners via `POST /users` (roles limited to `CONTENT_AUTHOR` and `LEARNER`). Duplicate emails per tenant should return HTTP 409.
 - Content Authors share a tenant-wide item bank; items are automatically visible to other authors within the same tenant but never leak across tenants.
 - Learners (Assessment Participants) belong to one or more cohorts; cohorts are the unit for scheduling assessments and aggregating analytics.
 - Reviewers/Raters resolve deferred scoring events (`FreeResponseEvaluationRequested`, `ScenarioEvaluationRequested`). Proctors/Operations unlock attempts and monitor live sessions. Analytics Consumers query reporting endpoints.
 
 ## Database & Tooling
 
-- SQLite schema lives under `migrations/sqlite/`. Run `npm run db:migrate -- --tenant=<id>` (or `--all-tenants`) whenever migrations change. Local files are stored under `data/sqlite/{tenantId}.db`.
+- SQLite schema lives under `migrations/sqlite/`. Run `npm run db:migrate -- --tenant=<id>` (or `--all-tenants`) whenever migrations change—`013_users_table.sql` adds the `users` table required by the new user routes. Local files are stored under `data/sqlite/{tenantId}.db`.
 - Seeding utilities are in `scripts/sqlite/`. Use `npm run db:reset -- --tenant=<id>` for deterministic sample data or `npm run db:seed:random-data -- --tenant=<id> --items=12 --assessments=4 --attempts=10 [--append]` for randomized math drills across items/assessments/attempts.
 - Repository helpers (`insertItem`, etc.) encapsulate SQL statements; reuse them from scripts to avoid drift.
 
@@ -32,5 +33,5 @@
 - Use dependency-injected repositories and avoid importing concrete implementations inside modules (other than top-level wiring in `src/app.ts`).
 - Keep migrations idempotent, sorted numerically, and ensure inserts/updates happen without manual BEGIN/COMMIT (sql.js auto-wraps statements). When adding new item shapes, include schema/storage guidance for choice JSON plus the shape-specific columns (`blank_schema_json`, `matching_schema_json`, `ordering_schema_json`, `short_answer_schema_json`, `essay_schema_json`, `numeric_schema_json`, `hotspot_schema_json`, `drag_drop_schema_json`, `scenario_schema_json`).
 - Random seeding (`scripts/sqlite/seed-random-data.ts`) must continue generating every item kind (including hotspot, drag-and-drop, and scenario tasks) so analytics/tests have coverage; update attempt mocks/scoring logic in tandem when introducing new response formats or deferred-scoring workflows (scenario tasks emit `ScenarioEvaluationRequested`).
-- When extending API surface, update both route tests, type definitions, and seed scripts to keep tooling (CLI + default data) aligned.
+- When extending API surface, update both route tests, type definitions, and seed scripts to keep tooling (CLI + default data) aligned. User management endpoints (`/tenants/:id/admins`, `/users`) must also update `src/common/types.ts`, repository bundles, and seeding/CLI utilities when fields change.
 - Any new tenant-scoped functionality should accept `{ tenantId, ... }` and be tested with mock tenant headers just like existing modules.

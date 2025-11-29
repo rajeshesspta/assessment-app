@@ -3,26 +3,42 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { tenantRoutes } from '../tenant.routes.js';
 import { createInMemoryTenantRepository } from '../tenant.repository.js';
 import type { TenantRepository } from '../tenant.repository.js';
+import { createInMemoryUserRepository } from '../../users/user.repository.js';
+import type { UserRepository } from '../../users/user.repository.js';
+import { loadConfig } from '../../../config/index.js';
+
+const superAdminTenantId = loadConfig().auth.superAdminTenantId;
 
 async function buildTestApp() {
   const repository = createInMemoryTenantRepository();
-  let currentTenantId = 'admin';
+  const userRepository = createInMemoryUserRepository();
+  let currentTenantId = superAdminTenantId;
+  let currentIsSuperAdmin = true;
 
   const app = Fastify();
   app.addHook('onRequest', async request => {
     (request as any).tenantId = currentTenantId;
+    (request as any).actorTenantId = currentIsSuperAdmin ? superAdminTenantId : currentTenantId;
+    (request as any).isSuperAdmin = currentIsSuperAdmin;
   });
 
   await app.register(tenantRoutes, {
     prefix: '/tenants',
     repository,
+    userRepository,
   });
 
   return {
     app,
     repository,
+    userRepository,
     setTenant(id: string) {
       currentTenantId = id;
+      currentIsSuperAdmin = false;
+    },
+    setSuperAdminTarget(id: string) {
+      currentTenantId = id;
+      currentIsSuperAdmin = true;
     },
   };
 }
@@ -30,13 +46,18 @@ async function buildTestApp() {
 describe('tenantRoutes', () => {
   let app: FastifyInstance;
   let repository: TenantRepository;
+  let userRepository: UserRepository;
   let setTenant: (id: string) => void;
+  let setSuperAdminTarget: (id: string) => void;
 
   beforeEach(async () => {
     const testContext = await buildTestApp();
     app = testContext.app;
     repository = testContext.repository;
+    userRepository = testContext.userRepository;
     setTenant = testContext.setTenant;
+    setSuperAdminTarget = testContext.setSuperAdminTarget;
+    setSuperAdminTarget(superAdminTenantId);
   });
 
   afterEach(async () => {
@@ -96,5 +117,93 @@ describe('tenantRoutes', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ error: 'Forbidden' });
+  });
+
+  it('allows super admin to create tenant admins when impersonating the tenant', async () => {
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/tenants',
+      payload: {
+        name: 'Umbrella',
+        slug: 'umbrella',
+        apiKey: 'umbrella-key',
+      },
+    });
+    const tenantId = createResponse.json().id as string;
+
+    setSuperAdminTarget(tenantId);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/tenants/${tenantId}/admins`,
+      payload: {
+        email: 'admin@umbrella.test',
+        displayName: 'Umbrella Admin',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const saved = userRepository.getByEmail(tenantId, 'admin@umbrella.test');
+    expect(saved).toMatchObject({ role: 'TENANT_ADMIN', displayName: 'Umbrella Admin' });
+  });
+
+  it('rejects tenant admin creation when header tenant mismatches target', async () => {
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/tenants',
+      payload: {
+        name: 'Stark Industries',
+        slug: 'stark',
+        apiKey: 'stark-key',
+      },
+    });
+    const tenantId = createResponse.json().id as string;
+
+    setSuperAdminTarget(superAdminTenantId);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/tenants/${tenantId}/admins`,
+      payload: {
+        email: 'admin@stark.test',
+        displayName: 'Stark Admin',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'x-tenant-id must match target tenant' });
+  });
+
+  it('prevents duplicate tenant admin emails', async () => {
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/tenants',
+      payload: {
+        name: 'Wayne Enterprises',
+        slug: 'wayne',
+        apiKey: 'wayne-key',
+      },
+    });
+    const tenantId = createResponse.json().id as string;
+
+    setSuperAdminTarget(tenantId);
+    await app.inject({
+      method: 'POST',
+      url: `/tenants/${tenantId}/admins`,
+      payload: {
+        email: 'admin@wayne.test',
+        displayName: 'Wayne Admin',
+      },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/tenants/${tenantId}/admins`,
+      payload: {
+        email: 'admin@wayne.test',
+        displayName: 'Another Admin',
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'User with email already exists' });
   });
 });

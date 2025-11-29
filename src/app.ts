@@ -4,6 +4,7 @@ import { itemRoutes } from './modules/items/item.routes.js';
 import { assessmentRoutes } from './modules/assessments/assessment.routes.js';
 import { attemptRoutes } from './modules/attempts/attempt.routes.js';
 import { analyticsRoutes } from './modules/analytics/analytics.routes.js';
+import { userRoutes } from './modules/users/user.routes.js';
 import {
   createInMemoryRepositoryBundle,
   type RepositoryBundle,
@@ -42,7 +43,12 @@ export function buildApp(deps: AppDependencies = {}) {
     itemRepository: repositories.item,
   });
   app.register(analyticsRoutes, { prefix: '/analytics', attemptRepository: repositories.attempt });
-  app.register(tenantRoutes, { prefix: '/tenants', repository: tenantRepository });
+  app.register(userRoutes, { prefix: '/users', repository: repositories.user });
+  app.register(tenantRoutes, {
+    prefix: '/tenants',
+    repository: tenantRepository,
+    userRepository: repositories.user,
+  });
 
   app.addHook('onClose', async () => {
     if (repositories.dispose) {
