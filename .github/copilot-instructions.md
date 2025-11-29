@@ -8,6 +8,13 @@
 - Validation consistently uses `zod` schemas near route handlers. Follow the pattern in `src/modules/items/item.routes.ts` and `src/modules/attempts/attempt.routes.ts` when introducing new endpoints.
 - Domain entities live in `src/common/types.ts`. Items now form a discriminated union: choice-based (`kind: 'MCQ' | 'TRUE_FALSE'`) with `answerMode`/`correctIndexes`, fill-in-the-blank (`kind: 'FILL_IN_THE_BLANK'`) with `blanks[]` + matcher metadata and `scoring.mode ('all' | 'partial')`, matching (`kind: 'MATCHING'`) with `prompts[]`, `targets[]`, and scoring rules, ordering (`kind: 'ORDERING'`) with `options[]`, `correctOrder[]`, and `scoring.mode ('all' | 'partial_pairs' | custom evaluator)`, short-answer (`kind: 'SHORT_ANSWER'`) with optional rubric keywords/guidance plus `scoring.mode ('manual' | 'ai_rubric')`, essay (`kind: 'ESSAY'`) with rubric sections, length expectations, and manual/AI rubric scoring, numeric entry (`kind: 'NUMERIC_ENTRY'`) with exact-or-range validation plus optional units metadata, hotspot (`kind: 'HOTSPOT'`) with image metadata and polygon scoring, drag-and-drop (`kind: 'DRAG_AND_DROP'`) with token/zone schemas, and scenario/coding tasks (`kind: 'SCENARIO_TASK'`) that include workspace templates, attachments, automation metadata, and rubric scoring. Attempts capture `answerIndexes`, `textAnswers`, `matchingAnswers`, `orderingAnswer`, `essayAnswer`, `numericAnswer`, `hotspotAnswers`, `dragDropAnswers`, and `scenarioAnswer`; keep these shapes in sync with persistence + repositories.
 
+## Domain Terminology
+
+- Tenant Admin provisions tenants, rotates API keys, and manages cohorts + access policies.
+- Content Authors share a tenant-wide item bank; items are automatically visible to other authors within the same tenant but never leak across tenants.
+- Learners (Assessment Participants) belong to one or more cohorts; cohorts are the unit for scheduling assessments and aggregating analytics.
+- Reviewers/Raters resolve deferred scoring events (`FreeResponseEvaluationRequested`, `ScenarioEvaluationRequested`). Proctors/Operations unlock attempts and monitor live sessions. Analytics Consumers query reporting endpoints.
+
 ## Database & Tooling
 
 - SQLite schema lives under `migrations/sqlite/`. Run `npm run db:migrate -- --tenant=<id>` (or `--all-tenants`) whenever migrations change. Local files are stored under `data/sqlite/{tenantId}.db`.

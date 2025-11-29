@@ -13,13 +13,19 @@ Headless assessment platform MVP in TypeScript + Fastify.
 - Analytics (attempt count + average score)
 - Event Bus (in-memory pub/sub)
 
-## User Personas
+## Domain Roles & Cohorts
 
-- Assessment Admin: configures tenants, manages API keys, and oversees compliance controls.
-- Content Author: builds and maintains item banks, assembles assessments, and tunes scoring rules.
-- Candidate: launches attempts, records responses, and reviews feedback when released.
-- Proctor/Reviewer: monitors live attempts, validates identity, and investigates flagged events.
-- Analyst/Stakeholder: consumes analytics endpoints, tracks completion metrics, and reports outcomes to business leadership.
+- Tenant Admin: provisions the tenant, manages API keys + rate limits, and enforces compliance policies.
+- Content Author: curates the tenant’s item bank and assembles assessments from those shared items.
+- Learner (Assessment Participant): receives cohort-based assignments, records responses, and reviews released feedback.
+- Reviewer / Rater: scores deferred items (short-answer, essay, scenario tasks) and finalizes results.
+- Proctor / Operations: monitors live attempts, unlocks sessions, and handles incident workflows.
+- Analytics Consumer: pulls reporting/insights for cohorts, programs, or compliance exports.
+
+### Cohorts
+
+- Cohort: a logical group of learners (class, onboarding batch, pilot program) used for assessment assignments, accommodations, and analytics rollups.
+- Cohort assignments let Tenant Admins/Authors schedule assessments once and deliver them to every learner in that cohort, while analytics surfaces completion/performance per cohort.
 
 ## Running
 
@@ -81,3 +87,8 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - GET /analytics/assessments/:id
 
 Headers required: `x-api-key`, `x-tenant-id`.
+
+## Tenant-Scoped Content
+
+- Item banks, assessments, attempts, and cohorts are always isolated per tenant; authors within the same tenant can reuse each other’s items, but nothing leaks across tenants unless explicitly exported/imported.
+- API calls must include the correct `x-tenant-id` so repository bundles (SQLite, memory, Cosmos) load the right data slice.

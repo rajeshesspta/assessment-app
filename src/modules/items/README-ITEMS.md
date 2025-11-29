@@ -1,5 +1,7 @@
 # Items Module Notes
 
+Item banks are tenant-scoped. Any Content Author inside the same tenant can reuse the shared items listed here, but items are never visible to authors in other tenants unless they explicitly export/import definitions.
+
 ## API payloads
 
 `POST /items` accepts a discriminated payload:
