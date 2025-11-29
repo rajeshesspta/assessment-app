@@ -40,11 +40,31 @@
 	],
 	"scoring": { "mode": "all" }
 }
+
+// Matching (pair prompts with available targets; answers stored per prompt)
+{
+	"kind": "MATCHING",
+	"prompt": "Match the country to its capital",
+	"prompts": [
+		{ "id": "p-fr", "text": "France", "correctTargetId": "t-paris" },
+		{ "id": "p-de", "text": "Germany", "correctTargetId": "t-berlin" }
+	],
+	"targets": [
+		{ "id": "t-paris", "text": "Paris" },
+		{ "id": "t-berlin", "text": "Berlin" },
+		{ "id": "t-madrid", "text": "Madrid" }
+	],
+	"scoring": { "mode": "partial" }
+}
 ```
 
 TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, which keeps downstream scoring logic untouched.
 
 Fill-in-the-blank items define one or more blanks, each with acceptable answers (exact or regex). Attempts submit `textAnswers` for those blanks in order; multi-blank items can use `scoring.mode = "partial"` to award credit per blank or `"all"` to require every blank to match.
+
+Matching items persist their prompt/target schema inside `matching_schema_json`. Attempts provide `matchingAnswers` shaped as `{ promptId, targetId }[]`; scoring awards either per-prompt (partial) or requires a perfect set (all).
+
+`GET /items` supports optional query params: `search` (full-text on prompts) and `kind`, enabling callers to fetch only a specific item type.
 
 ## Partition Strategy (future Cosmos)
 
