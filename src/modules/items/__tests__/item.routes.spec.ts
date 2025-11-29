@@ -445,6 +445,98 @@ describe('itemRoutes', () => {
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'HOTSPOT' }));
   });
 
+  it('creates a drag-and-drop item with normalized metadata', async () => {
+    uuidMock.mockReturnValueOnce('drag-drop-item-id').mockReturnValueOnce('event-id-9');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'DRAG_AND_DROP',
+        prompt: 'Classify each animal.',
+        tokens: [
+          { id: 'tok-1', label: '  Cat  ', category: ' mammals ' },
+          { id: 'tok-2', label: 'Falcon', category: 'birds' },
+          { id: 'tok-3', label: 'Turtle' },
+        ],
+        zones: [
+          {
+            id: 'zone-mammal',
+            label: ' Mammals ',
+            acceptsCategories: ['mammals', 'Mammals'],
+            correctTokenIds: ['tok-1'],
+            evaluation: 'set',
+            maxTokens: 2,
+          },
+          {
+            id: 'zone-birds',
+            label: 'Birds',
+            acceptsTokenIds: ['tok-2', 'tok-2'],
+            correctTokenIds: ['tok-2'],
+            evaluation: 'set',
+          },
+        ],
+        scoring: { mode: 'per_zone' },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body).toMatchObject({
+      id: 'drag-drop-item-id',
+      kind: 'DRAG_AND_DROP',
+      tokens: [
+        { id: 'tok-1', label: 'Cat', category: 'mammals' },
+        { id: 'tok-2', label: 'Falcon', category: 'birds' },
+        { id: 'tok-3', label: 'Turtle' },
+      ],
+      zones: [
+        expect.objectContaining({
+          id: 'zone-mammal',
+          acceptsCategories: ['mammals'],
+          maxTokens: 2,
+        }),
+        expect.objectContaining({
+          id: 'zone-birds',
+          acceptsTokenIds: ['tok-2'],
+        }),
+      ],
+      scoring: { mode: 'per_zone' },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'DRAG_AND_DROP' }));
+  });
+
+  it('rejects drag-and-drop payloads when zones reference unknown tokens', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'DRAG_AND_DROP',
+        prompt: 'Arrange the steps.',
+        tokens: [
+          { id: 'tok-1', label: 'First' },
+          { id: 'tok-2', label: 'Second' },
+        ],
+        zones: [
+          {
+            id: 'sequence',
+            correctTokenIds: ['tok-1'],
+            evaluation: 'set',
+          },
+          {
+            id: 'invalid',
+            correctTokenIds: ['missing-token'],
+            evaluation: 'set',
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Zone invalid references unknown token missing-token' });
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it('rejects numeric entry payloads when range bounds are invalid', async () => {
     const response = await app.inject({
       method: 'POST',

@@ -5,6 +5,7 @@ import { createItem } from './item.model.js';
 import type { ItemRepository } from './item.repository.js';
 import type {
   ChoiceItem,
+  DragDropItem,
   EssayItem,
   FillBlankItem,
   HotspotItem,
@@ -174,13 +175,37 @@ const hotspotSchema = z.object({
   }).default({ mode: 'all' }),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema, numericEntrySchema, hotspotSchema]);
+const dragDropTokenSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  category: z.string().min(1).optional(),
+});
+
+const dragDropZoneSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).max(120).optional(),
+  acceptsTokenIds: z.array(z.string().min(1)).min(1).optional(),
+  acceptsCategories: z.array(z.string().min(1)).min(1).optional(),
+  correctTokenIds: z.array(z.string().min(1)).min(1),
+  evaluation: z.enum(['set', 'ordered']).default('set'),
+  maxTokens: z.number().int().positive().max(20).optional(),
+});
+
+const dragDropSchema = z.object({
+  kind: z.literal('DRAG_AND_DROP'),
+  prompt: z.string().min(1),
+  tokens: z.array(dragDropTokenSchema).min(2),
+  zones: z.array(dragDropZoneSchema).min(1),
+  scoring: z.object({ mode: z.enum(['all', 'per_zone', 'per_token']).default('all') }).default({ mode: 'all' }),
+});
+
+const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema, numericEntrySchema, hotspotSchema, dragDropSchema]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
-  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY', 'NUMERIC_ENTRY', 'HOTSPOT']).optional(),
+  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY', 'NUMERIC_ENTRY', 'HOTSPOT', 'DRAG_AND_DROP']).optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -475,6 +500,129 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         prompt: parsed.prompt,
         image,
         hotspots,
+        scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    if (parsed.kind === 'DRAG_AND_DROP') {
+      if (new Set(parsed.tokens.map(token => token.id)).size !== parsed.tokens.length) {
+        reply.code(400);
+        return { error: 'Token ids must be unique' };
+      }
+      const zoneIdSet = new Set(parsed.zones.map(zone => zone.id));
+      if (zoneIdSet.size !== parsed.zones.length) {
+        reply.code(400);
+        return { error: 'Zone ids must be unique' };
+      }
+      const ensureUniqueOrder = (values?: string[]) => {
+        if (!values) return undefined;
+        const seen = new Set<string>();
+        const deduped: string[] = [];
+        for (const value of values) {
+          if (seen.has(value)) continue;
+          seen.add(value);
+          deduped.push(value);
+        }
+        return deduped;
+      };
+      const normalizeCategories = (categories?: string[]) => {
+        if (!categories) return undefined;
+        const trimmed = categories
+          .map(category => category.trim())
+          .filter(category => category.length > 0)
+          .map(category => category.toLowerCase());
+        if (!trimmed.length) {
+          return undefined;
+        }
+        return ensureUniqueOrder(trimmed);
+      };
+
+      const tokens: DragDropItem['tokens'] = [];
+      for (const token of parsed.tokens) {
+        const label = token.label.trim();
+        if (!label) {
+          reply.code(400);
+          return { error: `Token ${token.id} label cannot be blank` };
+        }
+        const category = token.category?.trim();
+        tokens.push({
+          id: token.id,
+          label,
+          category: category && category.length > 0 ? category : undefined,
+        });
+      }
+      const tokenLookup = new Map(tokens.map(token => [token.id, token] as const));
+      const zones: DragDropItem['zones'] = [];
+      for (const zone of parsed.zones) {
+        const normalizedAcceptsTokenIds = ensureUniqueOrder(zone.acceptsTokenIds);
+        if (normalizedAcceptsTokenIds) {
+          const unknownAccept = normalizedAcceptsTokenIds.find(id => !tokenLookup.has(id));
+          if (unknownAccept) {
+            reply.code(400);
+            return { error: `Zone ${zone.id} references unknown token ${unknownAccept}` };
+          }
+        }
+        const seenCorrect = new Set<string>();
+        for (const tokenId of zone.correctTokenIds) {
+          if (!tokenLookup.has(tokenId)) {
+            reply.code(400);
+            return { error: `Zone ${zone.id} references unknown token ${tokenId}` };
+          }
+          if (seenCorrect.has(tokenId)) {
+            reply.code(400);
+            return { error: `Zone ${zone.id} cannot include duplicate token ${tokenId}` };
+          }
+          seenCorrect.add(tokenId);
+        }
+        if (zone.evaluation === 'ordered' && zone.correctTokenIds.length < 2) {
+          reply.code(400);
+          return { error: 'Ordered zones must include at least two correct tokens' };
+        }
+        if (zone.maxTokens && zone.maxTokens < zone.correctTokenIds.length) {
+          reply.code(400);
+          return { error: `Zone ${zone.id} maxTokens must allow placing every correct token` };
+        }
+        if (normalizedAcceptsTokenIds) {
+          const allowed = new Set(normalizedAcceptsTokenIds);
+          const disallowed = zone.correctTokenIds.find(id => !allowed.has(id));
+          if (disallowed) {
+            reply.code(400);
+            return { error: `Zone ${zone.id} correct tokens must be part of acceptsTokenIds` };
+          }
+        }
+        const normalizedCategories = normalizeCategories(zone.acceptsCategories);
+        if (normalizedCategories) {
+          const allowedCategories = new Set(normalizedCategories);
+          const invalidCategory = zone.correctTokenIds.find(tokenId => {
+            const token = tokenLookup.get(tokenId);
+            return !token?.category || !allowedCategories.has(token.category);
+          });
+          if (invalidCategory) {
+            reply.code(400);
+            return { error: `Zone ${zone.id} correct tokens must match acceptsCategories` };
+          }
+        }
+        zones.push({
+          id: zone.id,
+          label: zone.label?.trim() || undefined,
+          acceptsTokenIds: normalizedAcceptsTokenIds,
+          acceptsCategories: normalizedCategories,
+          correctTokenIds: [...zone.correctTokenIds],
+          evaluation: zone.evaluation,
+          maxTokens: zone.maxTokens,
+        });
+      }
+      const item = createItem<DragDropItem>({
+        id,
+        tenantId,
+        kind: 'DRAG_AND_DROP',
+        prompt: parsed.prompt,
+        tokens,
+        zones,
         scoring: parsed.scoring,
       });
       repository.save(item);

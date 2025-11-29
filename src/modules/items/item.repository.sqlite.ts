@@ -1,6 +1,17 @@
 import type { ItemRepository } from './item.repository.js';
 import type { SQLiteTenantClient } from '../../infrastructure/sqlite/client.js';
-import type { ChoiceItem, EssayItem, FillBlankItem, HotspotItem, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
+import type {
+  ChoiceItem,
+  DragDropItem,
+  EssayItem,
+  FillBlankItem,
+  HotspotItem,
+  Item,
+  MatchingItem,
+  NumericEntryItem,
+  OrderingItem,
+  ShortAnswerItem,
+} from '../../common/types.js';
 
 function isChoiceItem(item: Item): item is ChoiceItem {
   return item.kind === 'MCQ' || item.kind === 'TRUE_FALSE';
@@ -34,13 +45,17 @@ function isHotspotItem(item: Item): item is HotspotItem {
   return item.kind === 'HOTSPOT';
 }
 
+function isDragDropItem(item: Item): item is DragDropItem {
+  return item.kind === 'DRAG_AND_DROP';
+}
+
 export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepository {
   return {
     save(item) {
       const db = client.getConnection(item.tenantId);
       db.prepare(`
-        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, drag_drop_schema_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           kind = excluded.kind,
           prompt = excluded.prompt,
@@ -54,6 +69,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           essay_schema_json = excluded.essay_schema_json,
           numeric_schema_json = excluded.numeric_schema_json,
           hotspot_schema_json = excluded.hotspot_schema_json,
+          drag_drop_schema_json = excluded.drag_drop_schema_json,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `).run(
@@ -81,6 +97,9 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
         isHotspotItem(item)
           ? JSON.stringify({ image: item.image, hotspots: item.hotspots, scoring: item.scoring })
           : null,
+        isDragDropItem(item)
+          ? JSON.stringify({ tokens: item.tokens, zones: item.zones, scoring: item.scoring })
+          : null,
         item.createdAt,
         item.updatedAt,
       );
@@ -89,7 +108,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
     getById(tenantId, id) {
       const db = client.getConnection(tenantId);
       const row = db.prepare(`
-        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, created_at as createdAt, updated_at as updatedAt
+        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, created_at as createdAt, updated_at as updatedAt
         FROM items
         WHERE id = ? AND tenant_id = ?
       `).get(id, tenantId);
@@ -193,6 +212,20 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           updatedAt: row.updatedAt,
         } satisfies Item;
       }
+      if (row.kind === 'DRAG_AND_DROP') {
+        const schema = row.dragDropSchemaJson ? JSON.parse(row.dragDropSchemaJson) : undefined;
+        return {
+          id: row.id,
+          tenantId: row.tenantId,
+          kind: 'DRAG_AND_DROP',
+          prompt: row.prompt,
+          tokens: schema?.tokens ?? [],
+          zones: schema?.zones ?? [],
+          scoring: schema?.scoring ?? { mode: 'all' },
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        } satisfies Item;
+      }
       const choices = JSON.parse(row.choicesJson) as ChoiceItem['choices'];
       return {
         id: row.id,
@@ -223,7 +256,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
       params.push(limit, offset);
       const rows = db
         .prepare(`
-          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, created_at as createdAt, updated_at as updatedAt
+          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, created_at as createdAt, updated_at as updatedAt
           FROM items
           WHERE ${clauses.join(' AND ')}
           ORDER BY created_at DESC
@@ -321,6 +354,20 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             prompt: row.prompt,
             image: schema?.image,
             hotspots: schema?.hotspots ?? [],
+            scoring: schema?.scoring ?? { mode: 'all' },
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          } satisfies Item;
+        }
+        if (row.kind === 'DRAG_AND_DROP') {
+          const schema = row.dragDropSchemaJson ? JSON.parse(row.dragDropSchemaJson) : undefined;
+          return {
+            id: row.id,
+            tenantId: row.tenantId,
+            kind: 'DRAG_AND_DROP',
+            prompt: row.prompt,
+            tokens: schema?.tokens ?? [],
+            zones: schema?.zones ?? [],
             scoring: schema?.scoring ?? { mode: 'all' },
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,

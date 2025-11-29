@@ -269,6 +269,46 @@ describe('attemptRoutes', () => {
     ]);
   });
 
+  it('stores drag-and-drop answers when provided', async () => {
+    const attempt = {
+      id: 'attempt-drag',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-drag',
+      userId: 'user-5',
+      status: 'in_progress' as const,
+      responses: [],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-drag', attempt);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/attempts/attempt-drag/responses',
+      payload: {
+        responses: [{
+          itemId: 'drag-item',
+          dragDropAnswers: [
+            { tokenId: 'tok-1', dropZoneId: 'zone-a', position: 0 },
+            { tokenId: 'tok-1', dropZoneId: 'zone-b', position: 2 },
+            { tokenId: 'tok-2', dropZoneId: 'zone-a', position: -5 },
+          ],
+        }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().responses).toEqual([
+      {
+        itemId: 'drag-item',
+        dragDropAnswers: [
+          { tokenId: 'tok-1', dropZoneId: 'zone-b', position: 2 },
+          { tokenId: 'tok-2', dropZoneId: 'zone-a', position: 0 },
+        ],
+      },
+    ]);
+  });
+
   it('returns 404 when patching missing attempt', async () => {
     const response = await app.inject({
       method: 'PATCH',
@@ -457,6 +497,103 @@ describe('attemptRoutes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ status: 'scored', score: 1, maxScore: 1 });
+  });
+
+  it('scores drag-and-drop items using per-zone rules', async () => {
+    const attempt = {
+      id: 'attempt-drag-zone',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-drag',
+      userId: 'user-11',
+      status: 'in_progress' as const,
+      responses: [{
+        itemId: 'drag-item',
+        dragDropAnswers: [
+          { tokenId: 'tok-1', dropZoneId: 'mammals' },
+          { tokenId: 'tok-2', dropZoneId: 'birds' },
+        ],
+      }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-drag-zone', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-drag',
+      tenantId: 'tenant-1',
+      itemIds: ['drag-item'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'drag-item',
+      tenantId: 'tenant-1',
+      kind: 'DRAG_AND_DROP' as const,
+      prompt: 'Classify animals',
+      tokens: [
+        { id: 'tok-1', label: 'Cat' },
+        { id: 'tok-2', label: 'Falcon' },
+      ],
+      zones: [
+        { id: 'mammals', correctTokenIds: ['tok-1'], evaluation: 'set' },
+        { id: 'birds', correctTokenIds: ['tok-2'], evaluation: 'set' },
+      ],
+      scoring: { mode: 'per_zone' },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('drag-zone-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-drag-zone/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'scored', score: 2, maxScore: 2 });
+  });
+
+  it('awards per-token partial credit for ordered drag-and-drop sequences', async () => {
+    const attempt = {
+      id: 'attempt-drag-ordered',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-drag-ordered',
+      userId: 'user-12',
+      status: 'in_progress' as const,
+      responses: [{
+        itemId: 'drag-ordered',
+        dragDropAnswers: [
+          { tokenId: 'tok-1', dropZoneId: 'sequence', position: 0 },
+          { tokenId: 'tok-3', dropZoneId: 'sequence', position: 1 },
+          { tokenId: 'tok-2', dropZoneId: 'sequence', position: 2 },
+        ],
+      }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-drag-ordered', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-drag-ordered',
+      tenantId: 'tenant-1',
+      itemIds: ['drag-ordered'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'drag-ordered',
+      tenantId: 'tenant-1',
+      kind: 'DRAG_AND_DROP' as const,
+      prompt: 'Sequence the steps',
+      tokens: [
+        { id: 'tok-1', label: 'First' },
+        { id: 'tok-2', label: 'Second' },
+        { id: 'tok-3', label: 'Third' },
+      ],
+      zones: [
+        { id: 'sequence', correctTokenIds: ['tok-1', 'tok-2', 'tok-3'], evaluation: 'ordered' as const },
+      ],
+      scoring: { mode: 'per_token' },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('drag-ordered-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-drag-ordered/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'scored', score: 1, maxScore: 3 });
   });
 
   it('defers scoring when short-answer items require review', async () => {

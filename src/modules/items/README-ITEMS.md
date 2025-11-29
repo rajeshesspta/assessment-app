@@ -138,6 +138,34 @@
 	],
 	"scoring": { "mode": "partial", "maxSelections": 2 }
 }
+
+// Drag-and-drop (tokens placed onto drop zones; supports classification or ordered sequences)
+{
+	"kind": "DRAG_AND_DROP",
+	"prompt": "Drag each label onto the correct diagram.",
+	"tokens": [
+		{ "id": "tok-heart", "label": "Heart", "category": "circulatory" },
+		{ "id": "tok-lungs", "label": "Lungs", "category": "respiratory" }
+	],
+	"zones": [
+		{
+			"id": "zone-cardiac",
+			"label": "Circulatory",
+			"acceptsCategories": ["circulatory"],
+			"correctTokenIds": ["tok-heart"],
+			"evaluation": "set",
+			"maxTokens": 2
+		},
+		{
+			"id": "zone-respiratory",
+			"label": "Respiratory",
+			"acceptsCategories": ["respiratory"],
+			"correctTokenIds": ["tok-lungs"],
+			"evaluation": "set"
+		}
+	],
+	"scoring": { "mode": "per_zone" }
+}
 ```
 
 TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, which keeps downstream scoring logic untouched.
@@ -155,6 +183,8 @@ Essay items persist their metadata inside `essay_schema_json`, including optiona
 Numeric entry items persist validation + units metadata in `numeric_schema_json`. Validation supports two modes: `exact` (value plus optional absolute `tolerance`) and `range` (inclusive `min`/`max`). Units metadata is optional but can expose UI hints such as `label`, `symbol`, or preferred decimal `precision`. Attempts submit `numericAnswer.value` (and optionally `numericAnswer.unit`) and are auto-scored immediately during submission.
 
 Hotspot items persist their image metadata, region polygons, and scoring rules inside `hotspot_schema_json`. Points are normalized to the `[0, 1]` coordinate space relative to the background image dimensions, which keeps scoring resolution independent of pixel density. Attempts submit `hotspotAnswers` arrays containing normalized `{ x, y }` coordinates. During submission, the API counts how many clicks land inside the configured polygons: `scoring.mode = "all"` requires every hotspot to be identified (awarding a single point), whereas `mode = "partial"` awards up to `maxSelections` points—one per correctly identified region.
+
+Drag-and-drop items persist their token metadata, drop zones, and scoring rules inside `drag_drop_schema_json`. Each token has a stable id plus optional category tags; zones can restrict acceptable tokens via explicit ids or categories, set `maxTokens`, and opt into `evaluation: "set"` (unordered classification) or `"ordered"` (sequencing). Attempts submit `dragDropAnswers` entries shaped as `{ tokenId, dropZoneId, position? }`, where `position` is only needed for ordered zones. Scoring supports three modes: `all` (one point when every zone is satisfied), `per_zone` (one point per correct zone), or `per_token` (fine-grained partial credit per correctly placed/ordered token).
 
 `GET /items` supports optional query params: `search` (full-text on prompts) and `kind`, enabling callers to fetch only a specific item type.
 

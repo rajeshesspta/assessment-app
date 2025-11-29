@@ -2,7 +2,21 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, ChoiceItem, EssayItem, FillBlankItem, HotspotItem, HotspotPoint, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
+import type {
+  Assessment,
+  Attempt,
+  ChoiceItem,
+  DragDropItem,
+  EssayItem,
+  FillBlankItem,
+  HotspotItem,
+  HotspotPoint,
+  Item,
+  MatchingItem,
+  NumericEntryItem,
+  OrderingItem,
+  ShortAnswerItem,
+} from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -286,6 +300,75 @@ function buildRandomHotspotItem(tenantId: string): Item {
   } satisfies Item;
 }
 
+const dragDropTemplates: Array<{
+  prompt: string;
+  tokens: DragDropItem['tokens'];
+  zones: DragDropItem['zones'];
+  scoringMode: DragDropItem['scoring']['mode'];
+}> = [
+  {
+    prompt: 'Classify each species into its home biome.',
+    tokens: [
+      { id: 'tok-fox', label: 'Arctic Fox', category: 'tundra' },
+      { id: 'tok-camel', label: 'Camel', category: 'desert' },
+      { id: 'tok-parrot', label: 'Parrot', category: 'rainforest' },
+      { id: 'tok-penguin', label: 'Penguin', category: 'polar' },
+    ],
+    zones: [
+      { id: 'zone-tundra', label: 'Tundra', acceptsCategories: ['tundra'], correctTokenIds: ['tok-fox'], evaluation: 'set', maxTokens: 2 },
+      { id: 'zone-desert', label: 'Desert', acceptsCategories: ['desert'], correctTokenIds: ['tok-camel'], evaluation: 'set' },
+      { id: 'zone-rainforest', label: 'Rainforest', acceptsCategories: ['rainforest'], correctTokenIds: ['tok-parrot'], evaluation: 'set' },
+      { id: 'zone-polar', label: 'Polar', acceptsCategories: ['polar'], correctTokenIds: ['tok-penguin'], evaluation: 'set' },
+    ],
+    scoringMode: 'per_zone',
+  },
+  {
+    prompt: 'Sequence the phases of stellar evolution.',
+    tokens: [
+      { id: 'tok-nebula', label: 'Nebula' },
+      { id: 'tok-protostar', label: 'Protostar' },
+      { id: 'tok-main', label: 'Main Sequence' },
+      { id: 'tok-red-giant', label: 'Red Giant' },
+    ],
+    zones: [
+      { id: 'zone-sequence', label: 'Timeline', correctTokenIds: ['tok-nebula', 'tok-protostar', 'tok-main', 'tok-red-giant'], evaluation: 'ordered', maxTokens: 4 },
+    ],
+    scoringMode: 'per_token',
+  },
+  {
+    prompt: 'Label each diagram with the correct organ.',
+    tokens: [
+      { id: 'tok-heart', label: 'Heart', category: 'circulatory' },
+      { id: 'tok-lung', label: 'Lungs', category: 'respiratory' },
+      { id: 'tok-brain', label: 'Brain', category: 'nervous' },
+      { id: 'tok-stomach', label: 'Stomach', category: 'digestive' },
+    ],
+    zones: [
+      { id: 'zone-cardiac', label: 'Circulatory', acceptsCategories: ['circulatory'], correctTokenIds: ['tok-heart'], evaluation: 'set' },
+      { id: 'zone-respiratory', label: 'Respiratory', acceptsCategories: ['respiratory'], correctTokenIds: ['tok-lung'], evaluation: 'set' },
+      { id: 'zone-nervous', label: 'Nervous', acceptsCategories: ['nervous'], correctTokenIds: ['tok-brain'], evaluation: 'set' },
+      { id: 'zone-digestive', label: 'Digestive', acceptsCategories: ['digestive'], correctTokenIds: ['tok-stomach'], evaluation: 'set' },
+    ],
+    scoringMode: 'all',
+  },
+];
+
+function buildRandomDragDropItem(tenantId: string): Item {
+  const template = dragDropTemplates[randomInt(dragDropTemplates.length)];
+  const now = new Date().toISOString();
+  return {
+    id: `random-drag-item-${randomUUID()}`,
+    tenantId,
+    kind: 'DRAG_AND_DROP',
+    prompt: template.prompt,
+    tokens: template.tokens.map(token => ({ ...token })),
+    zones: template.zones.map(zone => ({ ...zone })),
+    scoring: { mode: template.scoringMode },
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
 const shortAnswerTemplates = [
   {
     prompt: 'Explain how photosynthesis converts sunlight into chemical energy.',
@@ -405,19 +488,21 @@ function buildRandomItem(tenantId: string, index: number): Item {
     buildRandomEssayItem,
     buildRandomNumericItem,
     buildRandomHotspotItem,
+    buildRandomDragDropItem,
   ] as const;
   if (index < builders.length) {
     return builders[index](tenantId);
   }
   const roll = Math.random();
-  if (roll < 0.12) return buildRandomFillBlankItem(tenantId);
-  if (roll < 0.24) return buildRandomTrueFalseItem(tenantId);
-  if (roll < 0.36) return buildRandomMatchingItem(tenantId);
-  if (roll < 0.48) return buildRandomOrderingItem(tenantId);
-  if (roll < 0.6) return buildRandomShortAnswerItem(tenantId);
-  if (roll < 0.72) return buildRandomEssayItem(tenantId);
-  if (roll < 0.84) return buildRandomNumericItem(tenantId);
-  if (roll < 0.95) return buildRandomHotspotItem(tenantId);
+  if (roll < 0.1) return buildRandomFillBlankItem(tenantId);
+  if (roll < 0.2) return buildRandomTrueFalseItem(tenantId);
+  if (roll < 0.3) return buildRandomMatchingItem(tenantId);
+  if (roll < 0.4) return buildRandomOrderingItem(tenantId);
+  if (roll < 0.5) return buildRandomShortAnswerItem(tenantId);
+  if (roll < 0.6) return buildRandomEssayItem(tenantId);
+  if (roll < 0.7) return buildRandomNumericItem(tenantId);
+  if (roll < 0.82) return buildRandomHotspotItem(tenantId);
+  if (roll < 0.94) return buildRandomDragDropItem(tenantId);
   return buildRandomMCQItem(tenantId);
 }
 
@@ -465,6 +550,10 @@ function isNumericItem(item: Item): item is NumericEntryItem {
 
 function isHotspotItem(item: Item): item is HotspotItem {
   return item.kind === 'HOTSPOT';
+}
+
+function isDragDropItem(item: Item): item is DragDropItem {
+  return item.kind === 'DRAG_AND_DROP';
 }
 
 function pointCentroid(points: HotspotPoint[]): HotspotPoint {
@@ -603,6 +692,33 @@ function buildRandomAttempt(
       }
       return { itemId, hotspotAnswers: answers };
     }
+    if (isDragDropItem(item)) {
+      const answers: { tokenId: string; dropZoneId: string; position?: number }[] = [];
+      for (const zone of item.zones) {
+        const provideCorrect = Math.random() > 0.35;
+        if (!provideCorrect) {
+          if (Math.random() > 0.5) {
+            const strayToken = item.tokens[randomInt(item.tokens.length)];
+            if (strayToken) {
+              answers.push({
+                tokenId: strayToken.id,
+                dropZoneId: zone.id,
+                position: zone.evaluation === 'ordered' ? randomInt(zone.correctTokenIds.length + 1) : undefined,
+              });
+            }
+          }
+          continue;
+        }
+        zone.correctTokenIds.forEach((tokenId, index) => {
+          answers.push({
+            tokenId,
+            dropZoneId: zone.id,
+            position: zone.evaluation === 'ordered' ? index : undefined,
+          });
+        });
+      }
+      return answers.length > 0 ? { itemId, dragDropAnswers: answers } : { itemId };
+    }
     if (isChoiceItem(item) && item.answerMode === 'single') {
       return { itemId, answerIndexes: [randomInt(item.choices.length)] };
     }
@@ -644,6 +760,19 @@ function buildRandomAttempt(
       const selectionLimit = item.scoring.maxSelections ?? item.hotspots.length;
       const selectionBudget = Math.min(item.hotspots.length, Math.max(1, selectionLimit));
       return item.scoring.mode === 'partial' ? total + selectionBudget : total + 1;
+    }
+    if (isDragDropItem(item)) {
+      if (item.zones.length === 0) {
+        return total;
+      }
+      if (item.scoring.mode === 'per_zone') {
+        return total + item.zones.length;
+      }
+      if (item.scoring.mode === 'per_token') {
+        const tokenCredit = item.zones.reduce((sum, zone) => sum + zone.correctTokenIds.length, 0);
+        return total + tokenCredit;
+      }
+      return total + 1;
     }
     return total + 1;
   }, 0);
@@ -746,6 +875,74 @@ function buildRandomAttempt(
         }
         return matched.size === item.hotspots.length ? total + 1 : total;
       }
+        if (isDragDropItem(item)) {
+          if (item.zones.length === 0) {
+            return total;
+          }
+          const provided = response.dragDropAnswers ?? [];
+          if (provided.length === 0) {
+            return total;
+          }
+          const zoneIds = new Set(item.zones.map(zone => zone.id));
+          const allowedTokenIds = new Set(item.tokens.map(token => token.id));
+          const placementsByZone = new Map<string, { tokenId: string; position?: number }[]>();
+          for (const placement of provided) {
+            if (!zoneIds.has(placement.dropZoneId) || !allowedTokenIds.has(placement.tokenId)) {
+              continue;
+            }
+            const list = placementsByZone.get(placement.dropZoneId) ?? [];
+            list.push({ tokenId: placement.tokenId, position: placement.position });
+            placementsByZone.set(placement.dropZoneId, list);
+          }
+          let correctZoneCount = 0;
+          let correctTokenCount = 0;
+          for (const zone of item.zones) {
+            const placements = placementsByZone.get(zone.id) ?? [];
+            const sorted = zone.evaluation === 'ordered'
+              ? placements
+                  .slice()
+                  .sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER))
+              : placements;
+            const limited = zone.maxTokens ? sorted.slice(0, zone.maxTokens) : sorted;
+            if (zone.evaluation === 'ordered') {
+              const providedOrder = limited.map(p => p.tokenId);
+              const expected = zone.correctTokenIds;
+              const zoneIsCorrect = providedOrder.length === expected.length
+                && expected.every((tokenId, index) => tokenId === providedOrder[index]);
+              if (zoneIsCorrect) {
+                correctZoneCount += 1;
+                correctTokenCount += expected.length;
+              } else if (item.scoring.mode === 'per_token') {
+                expected.forEach((tokenId, index) => {
+                  if (providedOrder[index] === tokenId) {
+                    correctTokenCount += 1;
+                  }
+                });
+              }
+              continue;
+            }
+            const providedSet = new Set(limited.map(p => p.tokenId));
+            const missing = zone.correctTokenIds.some(tokenId => !providedSet.has(tokenId));
+            const extra = Array.from(providedSet).some(tokenId => !zone.correctTokenIds.includes(tokenId));
+            if (!missing && !extra && providedSet.size === zone.correctTokenIds.length) {
+              correctZoneCount += 1;
+            }
+            if (item.scoring.mode === 'per_token') {
+              zone.correctTokenIds.forEach(tokenId => {
+                if (providedSet.has(tokenId)) {
+                  correctTokenCount += 1;
+                }
+              });
+            }
+          }
+          if (item.scoring.mode === 'all') {
+            return correctZoneCount === item.zones.length ? total + 1 : total;
+          }
+          if (item.scoring.mode === 'per_zone') {
+            return total + correctZoneCount;
+          }
+          return total + correctTokenCount;
+        }
       if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
         return total;
       }

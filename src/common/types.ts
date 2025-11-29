@@ -6,7 +6,7 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
-export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY' | 'NUMERIC_ENTRY' | 'HOTSPOT';
+export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY' | 'NUMERIC_ENTRY' | 'HOTSPOT' | 'DRAG_AND_DROP';
 
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
@@ -157,7 +157,34 @@ export interface HotspotItem extends BaseItemEntity {
 	scoring: HotspotScoringRule;
 }
 
-export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem | HotspotItem;
+export interface DragDropToken {
+	id: string;
+	label: string;
+	category?: string;
+}
+
+export interface DragDropZone {
+	id: string;
+	label?: string;
+	acceptsTokenIds?: string[];
+	acceptsCategories?: string[];
+	correctTokenIds: string[];
+	evaluation?: 'set' | 'ordered';
+	maxTokens?: number;
+}
+
+export interface DragDropScoringRule {
+	mode: 'all' | 'per_zone' | 'per_token';
+}
+
+export interface DragDropItem extends BaseItemEntity {
+	kind: 'DRAG_AND_DROP';
+	tokens: DragDropToken[];
+	zones: DragDropZone[];
+	scoring: DragDropScoringRule;
+}
+
+export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem | HotspotItem | DragDropItem;
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
@@ -170,6 +197,7 @@ export interface AttemptResponse {
 	essayAnswer?: string;
 	numericAnswer?: { value: number; unit?: string };
 	hotspotAnswers?: HotspotPoint[];
+	dragDropAnswers?: { tokenId: string; dropZoneId: string; position?: number }[];
 }
 
 export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }

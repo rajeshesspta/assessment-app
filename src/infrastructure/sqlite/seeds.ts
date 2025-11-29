@@ -1,5 +1,17 @@
 import type { SQLiteDatabase } from './client.js';
-import type { Assessment, Attempt, EssayItem, FillBlankItem, HotspotItem, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
+import type {
+  Assessment,
+  Attempt,
+  DragDropItem,
+  EssayItem,
+  FillBlankItem,
+  HotspotItem,
+  Item,
+  MatchingItem,
+  NumericEntryItem,
+  OrderingItem,
+  ShortAnswerItem,
+} from '../../common/types.js';
 
 function isFillBlankItem(item: Item): item is FillBlankItem {
   return item.kind === 'FILL_IN_THE_BLANK';
@@ -29,10 +41,14 @@ function isHotspotItem(item: Item): item is HotspotItem {
   return item.kind === 'HOTSPOT';
 }
 
+function isDragDropItem(item: Item): item is DragDropItem {
+  return item.kind === 'DRAG_AND_DROP';
+}
+
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, drag_drop_schema_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
@@ -47,6 +63,7 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
       essay_schema_json = excluded.essay_schema_json,
       numeric_schema_json = excluded.numeric_schema_json,
       hotspot_schema_json = excluded.hotspot_schema_json,
+      drag_drop_schema_json = excluded.drag_drop_schema_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -54,9 +71,9 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.tenantId,
     item.kind,
     item.prompt,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) ? [] : item.choices),
-    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) ? 'single' : item.answerMode,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) ? [] : item.correctIndexes),
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) || isDragDropItem(item) ? [] : item.choices),
+    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) || isDragDropItem(item) ? 'single' : item.answerMode,
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) || isDragDropItem(item) ? [] : item.correctIndexes),
     isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
     isMatchingItem(item) ? JSON.stringify({ prompts: item.prompts, targets: item.targets, scoring: item.scoring }) : null,
     isOrderingItem(item) ? JSON.stringify({ options: item.options, correctOrder: item.correctOrder, scoring: item.scoring }) : null,
@@ -64,6 +81,7 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     isEssayItem(item) ? JSON.stringify({ rubric: item.rubric, length: item.length, scoring: item.scoring }) : null,
     isNumericItem(item) ? JSON.stringify({ validation: item.validation, units: item.units }) : null,
     isHotspotItem(item) ? JSON.stringify({ image: item.image, hotspots: item.hotspots, scoring: item.scoring }) : null,
+    isDragDropItem(item) ? JSON.stringify({ tokens: item.tokens, zones: item.zones, scoring: item.scoring }) : null,
     item.createdAt,
     item.updatedAt,
   );
@@ -122,7 +140,7 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
@@ -219,6 +237,20 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
       prompt: row.prompt,
       image: schema?.image,
       hotspots: schema?.hotspots ?? [],
+      scoring: schema?.scoring ?? { mode: 'all' },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    } as Item;
+  }
+  if (row.kind === 'DRAG_AND_DROP') {
+    const schema = row.dragDropSchemaJson ? JSON.parse(row.dragDropSchemaJson) : undefined;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      kind: 'DRAG_AND_DROP',
+      prompt: row.prompt,
+      tokens: schema?.tokens ?? [],
+      zones: schema?.zones ?? [],
       scoring: schema?.scoring ?? { mode: 'all' },
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -359,6 +391,22 @@ function tenantSampleItems(seedTenantId: string) {
       ],
       scoring: { mode: 'partial', maxSelections: 3 },
     },
+    {
+      id: 'sample-item-12',
+      kind: 'DRAG_AND_DROP' as Item['kind'],
+      prompt: 'Drag each species into the correct habitat.',
+      tokens: [
+        { id: 'token-fox', label: 'Arctic Fox', category: 'tundra' },
+        { id: 'token-camel', label: 'Camel', category: 'desert' },
+        { id: 'token-parrot', label: 'Parrot', category: 'rainforest' },
+      ],
+      zones: [
+        { id: 'zone-tundra', label: 'Tundra', acceptsCategories: ['tundra'], correctTokenIds: ['token-fox'], evaluation: 'set', maxTokens: 2 },
+        { id: 'zone-desert', label: 'Desert', acceptsCategories: ['desert'], correctTokenIds: ['token-camel'], evaluation: 'set' },
+        { id: 'zone-rainforest', label: 'Rainforest', acceptsCategories: ['rainforest'], correctTokenIds: ['token-parrot'], evaluation: 'set' },
+      ],
+      scoring: { mode: 'per_zone' },
+    },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
 
@@ -460,6 +508,20 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
         prompt: item.prompt,
         image: item.image,
         hotspots: item.hotspots,
+        scoring: item.scoring,
+        createdAt: now,
+        updatedAt: now,
+      } as Item);
+      continue;
+    }
+    if (item.kind === 'DRAG_AND_DROP') {
+      insertItem(db, {
+        id: item.id,
+        tenantId,
+        kind: 'DRAG_AND_DROP',
+        prompt: item.prompt,
+        tokens: item.tokens,
+        zones: item.zones,
         scoring: item.scoring,
         createdAt: now,
         updatedAt: now,

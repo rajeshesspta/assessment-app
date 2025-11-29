@@ -20,6 +20,9 @@ const responseSchema = z.object({
   essayAnswer: z.string().optional(),
   numericAnswer: z.object({ value: z.number(), unit: z.string().min(1).max(40).optional() }).optional(),
   hotspotAnswers: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).optional(),
+  dragDropAnswers: z
+    .array(z.object({ tokenId: z.string().min(1), dropZoneId: z.string().min(1), position: z.number().int().optional() }))
+    .optional(),
 });
 
 const responsesSchema = z.object({ responses: z.array(responseSchema) });
@@ -128,6 +131,40 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       if (hotspotAnswers && hotspotAnswers.length === 0) {
         hotspotAnswers = undefined;
       }
+      type DragDropPlacement = { tokenId: string; dropZoneId: string; position?: number };
+      let dragDropAnswers: DragDropPlacement[] | undefined;
+      if (r.dragDropAnswers && r.dragDropAnswers.length > 0) {
+        const normalized = r.dragDropAnswers
+          .map(answer => ({
+            tokenId: answer.tokenId?.trim(),
+            dropZoneId: answer.dropZoneId?.trim(),
+            position: typeof answer.position === 'number' && Number.isFinite(answer.position)
+              ? Math.max(0, Math.floor(answer.position))
+              : undefined,
+          }))
+          .filter(answer => Boolean(answer.tokenId) && Boolean(answer.dropZoneId))
+          .map(answer => ({
+            tokenId: answer.tokenId as string,
+            dropZoneId: answer.dropZoneId as string,
+            position: answer.position,
+          })) satisfies DragDropPlacement[];
+        if (normalized.length > 0) {
+          const latestPlacementByToken = new Map<string, DragDropPlacement>();
+          for (const placement of normalized) {
+            latestPlacementByToken.set(placement.tokenId, placement);
+          }
+          dragDropAnswers = Array.from(latestPlacementByToken.values());
+        }
+      }
+      if (dragDropAnswers && dragDropAnswers.length > 0) {
+        const latestPlacementByToken = new Map<string, { tokenId: string; dropZoneId: string; position?: number }>();
+        for (const placement of dragDropAnswers) {
+          latestPlacementByToken.set(placement.tokenId, placement);
+        }
+        dragDropAnswers = Array.from(latestPlacementByToken.values());
+      } else {
+        dragDropAnswers = undefined;
+      }
       return {
         itemId: r.itemId,
         answerIndexes,
@@ -137,6 +174,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         essayAnswer: essayAnswer && essayAnswer.length > 0 ? essayAnswer : undefined,
         numericAnswer,
         hotspotAnswers,
+        dragDropAnswers,
       };
     });
     for (const r of normalized) {
@@ -149,6 +187,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         existing.essayAnswer = r.essayAnswer;
         existing.numericAnswer = r.numericAnswer;
         existing.hotspotAnswers = r.hotspotAnswers;
+        existing.dragDropAnswers = r.dragDropAnswers;
       } else {
         attempt.responses.push(r);
       }
@@ -343,6 +382,91 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
           score += matched.size;
         } else if (matched.size === hotspotCount && hotspotCount > 0) {
           score += 1;
+        }
+        continue;
+      }
+      if (item.kind === 'DRAG_AND_DROP') {
+        const zones = item.zones ?? [];
+        if (zones.length === 0) {
+          continue;
+        }
+        const totalTokenCredit = zones.reduce((total, zone) => total + zone.correctTokenIds.length, 0);
+        if (item.scoring.mode === 'per_zone') {
+          maxScore += zones.length;
+        } else if (item.scoring.mode === 'per_token') {
+          maxScore += totalTokenCredit;
+        } else {
+          maxScore += 1;
+        }
+        const provided = response?.dragDropAnswers ?? [];
+        if (provided.length === 0) {
+          continue;
+        }
+        const zoneIds = new Set(zones.map(zone => zone.id));
+        const allowedTokenIds = new Set(item.tokens.map(token => token.id));
+        const placementsByZone = new Map<string, { tokenId: string; position?: number }[]>();
+        for (const placement of provided) {
+          if (!zoneIds.has(placement.dropZoneId) || !allowedTokenIds.has(placement.tokenId)) {
+            continue;
+          }
+          const list = placementsByZone.get(placement.dropZoneId) ?? [];
+          list.push({ tokenId: placement.tokenId, position: placement.position });
+          placementsByZone.set(placement.dropZoneId, list);
+        }
+        let correctZoneCount = 0;
+        let correctTokenCount = 0;
+        for (const zone of zones) {
+          const placements = placementsByZone.get(zone.id) ?? [];
+          const sortedPlacements = zone.evaluation === 'ordered'
+            ? placements
+                .slice()
+                .sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER))
+            : placements;
+          const limitedPlacements = zone.maxTokens
+            ? sortedPlacements.slice(0, zone.maxTokens)
+            : sortedPlacements;
+          if (zone.evaluation === 'ordered') {
+            const providedOrder = limitedPlacements.map(p => p.tokenId);
+            const expected = zone.correctTokenIds;
+            const isZoneCorrect = providedOrder.length === expected.length
+              && expected.every((tokenId, index) => tokenId === providedOrder[index]);
+            if (isZoneCorrect) {
+              correctZoneCount += 1;
+              correctTokenCount += expected.length;
+            } else if (item.scoring.mode === 'per_token') {
+              for (let i = 0; i < expected.length && i < providedOrder.length; i += 1) {
+                if (providedOrder[i] === expected[i]) {
+                  correctTokenCount += 1;
+                }
+              }
+            }
+            continue;
+          }
+          const providedSet = new Set(limitedPlacements.map(p => p.tokenId));
+          const expectedSet = new Set(zone.correctTokenIds);
+          const missing = zone.correctTokenIds.find(tokenId => !providedSet.has(tokenId));
+          const extra = providedSet.size > expectedSet.size
+            ? Array.from(providedSet).find(tokenId => !expectedSet.has(tokenId))
+            : undefined;
+          if (!missing && !extra && expectedSet.size === providedSet.size) {
+            correctZoneCount += 1;
+          }
+          if (item.scoring.mode === 'per_token') {
+            for (const tokenId of zone.correctTokenIds) {
+              if (providedSet.has(tokenId)) {
+                correctTokenCount += 1;
+              }
+            }
+          }
+        }
+        if (item.scoring.mode === 'all') {
+          if (correctZoneCount === zones.length && zones.length > 0) {
+            score += 1;
+          }
+        } else if (item.scoring.mode === 'per_zone') {
+          score += correctZoneCount;
+        } else {
+          score += correctTokenCount;
         }
         continue;
       }
