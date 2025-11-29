@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item } from '../../src/common/types.js';
+import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item, MatchingItem } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -152,14 +152,64 @@ function buildRandomFillBlankItem(tenantId: string): Item {
   } satisfies Item;
 }
 
-function buildRandomItem(tenantId: string): Item {
+const matchingTemplates = [
+  {
+    prompt: 'Match the country to its capital',
+    pairs: [
+      { prompt: 'France', target: 'Paris' },
+      { prompt: 'Japan', target: 'Tokyo' },
+      { prompt: 'Canada', target: 'Ottawa' },
+    ],
+    distractors: ['Berlin', 'Madrid'],
+  },
+  {
+    prompt: 'Match the scientist to their discovery',
+    pairs: [
+      { prompt: 'Newton', target: 'Gravity' },
+      { prompt: 'Einstein', target: 'Relativity' },
+      { prompt: 'Curie', target: 'Radioactivity' },
+    ],
+    distractors: ['Evolution'],
+  },
+  {
+    prompt: 'Match each planet to its order from the sun',
+    pairs: [
+      { prompt: 'Mercury', target: '1st' },
+      { prompt: 'Earth', target: '3rd' },
+      { prompt: 'Saturn', target: '6th' },
+    ],
+    distractors: ['2nd', '4th'],
+  },
+];
+
+function buildRandomMatchingItem(tenantId: string): Item {
+  const now = new Date().toISOString();
+  const template = matchingTemplates[randomInt(matchingTemplates.length)];
+  const targets = template.pairs.map((pair, index) => ({ id: `t-${index + 1}`, text: pair.target }));
+  const extraTargets = template.distractors?.map((text, index) => ({ id: `t-extra-${index + 1}`, text })) ?? [];
+  const prompts = template.pairs.map((pair, index) => ({ id: `p-${index + 1}`, text: pair.prompt, correctTargetId: targets[index].id }));
+  return {
+    id: `random-match-item-${randomUUID()}`,
+    tenantId,
+    kind: 'MATCHING',
+    prompt: template.prompt,
+    prompts,
+    targets: [...targets, ...extraTargets],
+    scoring: { mode: 'partial' },
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
+function buildRandomItem(tenantId: string, index: number): Item {
+  const builders = [buildRandomMCQItem, buildRandomTrueFalseItem, buildRandomFillBlankItem, buildRandomMatchingItem] as const;
+  if (index < builders.length) {
+    return builders[index](tenantId);
+  }
   const roll = Math.random();
-  if (roll < 0.2) {
-    return buildRandomFillBlankItem(tenantId);
-  }
-  if (roll < 0.5) {
-    return buildRandomTrueFalseItem(tenantId);
-  }
+  if (roll < 0.25) return buildRandomFillBlankItem(tenantId);
+  if (roll < 0.5) return buildRandomTrueFalseItem(tenantId);
+  if (roll < 0.75) return buildRandomMatchingItem(tenantId);
   return buildRandomMCQItem(tenantId);
 }
 
@@ -185,6 +235,10 @@ function isFillBlankItem(item: Item): item is FillBlankItem {
   return item.kind === 'FILL_IN_THE_BLANK';
 }
 
+function isMatchingItem(item: Item): item is MatchingItem {
+  return item.kind === 'MATCHING';
+}
+
 function buildRandomAttempt(
   tenantId: string,
   assessment: Assessment,
@@ -197,6 +251,17 @@ function buildRandomAttempt(
     const item = itemById.get(itemId);
     if (!item) {
       return { itemId };
+    }
+    if (isMatchingItem(item)) {
+      const answers = item.prompts.map(prompt => {
+        const provideCorrect = Math.random() > 0.35;
+        const fallbackTarget = item.targets[randomInt(item.targets.length)]?.id ?? prompt.correctTargetId;
+        return {
+          promptId: prompt.id,
+          targetId: provideCorrect ? prompt.correctTargetId : fallbackTarget,
+        };
+      });
+      return { itemId, matchingAnswers: answers };
     }
     if (isFillBlankItem(item)) {
       const answers = item.blanks.map(blank => {
@@ -223,6 +288,9 @@ function buildRandomAttempt(
   const maxScore = assessment.itemIds.reduce((total, itemId) => {
     const item = itemById.get(itemId);
     if (!item) return total;
+    if (isMatchingItem(item)) {
+      return item.scoring.mode === 'partial' ? total + item.prompts.length : total + 1;
+    }
     if (isFillBlankItem(item) && item.scoring.mode === 'partial') {
       return total + item.blanks.length;
     }
@@ -248,6 +316,18 @@ function buildRandomAttempt(
             return total + blanksCorrect;
           }
           return blanksCorrect === item.blanks.length && item.blanks.length > 0 ? total + 1 : total;
+        }
+        if (isMatchingItem(item)) {
+          const provided = response.matchingAnswers ?? [];
+          const correctByPrompt = new Map(item.prompts.map(prompt => [prompt.id, prompt.correctTargetId] as const));
+          const matches = provided.reduce((count, pair) => {
+            const expected = correctByPrompt.get(pair.promptId);
+            return expected && expected === pair.targetId ? count + 1 : count;
+          }, 0);
+          if (item.scoring.mode === 'partial') {
+            return total + matches;
+          }
+          return matches === item.prompts.length && item.prompts.length > 0 ? total + 1 : total;
         }
         if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
           return total;
@@ -289,7 +369,7 @@ async function main() {
 
     const items: Item[] = [];
     for (let i = 0; i < options.items; i += 1) {
-      items.push(insertItem(db, buildRandomItem(options.tenantId)));
+      items.push(insertItem(db, buildRandomItem(options.tenantId, i)));
     }
 
     if (items.length === 0) {

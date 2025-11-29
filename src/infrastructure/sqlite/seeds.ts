@@ -1,14 +1,18 @@
 import type { SQLiteDatabase } from './client.js';
-import type { Assessment, Attempt, FillBlankItem, Item } from '../../common/types.js';
+import type { Assessment, Attempt, FillBlankItem, Item, MatchingItem } from '../../common/types.js';
 
 function isFillBlankItem(item: Item): item is FillBlankItem {
   return item.kind === 'FILL_IN_THE_BLANK';
 }
 
+function isMatchingItem(item: Item): item is MatchingItem {
+  return item.kind === 'MATCHING';
+}
+
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
@@ -17,6 +21,7 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
       answer_mode = excluded.answer_mode,
       correct_indexes_json = excluded.correct_indexes_json,
       blank_schema_json = excluded.blank_schema_json,
+      matching_schema_json = excluded.matching_schema_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -24,10 +29,11 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.tenantId,
     item.kind,
     item.prompt,
-    JSON.stringify(isFillBlankItem(item) ? [] : item.choices),
-    isFillBlankItem(item) ? 'single' : item.answerMode,
-    JSON.stringify(isFillBlankItem(item) ? [] : item.correctIndexes),
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) ? [] : item.choices),
+    isFillBlankItem(item) || isMatchingItem(item) ? 'single' : item.answerMode,
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) ? [] : item.correctIndexes),
     isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
+    isMatchingItem(item) ? JSON.stringify({ prompts: item.prompts, targets: item.targets, scoring: item.scoring }) : null,
     item.createdAt,
     item.updatedAt,
   );
@@ -86,7 +92,7 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
@@ -102,6 +108,20 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
       prompt: row.prompt,
       blanks: schema?.blanks ?? [],
       scoring: schema?.scoring ?? { mode: 'all' },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    } as Item;
+  }
+  if (row.kind === 'MATCHING') {
+    const schema = row.matchingSchemaJson ? JSON.parse(row.matchingSchemaJson) : undefined;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      kind: 'MATCHING',
+      prompt: row.prompt,
+      prompts: schema?.prompts ?? [],
+      targets: schema?.targets ?? [],
+      scoring: schema?.scoring ?? { mode: 'partial' },
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     } as Item;
@@ -162,6 +182,21 @@ function tenantSampleItems(seedTenantId: string) {
       }],
       scoring: { mode: 'all' },
     },
+    {
+      id: 'sample-item-6',
+      kind: 'MATCHING' as Item['kind'],
+      prompt: 'Match each country to its capital',
+      prompts: [
+        { id: 'p-1', text: 'France', correctTargetId: 't-1' },
+        { id: 'p-2', text: 'Germany', correctTargetId: 't-2' },
+      ],
+      targets: [
+        { id: 't-1', text: 'Paris' },
+        { id: 't-2', text: 'Berlin' },
+        { id: 't-3', text: 'Rome' },
+      ],
+      scoring: { mode: 'partial' },
+    },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
 
@@ -181,6 +216,20 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
         kind: 'FILL_IN_THE_BLANK',
         prompt: item.prompt,
         blanks: item.blanks,
+        scoring: item.scoring,
+        createdAt: now,
+        updatedAt: now,
+      } as Item);
+      continue;
+    }
+    if (item.kind === 'MATCHING') {
+      insertItem(db, {
+        id: item.id,
+        tenantId,
+        kind: 'MATCHING',
+        prompt: item.prompt,
+        prompts: item.prompts,
+        targets: item.targets,
         scoring: item.scoring,
         createdAt: now,
         updatedAt: now,

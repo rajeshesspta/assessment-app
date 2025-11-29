@@ -34,12 +34,28 @@ const fillBlankSchema = z.object({
   scoring: z.object({ mode: z.enum(['all', 'partial']).default('all') }).default({ mode: 'all' }),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema]);
+const matchingSchema = z.object({
+  kind: z.literal('MATCHING'),
+  prompt: z.string().min(1),
+  prompts: z.array(z.object({
+    id: z.string().min(1),
+    text: z.string().min(1),
+    correctTargetId: z.string().min(1),
+  })).min(1),
+  targets: z.array(z.object({
+    id: z.string().min(1),
+    text: z.string().min(1),
+  })).min(1),
+  scoring: z.object({ mode: z.enum(['all', 'partial']).default('partial') }).default({ mode: 'partial' }),
+});
+
+const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
+  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING']).optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -50,8 +66,8 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
   const { repository } = options;
   app.get('/', async req => {
     const tenantId = (req as any).tenantId as string;
-    const { search, limit, offset } = listQuerySchema.parse(req.query ?? {});
-    return repository.list(tenantId, { search, limit: limit ?? 10, offset: offset ?? 0 });
+    const { search, limit, offset, kind } = listQuerySchema.parse(req.query ?? {});
+    return repository.list(tenantId, { search, kind, limit: limit ?? 10, offset: offset ?? 0 });
   });
   app.post('/', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
@@ -109,27 +125,59 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       return item;
     }
 
-    const blankIds = new Set(parsed.blanks.map(blank => blank.id));
-    if (blankIds.size !== parsed.blanks.length) {
-      reply.code(400);
-      return { error: 'Blank ids must be unique' };
+    if (parsed.kind === 'FILL_IN_THE_BLANK') {
+      const blankIds = new Set(parsed.blanks.map(blank => blank.id));
+      if (blankIds.size !== parsed.blanks.length) {
+        reply.code(400);
+        return { error: 'Blank ids must be unique' };
+      }
+
+      const blanks = parsed.blanks.map(blank => ({
+        id: blank.id,
+        acceptableAnswers: blank.answers.map(answer => (
+          answer.type === 'exact'
+            ? { type: 'exact', value: answer.value, caseSensitive: answer.caseSensitive ?? false }
+            : { type: 'regex', pattern: answer.pattern, flags: answer.flags }
+        )),
+      }));
+
+      const item = createItem({
+        id,
+        tenantId,
+        kind: 'FILL_IN_THE_BLANK',
+        prompt: parsed.prompt,
+        blanks,
+        scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
     }
 
-    const blanks = parsed.blanks.map(blank => ({
-      id: blank.id,
-      acceptableAnswers: blank.answers.map(answer => (
-        answer.type === 'exact'
-          ? { type: 'exact', value: answer.value, caseSensitive: answer.caseSensitive ?? false }
-          : { type: 'regex', pattern: answer.pattern, flags: answer.flags }
-      )),
-    }));
+    const promptIds = new Set(parsed.prompts.map(p => p.id));
+    const targetIds = new Set(parsed.targets.map(t => t.id));
+    if (promptIds.size !== parsed.prompts.length) {
+      reply.code(400);
+      return { error: 'Prompt ids must be unique' };
+    }
+    if (targetIds.size !== parsed.targets.length) {
+      reply.code(400);
+      return { error: 'Target ids must be unique' };
+    }
+    const invalidReference = parsed.prompts.find(prompt => !targetIds.has(prompt.correctTargetId));
+    if (invalidReference) {
+      reply.code(400);
+      return { error: `Unknown target id: ${invalidReference.correctTargetId}` };
+    }
 
     const item = createItem({
       id,
       tenantId,
-      kind: 'FILL_IN_THE_BLANK',
+      kind: 'MATCHING',
       prompt: parsed.prompt,
-      blanks,
+      prompts: parsed.prompts,
+      targets: parsed.targets,
       scoring: parsed.scoring,
     });
     repository.save(item);

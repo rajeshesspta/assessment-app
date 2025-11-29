@@ -59,7 +59,7 @@ describe('itemRoutes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(results);
-    expect(listMock).toHaveBeenCalledWith('tenant-1', { search: undefined, limit: 10, offset: 0 });
+    expect(listMock).toHaveBeenCalledWith('tenant-1', { search: undefined, kind: undefined, limit: 10, offset: 0 });
   });
 
   it('lists items filtered by search query with paging', async () => {
@@ -70,7 +70,18 @@ describe('itemRoutes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(results);
-    expect(listMock).toHaveBeenCalledWith('tenant-1', { search: 'math', limit: 5, offset: 10 });
+    expect(listMock).toHaveBeenCalledWith('tenant-1', { search: 'math', kind: undefined, limit: 5, offset: 10 });
+  });
+
+  it('lists items filtered by kind', async () => {
+    const results = [{ id: '3' }] as any;
+    listMock.mockReturnValueOnce(results);
+
+    const response = await app.inject({ method: 'GET', url: '/items?kind=TRUE_FALSE' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(results);
+    expect(listMock).toHaveBeenCalledWith('tenant-1', { search: undefined, kind: 'TRUE_FALSE', limit: 10, offset: 0 });
   });
 
   it('creates an item when payload is valid', async () => {

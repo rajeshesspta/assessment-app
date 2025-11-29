@@ -14,11 +14,13 @@ export function createInMemoryItemRepository(): ItemRepository {
     },
     list(tenantId, options = {}) {
       const search = options.search?.toLowerCase();
+      const kind = options.kind;
       const limit = options.limit ?? 10;
       const offset = options.offset ?? 0;
       const items: Item[] = [];
       for (const item of store.values()) {
         if (item.tenantId !== tenantId) continue;
+        if (kind && item.kind !== kind) continue;
         if (search && !item.prompt.toLowerCase().includes(search)) continue;
         items.push(item);
       }
