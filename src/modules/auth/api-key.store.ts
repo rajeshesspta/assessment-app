@@ -16,7 +16,15 @@ interface CacheEntry {
   expiresAt: number;
 }
 
-interface ApiKeyStoreOptions {
+interface ApiKeyStore {
+  init?(): Promise<void>;
+  get(key: string): Promise<ApiKeyRecord | undefined>;
+  upsert(record: ApiKeyRecord): Promise<void>;
+  revoke(key: string): Promise<void>;
+  clearCache(): void;
+}
+
+interface CosmosApiKeyStoreOptions {
   client: CosmosClient;
   databaseId: string;
   containerId: string;
@@ -25,12 +33,12 @@ interface ApiKeyStoreOptions {
   seed: ApiKeyRecord[];
 }
 
-class ApiKeyStore {
+class CosmosApiKeyStore implements ApiKeyStore {
   private cache = new Map<string, CacheEntry>();
   private container?: Container;
   private initPromise?: Promise<void>;
 
-  constructor(private readonly options: ApiKeyStoreOptions) {}
+  constructor(private readonly options: CosmosApiKeyStoreOptions) {}
 
   async init(): Promise<void> {
     if (this.initPromise) {
@@ -128,25 +136,60 @@ class ApiKeyStore {
   }
 }
 
+class InMemoryApiKeyStore implements ApiKeyStore {
+  private records = new Map<string, ApiKeyRecord>();
+
+  constructor(seed: ApiKeyRecord[]) {
+    for (const record of seed) {
+      this.records.set(record.key, { ...record });
+    }
+  }
+
+  async get(key: string): Promise<ApiKeyRecord | undefined> {
+    const stored = this.records.get(key);
+    if (!stored || stored.revoked) {
+      return undefined;
+    }
+    return { ...stored };
+  }
+
+  async upsert(record: ApiKeyRecord): Promise<void> {
+    this.records.set(record.key, { ...record });
+  }
+
+  async revoke(key: string): Promise<void> {
+    const existing = this.records.get(key);
+    if (existing) {
+      this.records.set(key, { ...existing, revoked: true });
+    }
+  }
+
+  clearCache() {
+    // no-op for in-memory store
+  }
+}
+
 const config = loadConfig();
 
-const cosmosClient = new CosmosClient({
-  endpoint: config.cosmos.endpoint,
-  key: config.cosmos.key,
-  userAgentSuffix: 'assessment-app',
-});
-
-const apiKeyStoreInstance = new ApiKeyStore({
-  client: cosmosClient,
-  databaseId: config.cosmos.databaseId,
-  containerId: config.cosmos.apiKeysContainer,
-  cacheTtlMs: config.auth.cacheTtlMs,
-  throughput: config.cosmos.throughput,
-  seed: config.auth.seedKeys,
-});
+const apiKeyStoreInstance: ApiKeyStore = config.auth.provider === 'cosmos'
+  ? new CosmosApiKeyStore({
+      client: new CosmosClient({
+        endpoint: config.cosmos.endpoint,
+        key: config.cosmos.key,
+        userAgentSuffix: 'assessment-app',
+      }),
+      databaseId: config.cosmos.databaseId,
+      containerId: config.cosmos.apiKeysContainer,
+      cacheTtlMs: config.auth.cacheTtlMs,
+      throughput: config.cosmos.throughput,
+      seed: config.auth.seedKeys,
+    })
+  : new InMemoryApiKeyStore(config.auth.seedKeys);
 
 export const apiKeyStore = apiKeyStoreInstance;
 
 export async function initApiKeyStore() {
-  await apiKeyStoreInstance.init();
+  if (apiKeyStoreInstance.init) {
+    await apiKeyStoreInstance.init();
+  }
 }

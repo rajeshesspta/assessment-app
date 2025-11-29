@@ -11,6 +11,7 @@ const baseConfig: AppConfig = {
     throughput: undefined,
   },
   auth: {
+    provider: 'memory',
     cacheTtlMs: 60000,
     seedKeys: [{ key: 'seed', tenantId: 'tenant' }],
   },

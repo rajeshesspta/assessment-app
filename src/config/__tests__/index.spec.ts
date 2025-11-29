@@ -15,6 +15,7 @@ describe('loadConfig', () => {
     delete process.env.API_KEY_CACHE_TTL_MS;
     delete process.env.API_KEY;
     delete process.env.API_TENANT_ID;
+    delete process.env.AUTH_PROVIDER;
     delete process.env.DB_PROVIDER;
     delete process.env.SQLITE_DB_ROOT;
     delete process.env.SQLITE_DB_FILE_PATTERN;
@@ -37,6 +38,7 @@ describe('loadConfig', () => {
         throughput: undefined,
       },
       auth: {
+        provider: 'memory',
         cacheTtlMs: 60000,
         seedKeys: [{ key: 'dev-key', tenantId: 'dev-tenant' }],
       },
@@ -61,6 +63,7 @@ describe('loadConfig', () => {
     process.env.API_KEY_CACHE_TTL_MS = '120000';
     process.env.API_KEY = 'seed-key';
     process.env.API_TENANT_ID = 'tenant-123';
+    process.env.AUTH_PROVIDER = 'cosmos';
     process.env.DB_PROVIDER = 'cosmos';
     process.env.SQLITE_DB_ROOT = 'C:/db/root';
     process.env.SQLITE_DB_FILE_PATTERN = 'db-{tenantId}.sqlite';
@@ -77,6 +80,7 @@ describe('loadConfig', () => {
       throughput: 500,
     });
     expect(config.auth).toEqual({
+      provider: 'cosmos',
       cacheTtlMs: 120000,
       seedKeys: [{ key: 'seed-key', tenantId: 'tenant-123' }],
     });
@@ -94,6 +98,7 @@ describe('loadConfig', () => {
   it('ignores invalid numeric env values', () => {
     process.env.COSMOS_THROUGHPUT = 'not-a-number';
     process.env.API_KEY_CACHE_TTL_MS = 'NaN';
+    process.env.AUTH_PROVIDER = 'invalid';
     process.env.DB_PROVIDER = 'unknown';
     process.env.SQLITE_SEED_DEFAULT_TENANT = 'off';
 
@@ -101,6 +106,7 @@ describe('loadConfig', () => {
 
     expect(config.cosmos.throughput).toBeUndefined();
     expect(config.auth.cacheTtlMs).toBe(60000);
+    expect(config.auth.provider).toBe('memory');
     expect(config.persistence.provider).toBe('sqlite');
     expect(config.persistence.sqlite.seedDefaultTenant).toBe(false);
   });

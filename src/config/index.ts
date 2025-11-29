@@ -8,7 +8,10 @@ export interface CosmosConfig {
   throughput?: number;
 }
 
+export type AuthProvider = 'memory' | 'cosmos';
+
 export interface AuthConfig {
+  provider: AuthProvider;
   cacheTtlMs: number;
   seedKeys: Array<{ key: string; tenantId: string }>;
 }
@@ -49,6 +52,11 @@ function readProviderFromEnv(envName: string): PersistenceProvider {
   return 'sqlite';
 }
 
+function readAuthProviderFromEnv(envName: string): AuthProvider {
+  const raw = (process.env[envName] ?? 'memory').toLowerCase();
+  return raw === 'cosmos' ? 'cosmos' : 'memory';
+}
+
 function readBooleanFromEnv(envName: string, defaultValue: boolean): boolean {
   const raw = process.env[envName];
   if (raw === undefined) return defaultValue;
@@ -67,6 +75,7 @@ export function loadConfig(): AppConfig {
   const filePattern = process.env.SQLITE_DB_FILE_PATTERN || '{tenantId}.db';
   const migrationsDir = process.env.SQLITE_MIGRATIONS_DIR || path.resolve(process.cwd(), 'migrations', 'sqlite');
   const seedDefaultTenant = readBooleanFromEnv('SQLITE_SEED_DEFAULT_TENANT', true);
+  const authProvider = readAuthProviderFromEnv('AUTH_PROVIDER');
 
   const envSeedKey = process.env.API_KEY;
   const envSeedTenant = process.env.API_TENANT_ID;
@@ -76,7 +85,7 @@ export function loadConfig(): AppConfig {
 
   return {
     cosmos: { endpoint, key, databaseId, apiKeysContainer, throughput },
-    auth: { cacheTtlMs, seedKeys },
+    auth: { provider: authProvider, cacheTtlMs, seedKeys },
     persistence: {
       provider,
       sqlite: {
