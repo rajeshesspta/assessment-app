@@ -19,7 +19,22 @@ const trueFalseSchema = z.object({
   answerIsTrue: z.boolean(),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema]);
+const fillBlankAnswerSchema = z.union([
+  z.object({ type: z.literal('exact'), value: z.string().min(1), caseSensitive: z.boolean().optional() }),
+  z.object({ type: z.literal('regex'), pattern: z.string().min(1), flags: z.string().regex(/^[gimsuy]*$/).default('i') }),
+]);
+
+const fillBlankSchema = z.object({
+  kind: z.literal('FILL_IN_THE_BLANK'),
+  prompt: z.string().min(1),
+  blanks: z.array(z.object({
+    id: z.string().min(1),
+    answers: z.array(fillBlankAnswerSchema).nonempty(),
+  })).nonempty(),
+  scoring: z.object({ mode: z.enum(['all', 'partial']).default('all') }).default({ mode: 'all' }),
+});
+
+const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
@@ -76,16 +91,46 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       return item;
     }
 
-    const tfChoices = [{ text: 'True' }, { text: 'False' }];
-    const correctIndexes = [parsed.answerIsTrue ? 0 : 1];
+    if (parsed.kind === 'TRUE_FALSE') {
+      const tfChoices = [{ text: 'True' }, { text: 'False' }];
+      const correctIndexes = [parsed.answerIsTrue ? 0 : 1];
+      const item = createItem({
+        id,
+        tenantId,
+        kind: 'TRUE_FALSE',
+        prompt: parsed.prompt,
+        choices: tfChoices,
+        answerMode: 'single',
+        correctIndexes,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    const blankIds = new Set(parsed.blanks.map(blank => blank.id));
+    if (blankIds.size !== parsed.blanks.length) {
+      reply.code(400);
+      return { error: 'Blank ids must be unique' };
+    }
+
+    const blanks = parsed.blanks.map(blank => ({
+      id: blank.id,
+      acceptableAnswers: blank.answers.map(answer => (
+        answer.type === 'exact'
+          ? { type: 'exact', value: answer.value, caseSensitive: answer.caseSensitive ?? false }
+          : { type: 'regex', pattern: answer.pattern, flags: answer.flags }
+      )),
+    }));
+
     const item = createItem({
       id,
       tenantId,
-      kind: 'TRUE_FALSE',
+      kind: 'FILL_IN_THE_BLANK',
       prompt: parsed.prompt,
-      choices: tfChoices,
-      answerMode: 'single',
-      correctIndexes,
+      blanks,
+      scoring: parsed.scoring,
     });
     repository.save(item);
     eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });

@@ -173,6 +173,64 @@ describe('itemRoutes', () => {
     expect(saveMock).toHaveBeenCalledWith(body);
   });
 
+  it('creates a fill-in-the-blank item', async () => {
+    uuidMock.mockReturnValueOnce('fib-item-id').mockReturnValueOnce('event-id-3');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'FILL_IN_THE_BLANK',
+        prompt: '___ is the chemical symbol for water.',
+        blanks: [{
+          id: 'blank-1',
+          answers: [
+            { type: 'exact', value: 'H2O' },
+            { type: 'regex', pattern: '^h\s*2\s*o$', flags: 'i' },
+          ],
+        }],
+        scoring: { mode: 'all' },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body).toMatchObject({
+      id: 'fib-item-id',
+      tenantId: 'tenant-1',
+      kind: 'FILL_IN_THE_BLANK',
+      prompt: '___ is the chemical symbol for water.',
+      blanks: [{
+        id: 'blank-1',
+        acceptableAnswers: [
+          { type: 'exact', value: 'H2O', caseSensitive: false },
+          { type: 'regex', pattern: '^h\s*2\s*o$', flags: 'i' },
+        ],
+      }],
+      scoring: { mode: 'all' },
+    });
+    expect(saveMock).toHaveBeenCalledWith(body);
+  });
+
+  it('rejects duplicate blank identifiers', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'FILL_IN_THE_BLANK',
+        prompt: '___ ___',
+        blanks: [
+          { id: 'dup', answers: [{ type: 'exact', value: 'foo' }] },
+          { id: 'dup', answers: [{ type: 'exact', value: 'bar' }] },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Blank ids must be unique' });
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it('returns an item when found', async () => {
     const storedItem = {
       id: 'item-123',

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, Item } from '../../src/common/types.js';
+import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -108,8 +108,59 @@ function buildRandomTrueFalseItem(tenantId: string): Item {
   };
 }
 
+const fillBlankTemplates: Array<{ prompt: string; answers: string[] | string[][] }> = [
+  { prompt: '___ is the largest continent on Earth.', answers: ['Asia'] },
+  { prompt: 'Light travels at approximately ___ km/s.', answers: ['300000', '300,000'] },
+  {
+    prompt: 'Name the two longest rivers: ___ and ___.',
+    answers: [['Nile', 'Amazon'], ['Amazon', 'Nile']],
+  },
+];
+
+function buildRandomFillBlankItem(tenantId: string): Item {
+  const template = fillBlankTemplates[randomInt(fillBlankTemplates.length)];
+  const now = new Date().toISOString();
+  const firstEntry = (template.answers as any)[0];
+  if (Array.isArray(firstEntry)) {
+    const [firstSet] = template.answers as string[][];
+    return {
+      id: `random-fib-item-${randomUUID()}`,
+      tenantId,
+      kind: 'FILL_IN_THE_BLANK',
+      prompt: template.prompt,
+      blanks: firstSet.map((answer, index) => ({
+        id: `blank-${index + 1}`,
+        acceptableAnswers: [{ type: 'exact', value: answer, caseSensitive: false }],
+      })),
+      scoring: { mode: 'partial' },
+      createdAt: now,
+      updatedAt: now,
+    } satisfies Item;
+  }
+  return {
+    id: `random-fib-item-${randomUUID()}`,
+    tenantId,
+    kind: 'FILL_IN_THE_BLANK',
+    prompt: template.prompt,
+    blanks: [{
+      id: 'blank-1',
+      acceptableAnswers: (template.answers as string[]).map(answer => ({ type: 'exact', value: answer, caseSensitive: false })),
+    }],
+    scoring: { mode: 'all' },
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
 function buildRandomItem(tenantId: string): Item {
-  return Math.random() < 0.25 ? buildRandomTrueFalseItem(tenantId) : buildRandomMCQItem(tenantId);
+  const roll = Math.random();
+  if (roll < 0.2) {
+    return buildRandomFillBlankItem(tenantId);
+  }
+  if (roll < 0.5) {
+    return buildRandomTrueFalseItem(tenantId);
+  }
+  return buildRandomMCQItem(tenantId);
 }
 
 function buildRandomAssessment(tenantId: string, items: Item[], index: number): Assessment {
@@ -126,6 +177,14 @@ function buildRandomAssessment(tenantId: string, items: Item[], index: number): 
   };
 }
 
+function isChoiceItem(item: Item): item is ChoiceItem {
+  return item.kind === 'MCQ' || item.kind === 'TRUE_FALSE';
+}
+
+function isFillBlankItem(item: Item): item is FillBlankItem {
+  return item.kind === 'FILL_IN_THE_BLANK';
+}
+
 function buildRandomAttempt(
   tenantId: string,
   assessment: Assessment,
@@ -139,21 +198,60 @@ function buildRandomAttempt(
     if (!item) {
       return { itemId };
     }
-    if (item.answerMode === 'single') {
+    if (isFillBlankItem(item)) {
+      const answers = item.blanks.map(blank => {
+        const provideCorrect = Math.random() > 0.3;
+        if (!provideCorrect) {
+          return `guess-${randomInt(100)}`;
+        }
+        const matcher = blank.acceptableAnswers.find(answer => answer.type === 'exact');
+        return matcher ? matcher.value : 'example';
+      });
+      return { itemId, textAnswers: answers };
+    }
+    if (isChoiceItem(item) && item.answerMode === 'single') {
       return { itemId, answerIndexes: [randomInt(item.choices.length)] };
     }
     const picks = new Set<number>();
-    const desired = Math.max(2, Math.min(item.choices.length, randomInt(item.choices.length) + 1));
-    while (picks.size < desired) {
-      picks.add(randomInt(item.choices.length));
+    const choiceCount = isChoiceItem(item) ? item.choices.length : 0;
+    const desired = Math.max(2, Math.min(choiceCount, randomInt(choiceCount) + 1));
+    while (picks.size < desired && choiceCount > 0) {
+      picks.add(randomInt(choiceCount));
     }
     return { itemId, answerIndexes: Array.from(picks) };
   });
-  const maxScore = responses.length;
+  const maxScore = assessment.itemIds.reduce((total, itemId) => {
+    const item = itemById.get(itemId);
+    if (!item) return total;
+    if (isFillBlankItem(item) && item.scoring.mode === 'partial') {
+      return total + item.blanks.length;
+    }
+    return total + 1;
+  }, 0);
   const score = status === 'scored'
     ? responses.reduce((total, response) => {
         const item = itemById.get(response.itemId);
-        if (!item || !response.answerIndexes || response.answerIndexes.length === 0) return total;
+        if (!item) return total;
+        if (isFillBlankItem(item)) {
+          const provided = response.textAnswers ?? [];
+          const blanksCorrect = item.blanks.reduce((count, blank, index) => {
+            const candidate = provided[index];
+            if (!candidate) return count;
+            const matcher = blank.acceptableAnswers[0];
+            if (!matcher) return count;
+            if (matcher.type === 'exact' && matcher.value.localeCompare(candidate, undefined, { sensitivity: matcher.caseSensitive ? 'case' : 'accent' }) === 0) {
+              return count + 1;
+            }
+            return count;
+          }, 0);
+          if (item.scoring.mode === 'partial') {
+            return total + blanksCorrect;
+          }
+          return blanksCorrect === item.blanks.length && item.blanks.length > 0 ? total + 1 : total;
+        }
+        if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
+          return total;
+        }
         const answers = Array.from(new Set(response.answerIndexes)).sort((x, y) => x - y);
         const expected = [...item.correctIndexes].sort((x, y) => x - y);
         if (item.answerMode === 'single') {

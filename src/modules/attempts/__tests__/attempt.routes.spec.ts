@@ -185,6 +185,33 @@ describe('attemptRoutes', () => {
     expect(response.json().responses).toEqual([{ itemId: 'item-1', answerIndexes: [3] }]);
   });
 
+  it('stores text answers when provided', async () => {
+    const attempt = {
+      id: 'attempt-text',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-2',
+      userId: 'user-2',
+      status: 'in_progress' as const,
+      responses: [],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-text', attempt);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/attempts/attempt-text/responses',
+      payload: {
+        responses: [{ itemId: 'item-9', textAnswers: ['Answer One', 'Answer Two'] }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().responses).toEqual([
+      { itemId: 'item-9', textAnswers: ['Answer One', 'Answer Two'] },
+    ]);
+  });
+
   it('returns 404 when patching missing attempt', async () => {
     const response = await app.inject({
       method: 'PATCH',
@@ -239,10 +266,30 @@ describe('attemptRoutes', () => {
     });
     mocks.itemGetByIdMock.mockImplementation((_tenantId: string, itemId: string) => {
       if (itemId === 'item-1') {
-        return { id: 'item-1', answerMode: 'single', correctIndexes: [0] };
+        return {
+          id: 'item-1',
+          tenantId: 'tenant-1',
+          kind: 'MCQ',
+          prompt: 'p1',
+          choices: [{ text: 'a' }, { text: 'b' }],
+          answerMode: 'single',
+          correctIndexes: [0],
+          createdAt: 'now',
+          updatedAt: 'now',
+        };
       }
       if (itemId === 'item-2') {
-        return { id: 'item-2', answerMode: 'multiple', correctIndexes: [1, 2] };
+        return {
+          id: 'item-2',
+          tenantId: 'tenant-1',
+          kind: 'MCQ',
+          prompt: 'p2',
+          choices: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+          answerMode: 'multiple',
+          correctIndexes: [1, 2],
+          createdAt: 'now',
+          updatedAt: 'now',
+        };
       }
       return undefined;
     });
@@ -286,8 +333,14 @@ describe('attemptRoutes', () => {
     });
     mocks.itemGetByIdMock.mockReturnValueOnce({
       id: 'item-3',
+      tenantId: 'tenant-1',
+      kind: 'MCQ',
+      prompt: 'p3',
+      choices: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       answerMode: 'multiple',
       correctIndexes: [0, 2],
+      createdAt: 'now',
+      updatedAt: 'now',
     });
     mocks.uuidMock.mockReturnValueOnce('score-event-2');
 
@@ -295,6 +348,82 @@ describe('attemptRoutes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ score: 1, maxScore: 1, status: 'scored' });
+  });
+
+  it('scores fill-in-the-blank items (all mode)', async () => {
+    const attempt = {
+      id: 'attempt-fib',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-fib',
+      userId: 'user-3',
+      status: 'in_progress' as const,
+      responses: [{ itemId: 'fib-item', textAnswers: ['H2O'] }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-fib', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-fib',
+      tenantId: 'tenant-1',
+      itemIds: ['fib-item'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'fib-item',
+      tenantId: 'tenant-1',
+      kind: 'FILL_IN_THE_BLANK',
+      prompt: '___ is the chemical symbol for water.',
+      blanks: [{
+        id: 'blank-1',
+        acceptableAnswers: [{ type: 'exact', value: 'H2O', caseSensitive: false }],
+      }],
+      scoring: { mode: 'all' },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('fib-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-fib/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ score: 1, maxScore: 1, status: 'scored' });
+  });
+
+  it('awards partial credit for multi-blank items', async () => {
+    const attempt = {
+      id: 'attempt-fib-partial',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-fib-partial',
+      userId: 'user-4',
+      status: 'in_progress' as const,
+      responses: [{ itemId: 'fib-item-2', textAnswers: ['Jupiter', 'Venus'] }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-fib-partial', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-fib-partial',
+      tenantId: 'tenant-1',
+      itemIds: ['fib-item-2'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'fib-item-2',
+      tenantId: 'tenant-1',
+      kind: 'FILL_IN_THE_BLANK',
+      prompt: '___ and ___ are gas giants.',
+      blanks: [
+        { id: 'blank-1', acceptableAnswers: [{ type: 'exact', value: 'Jupiter' }] },
+        { id: 'blank-2', acceptableAnswers: [{ type: 'exact', value: 'Saturn' }] },
+      ],
+      scoring: { mode: 'partial' },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('fib-event-2');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-fib-partial/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ score: 1, maxScore: 2, status: 'scored' });
   });
 
   it('returns 404 when submitting missing attempt', async () => {

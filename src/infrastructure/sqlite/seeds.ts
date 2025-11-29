@@ -1,10 +1,14 @@
 import type { SQLiteDatabase } from './client.js';
-import type { Assessment, Attempt, Item } from '../../common/types.js';
+import type { Assessment, Attempt, FillBlankItem, Item } from '../../common/types.js';
+
+function isFillBlankItem(item: Item): item is FillBlankItem {
+  return item.kind === 'FILL_IN_THE_BLANK';
+}
 
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
@@ -12,6 +16,7 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
       choices_json = excluded.choices_json,
       answer_mode = excluded.answer_mode,
       correct_indexes_json = excluded.correct_indexes_json,
+      blank_schema_json = excluded.blank_schema_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -19,9 +24,10 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.tenantId,
     item.kind,
     item.prompt,
-    JSON.stringify(item.choices),
-    item.answerMode,
-    JSON.stringify(item.correctIndexes),
+    JSON.stringify(isFillBlankItem(item) ? [] : item.choices),
+    isFillBlankItem(item) ? 'single' : item.answerMode,
+    JSON.stringify(isFillBlankItem(item) ? [] : item.correctIndexes),
+    isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
     item.createdAt,
     item.updatedAt,
   );
@@ -80,21 +86,34 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
   if (!row) {
     return undefined;
   }
+  if (row.kind === 'FILL_IN_THE_BLANK') {
+    const schema = row.blankSchemaJson ? JSON.parse(row.blankSchemaJson) : undefined;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      kind: 'FILL_IN_THE_BLANK',
+      prompt: row.prompt,
+      blanks: schema?.blanks ?? [],
+      scoring: schema?.scoring ?? { mode: 'all' },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    } as Item;
+  }
   return {
     id: row.id,
     tenantId: row.tenantId,
     kind: row.kind,
     prompt: row.prompt,
-    choices: JSON.parse(row.choicesJson) as Item['choices'],
+    choices: JSON.parse(row.choicesJson),
     answerMode: row.answerMode,
-    correctIndexes: JSON.parse(row.correctIndexesJson) as Item['correctIndexes'],
+    correctIndexes: JSON.parse(row.correctIndexesJson),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   } as Item;
@@ -130,6 +149,19 @@ function tenantSampleItems(seedTenantId: string) {
       choices: [{ text: 'True' }, { text: 'False' }],
       correctIndexes: [0],
     },
+    {
+      id: 'sample-item-5',
+      kind: 'FILL_IN_THE_BLANK' as Item['kind'],
+      prompt: 'Fill the blank: The tallest mountain is ___',
+      blanks: [{
+        id: 'blank-1',
+        acceptableAnswers: [
+          { type: 'exact', value: 'Mount Everest', caseSensitive: false },
+          { type: 'regex', pattern: 'everest', flags: 'i' },
+        ],
+      }],
+      scoring: { mode: 'all' },
+    },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
 
@@ -142,16 +174,29 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
   }
   const now = new Date().toISOString();
   for (const item of sampleItems) {
-    const kind = item.kind ?? 'MCQ';
-    const choices = item.choices ?? (kind === 'TRUE_FALSE' ? [{ text: 'True' }, { text: 'False' }] : []);
+    if (item.kind === 'FILL_IN_THE_BLANK') {
+      insertItem(db, {
+        id: item.id,
+        tenantId,
+        kind: 'FILL_IN_THE_BLANK',
+        prompt: item.prompt,
+        blanks: item.blanks,
+        scoring: item.scoring,
+        createdAt: now,
+        updatedAt: now,
+      } as Item);
+      continue;
+    }
+    const choices = item.choices ?? (item.kind === 'TRUE_FALSE' ? [{ text: 'True' }, { text: 'False' }] : []);
+    const correctIndexes = item.correctIndexes ?? [];
     insertItem(db, {
       id: item.id,
       tenantId,
-      kind,
+      kind: item.kind,
       prompt: item.prompt,
       choices,
-      answerMode: item.correctIndexes.length > 1 ? 'multiple' : 'single',
-      correctIndexes: item.correctIndexes,
+      answerMode: correctIndexes.length > 1 ? 'multiple' : 'single',
+      correctIndexes,
       createdAt: now,
       updatedAt: now,
     });
