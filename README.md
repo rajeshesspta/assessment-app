@@ -30,16 +30,20 @@ npm run build
 npm run dev
 ```
 
-Server listens on `http://127.0.0.1:3000` by default.
+The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by default. Cosmos DB is optional; with the default `AUTH_PROVIDER=memory` no emulator or cloud dependency is required.
 
 ### Database Provisioning (SQLite)
 
 - `npm run db:provision -- --tenant=<tenantId>`: create or update the tenant database, apply migrations, and (by default) seed a sample item and assessment. Pass `--seed=false` to skip seeding when you only want schema changes.
 - `npm run db:seed -- --tenant=<tenantId>`: idempotently upsert the sample content for the tenant. Safe to re-run after clearing data or rotating tenants.
+- `npm run db:clear -- --tenant=<tenantId>`: wipe attempts/assessments/items for the tenant without touching schema.
+- `npm run db:migrate [-- --tenant=<tenantId> | -- --all-tenants]`: apply migrations to specific tenants or all known tenants (including the tenant directory database).
+- `npm run db:reset -- --tenant=<tenantId>`: clear tenant data and reseed the sample content in one shot.
 - SQLite persistence uses the WebAssembly-powered [`sql.js`](https://github.com/sql-js/sql.js) runtime, so no native toolchains or Python installs are required. Databases are materialized as files under `data/sqlite/` using the configured file pattern.
 
 ## Configuration
 
+- `AUTH_PROVIDER`: `memory` (default) or `cosmos` for API-key storage. Memory provider uses seeded keys and avoids Cosmos entirely.
 - `COSMOS_ENDPOINT` / `COSMOS_KEY`: Cosmos DB account endpoint and key (defaults to local emulator).
 - `COSMOS_DATABASE_ID`: Database name to host feature containers (default `assessment-app`).
 - `COSMOS_API_KEYS_CONTAINER`: Container for API key records (default `api-keys`).
