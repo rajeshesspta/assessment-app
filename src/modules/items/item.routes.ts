@@ -123,13 +123,29 @@ const essaySchema = z.object({
     }),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema]);
+const numericUnitsSchema = z.object({
+  label: z.string().min(1).max(50).optional(),
+  symbol: z.string().min(1).max(16).optional(),
+  precision: z.number().int().nonnegative().max(6).optional(),
+});
+
+const numericExactSchema = z.object({ mode: z.literal('exact'), value: z.number(), tolerance: z.number().nonnegative().optional() });
+const numericRangeSchema = z.object({ mode: z.literal('range'), min: z.number(), max: z.number() });
+
+const numericEntrySchema = z.object({
+  kind: z.literal('NUMERIC_ENTRY'),
+  prompt: z.string().min(1),
+  validation: z.discriminatedUnion('mode', [numericExactSchema, numericRangeSchema]),
+  units: numericUnitsSchema.optional(),
+});
+
+const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema, numericEntrySchema]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
-  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY']).optional(),
+  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY', 'NUMERIC_ENTRY']).optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -353,6 +369,38 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         rubric,
         length: parsed.length,
         scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    if (parsed.kind === 'NUMERIC_ENTRY') {
+      if (parsed.validation.mode === 'range' && parsed.validation.min > parsed.validation.max) {
+        reply.code(400);
+        return { error: 'Range min must be less than or equal to max' };
+      }
+      const normalizedUnits = parsed.units
+        ? (() => {
+            const candidate = {
+              label: parsed.units.label?.trim() || undefined,
+              symbol: parsed.units.symbol?.trim() || undefined,
+              precision: parsed.units.precision,
+            } as { label?: string; symbol?: string; precision?: number };
+            if (!candidate.label && !candidate.symbol && candidate.precision === undefined) {
+              return undefined;
+            }
+            return candidate;
+          })()
+        : undefined;
+      const item = createItem({
+        id,
+        tenantId,
+        kind: 'NUMERIC_ENTRY',
+        prompt: parsed.prompt,
+        validation: parsed.validation,
+        units: normalizedUnits,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });

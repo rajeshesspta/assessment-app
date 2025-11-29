@@ -6,7 +6,7 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
-export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY';
+export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY' | 'NUMERIC_ENTRY';
 
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
@@ -114,7 +114,23 @@ export interface EssayItem extends BaseItemEntity {
 	scoring: EssayScoringRule;
 }
 
-export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem;
+export interface NumericUnitsMetadata {
+	label?: string;
+	symbol?: string;
+	precision?: number;
+}
+
+export type NumericValidationRule =
+	| { mode: 'exact'; value: number; tolerance?: number }
+	| { mode: 'range'; min: number; max: number };
+
+export interface NumericEntryItem extends BaseItemEntity {
+	kind: 'NUMERIC_ENTRY';
+	validation: NumericValidationRule;
+	units?: NumericUnitsMetadata;
+}
+
+export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem;
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
@@ -125,6 +141,7 @@ export interface AttemptResponse {
 	matchingAnswers?: { promptId: string; targetId: string }[];
 	orderingAnswer?: string[];
 	essayAnswer?: string;
+	numericAnswer?: { value: number; unit?: string };
 }
 
 export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }

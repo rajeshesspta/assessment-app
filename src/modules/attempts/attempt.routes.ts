@@ -18,6 +18,7 @@ const responseSchema = z.object({
   matchingAnswers: z.array(z.object({ promptId: z.string(), targetId: z.string() })).optional(),
   orderingAnswer: z.array(z.string()).optional(),
   essayAnswer: z.string().optional(),
+  numericAnswer: z.object({ value: z.number(), unit: z.string().min(1).max(40).optional() }).optional(),
 });
 
 const responsesSchema = z.object({ responses: z.array(responseSchema) });
@@ -92,6 +93,9 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         ? Array.from(new Set(r.orderingAnswer.map(value => value?.trim()).filter((value): value is string => Boolean(value))))
         : undefined;
       const essayAnswer = typeof r.essayAnswer === 'string' ? r.essayAnswer.trim() : undefined;
+      const numericAnswer = typeof r.numericAnswer?.value === 'number' && Number.isFinite(r.numericAnswer.value)
+        ? { value: r.numericAnswer.value, unit: r.numericAnswer.unit?.trim() || undefined }
+        : undefined;
       return {
         itemId: r.itemId,
         answerIndexes,
@@ -99,6 +103,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         matchingAnswers,
         orderingAnswer,
         essayAnswer: essayAnswer && essayAnswer.length > 0 ? essayAnswer : undefined,
+        numericAnswer,
       };
     });
     for (const r of normalized) {
@@ -109,6 +114,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         existing.matchingAnswers = r.matchingAnswers;
         existing.orderingAnswer = r.orderingAnswer;
         existing.essayAnswer = r.essayAnswer;
+        existing.numericAnswer = r.numericAnswer;
       } else {
         attempt.responses.push(r);
       }
@@ -257,6 +263,23 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
           lengthExpectation: item.length,
           responseText: response?.essayAnswer?.trim(),
         });
+        continue;
+      }
+      if (item.kind === 'NUMERIC_ENTRY') {
+        maxScore += 1;
+        const provided = response?.numericAnswer?.value;
+        if (typeof provided === 'number' && Number.isFinite(provided)) {
+          let isCorrect = false;
+          if (item.validation.mode === 'exact') {
+            const tolerance = item.validation.tolerance ?? 0;
+            isCorrect = Math.abs(provided - item.validation.value) <= tolerance;
+          } else {
+            isCorrect = provided >= item.validation.min && provided <= item.validation.max;
+          }
+          if (isCorrect) {
+            score += 1;
+          }
+        }
         continue;
       }
       maxScore += 1;

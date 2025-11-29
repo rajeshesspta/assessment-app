@@ -106,6 +106,14 @@
 		"maxScore": 10
 	}
 }
+
+// Numeric entry (auto-scored via range or exact-with-tolerance rules)
+{
+	"kind": "NUMERIC_ENTRY",
+	"prompt": "Report the circuit voltage in volts.",
+	"validation": { "mode": "exact", "value": 12.5, "tolerance": 0.1 },
+	"units": { "label": "Volts", "symbol": "V", "precision": 2 }
+}
 ```
 
 TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, which keeps downstream scoring logic untouched.
@@ -119,6 +127,8 @@ Ordering items persist their schema inside `ordering_schema_json` and expect cli
 Short-answer items store their rubric + scoring metadata inside `short_answer_schema_json`. Attempts simply provide `textAnswer`/`textAnswers[0]`. When an attempt is submitted, the API records `maxScore`, keeps the attempt in `submitted` status, and publishes a `FreeResponseEvaluationRequested` event (containing prompt, rubric keywords, and response text) so a manual reviewer or AI evaluator can award the final score.
 
 Essay items persist their metadata inside `essay_schema_json`, including optional rubric sections and length expectations (min/max/recommended word counts). Attempts send `essayAnswer` strings; submission triggers the same deferred-scoring workflow, emitting a `FreeResponseEvaluationRequested` event that contains rubric sections, keywords, and length guidance for downstream graders.
+
+Numeric entry items persist validation + units metadata in `numeric_schema_json`. Validation supports two modes: `exact` (value plus optional absolute `tolerance`) and `range` (inclusive `min`/`max`). Units metadata is optional but can expose UI hints such as `label`, `symbol`, or preferred decimal `precision`. Attempts submit `numericAnswer.value` (and optionally `numericAnswer.unit`) and are auto-scored immediately during submission.
 
 `GET /items` supports optional query params: `search` (full-text on prompts) and `kind`, enabling callers to fetch only a specific item type.
 

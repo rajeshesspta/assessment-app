@@ -390,6 +390,45 @@ describe('itemRoutes', () => {
     expect(saveMock).not.toHaveBeenCalled();
   });
 
+  it('creates a numeric entry item with tolerance metadata', async () => {
+    uuidMock.mockReturnValueOnce('numeric-item-id').mockReturnValueOnce('event-id-7');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'NUMERIC_ENTRY',
+        prompt: 'Report gravity in m/s^2',
+        validation: { mode: 'exact', value: 9.81, tolerance: 0.05 },
+        units: { label: 'Meters per second squared', symbol: 'm/s^2', precision: 2 },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: 'numeric-item-id',
+      kind: 'NUMERIC_ENTRY',
+      validation: { mode: 'exact', value: 9.81, tolerance: 0.05 },
+      units: { label: 'Meters per second squared', symbol: 'm/s^2', precision: 2 },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'NUMERIC_ENTRY' }));
+  });
+
+  it('rejects numeric entry payloads when range bounds are invalid', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'NUMERIC_ENTRY',
+        prompt: 'Provide current temperature',
+        validation: { mode: 'range', min: 100, max: 50 },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it('returns an item when found', async () => {
     const storedItem = {
       id: 'item-123',

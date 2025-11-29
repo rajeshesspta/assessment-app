@@ -6,7 +6,7 @@ Headless assessment platform MVP in TypeScript + Fastify.
 
 - Auth (API key)
 - Tenant enforcement (header `x-tenant-id`)
-- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking, short-answer, essay/long-form)
+- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking, short-answer, essay/long-form, numeric entry)
 - Assessment Authoring (static list of item IDs)
 - Attempt & Response Capture
 - Scoring (auto for MCQ + structured types; short-answer and essay routes events for manual/AI rubric review)
@@ -67,10 +67,10 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 
 ## API (Summary)
 
-- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering, short-answer, essay)
-- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING|SHORT_ANSWER|ESSAY` filter)
+- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering, short-answer, essay, numeric entry)
+- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING|SHORT_ANSWER|ESSAY|NUMERIC_ENTRY` filter)
 - Ordering responses submit `orderingAnswer` (array of option ids) and support either binary (`mode: all`) or partial pairwise credit (`mode: partial_pairs`).
-- Short-answer responses submit `textAnswer` or `textAnswers[0]`; essay responses submit `essayAnswer`. Both emit `FreeResponseEvaluationRequested` events so reviewers or AI rubric services can assign up to the configured `maxScore`.
+- Short-answer responses submit `textAnswer` or `textAnswers[0]`; essay responses submit `essayAnswer`. Both emit `FreeResponseEvaluationRequested` events so reviewers or AI rubric services can assign up to the configured `maxScore`. Numeric entry responses submit `numericAnswer.value` (with optional `unit`) and are auto-scored using either exact-with-tolerance or range validation.
 - GET /items/:id
 - POST /assessments
 - GET /assessments/:id

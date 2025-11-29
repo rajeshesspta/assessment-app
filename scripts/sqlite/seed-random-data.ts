@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, ChoiceItem, EssayItem, FillBlankItem, Item, MatchingItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
+import type { Assessment, Attempt, ChoiceItem, EssayItem, FillBlankItem, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -312,6 +312,37 @@ function buildRandomEssayItem(tenantId: string): Item {
   } satisfies Item;
 }
 
+function buildRandomNumericItem(tenantId: string): Item {
+  const now = new Date().toISOString();
+  const useRange = Math.random() > 0.5;
+  if (useRange) {
+    const min = Number((Math.random() * 50 + 10).toFixed(1));
+    const max = Number((min + Math.random() * 15 + 2).toFixed(1));
+    return {
+      id: `random-numeric-item-${randomUUID()}`,
+      tenantId,
+      kind: 'NUMERIC_ENTRY',
+      prompt: 'Provide the measured temperature in °C.',
+      validation: { mode: 'range', min, max },
+      units: { label: 'Degrees Celsius', symbol: '°C', precision: 1 },
+      createdAt: now,
+      updatedAt: now,
+    } satisfies Item;
+  }
+  const value = Number((Math.random() * 120 + 5).toFixed(2));
+  const tolerance = Number((Math.random() * 1.5 + 0.1).toFixed(2));
+  return {
+    id: `random-numeric-item-${randomUUID()}`,
+    tenantId,
+    kind: 'NUMERIC_ENTRY',
+    prompt: 'Report the circuit voltage in volts.',
+    validation: { mode: 'exact', value, tolerance },
+    units: { label: 'Volts', symbol: 'V', precision: 2 },
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
 function buildRandomItem(tenantId: string, index: number): Item {
   const builders = [
     buildRandomMCQItem,
@@ -321,17 +352,19 @@ function buildRandomItem(tenantId: string, index: number): Item {
     buildRandomOrderingItem,
     buildRandomShortAnswerItem,
     buildRandomEssayItem,
+    buildRandomNumericItem,
   ] as const;
   if (index < builders.length) {
     return builders[index](tenantId);
   }
   const roll = Math.random();
-  if (roll < 0.15) return buildRandomFillBlankItem(tenantId);
-  if (roll < 0.3) return buildRandomTrueFalseItem(tenantId);
-  if (roll < 0.45) return buildRandomMatchingItem(tenantId);
-  if (roll < 0.6) return buildRandomOrderingItem(tenantId);
-  if (roll < 0.75) return buildRandomShortAnswerItem(tenantId);
-  if (roll < 0.9) return buildRandomEssayItem(tenantId);
+  if (roll < 0.12) return buildRandomFillBlankItem(tenantId);
+  if (roll < 0.24) return buildRandomTrueFalseItem(tenantId);
+  if (roll < 0.36) return buildRandomMatchingItem(tenantId);
+  if (roll < 0.48) return buildRandomOrderingItem(tenantId);
+  if (roll < 0.6) return buildRandomShortAnswerItem(tenantId);
+  if (roll < 0.75) return buildRandomEssayItem(tenantId);
+  if (roll < 0.9) return buildRandomNumericItem(tenantId);
   return buildRandomMCQItem(tenantId);
 }
 
@@ -371,6 +404,10 @@ function isShortAnswerItem(item: Item): item is ShortAnswerItem {
 
 function isEssayItem(item: Item): item is EssayItem {
   return item.kind === 'ESSAY';
+}
+
+function isNumericItem(item: Item): item is NumericEntryItem {
+  return item.kind === 'NUMERIC_ENTRY';
 }
 
 function buildRandomAttempt(
@@ -434,6 +471,29 @@ function buildRandomAttempt(
       const essayText = paragraphs.join(' ');
       return { itemId, essayAnswer: essayText };
     }
+    if (isNumericItem(item)) {
+      const provideCorrect = Math.random() > 0.3;
+      let value: number;
+      if (provideCorrect) {
+        if (item.validation.mode === 'exact') {
+          const tolerance = item.validation.tolerance ?? 0;
+          const offset = tolerance === 0 ? 0 : (Math.random() - 0.5) * tolerance * 0.9;
+          value = Number((item.validation.value + offset).toFixed(3));
+        } else {
+          const span = item.validation.max - item.validation.min;
+          value = Number((item.validation.min + Math.random() * span).toFixed(3));
+        }
+      } else if (item.validation.mode === 'exact') {
+        value = Number((item.validation.value + ((item.validation.tolerance ?? 0.5) + 0.5) * 2).toFixed(3));
+      } else {
+        const pad = Math.max(1, (item.validation.max - item.validation.min) * 0.25);
+        value = Math.random() > 0.5
+          ? Number((item.validation.max + pad).toFixed(3))
+          : Number((item.validation.min - pad).toFixed(3));
+      }
+      const preferredUnit = item.units?.symbol ?? item.units?.label;
+      return { itemId, numericAnswer: { value, unit: preferredUnit } };
+    }
     if (isChoiceItem(item) && item.answerMode === 'single') {
       return { itemId, answerIndexes: [randomInt(item.choices.length)] };
     }
@@ -464,6 +524,9 @@ function buildRandomAttempt(
     }
     if (isEssayItem(item)) {
       return total + (item.scoring?.maxScore ?? 10);
+    }
+    if (isNumericItem(item)) {
+      return total + 1;
     }
     return total + 1;
   }, 0);
@@ -531,6 +594,18 @@ function buildRandomAttempt(
           }
         }
         return total + correctPairs;
+      }
+      if (isNumericItem(item)) {
+        const provided = response.numericAnswer?.value;
+        if (typeof provided !== 'number' || Number.isNaN(provided)) {
+          return total;
+        }
+        if (item.validation.mode === 'exact') {
+          const tolerance = item.validation.tolerance ?? 0;
+          const delta = Math.abs(provided - item.validation.value);
+          return delta <= tolerance ? total + 1 : total;
+        }
+        return provided >= item.validation.min && provided <= item.validation.max ? total + 1 : total;
       }
       if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
         return total;

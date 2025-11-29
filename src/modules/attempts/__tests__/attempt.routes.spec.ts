@@ -212,6 +212,33 @@ describe('attemptRoutes', () => {
     ]);
   });
 
+  it('stores numeric answers when provided', async () => {
+    const attempt = {
+      id: 'attempt-num',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-3',
+      userId: 'user-3',
+      status: 'in_progress' as const,
+      responses: [],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-num', attempt);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/attempts/attempt-num/responses',
+      payload: {
+        responses: [{ itemId: 'item-num', numericAnswer: { value: 12.34, unit: 'm' } }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().responses).toEqual([
+      { itemId: 'item-num', numericAnswer: { value: 12.34, unit: 'm' } },
+    ]);
+  });
+
   it('returns 404 when patching missing attempt', async () => {
     const response = await app.inject({
       method: 'PATCH',
@@ -468,6 +495,74 @@ describe('attemptRoutes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ score: 1, maxScore: 1, status: 'scored' });
+  });
+
+  it('scores numeric entry items within tolerance', async () => {
+    const attempt = {
+      id: 'attempt-num-tol',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-num',
+      userId: 'user-5',
+      status: 'in_progress' as const,
+      responses: [{ itemId: 'numeric-item', numericAnswer: { value: 9.83 } }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-num-tol', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-num',
+      tenantId: 'tenant-1',
+      itemIds: ['numeric-item'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'numeric-item',
+      tenantId: 'tenant-1',
+      kind: 'NUMERIC_ENTRY' as const,
+      prompt: 'Gravity',
+      validation: { mode: 'exact', value: 9.81, tolerance: 0.05 },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('numeric-score');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-num-tol/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ score: 1, maxScore: 1, status: 'scored' });
+  });
+
+  it('does not score numeric entry responses outside range', async () => {
+    const attempt = {
+      id: 'attempt-num-range',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-num-range',
+      userId: 'user-6',
+      status: 'in_progress' as const,
+      responses: [{ itemId: 'numeric-range-item', numericAnswer: { value: 150 } }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-num-range', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-num-range',
+      tenantId: 'tenant-1',
+      itemIds: ['numeric-range-item'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'numeric-range-item',
+      tenantId: 'tenant-1',
+      kind: 'NUMERIC_ENTRY' as const,
+      prompt: 'Temperature',
+      validation: { mode: 'range', min: 65, max: 75 },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+    mocks.uuidMock.mockReturnValueOnce('numeric-range-score');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-num-range/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ score: 0, maxScore: 1, status: 'scored' });
   });
 
   it('scores fill-in-the-blank items (all mode)', async () => {

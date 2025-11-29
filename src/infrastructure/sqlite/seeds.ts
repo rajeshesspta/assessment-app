@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from './client.js';
-import type { Assessment, Attempt, EssayItem, FillBlankItem, Item, MatchingItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
+import type { Assessment, Attempt, EssayItem, FillBlankItem, Item, MatchingItem, NumericEntryItem, OrderingItem, ShortAnswerItem } from '../../common/types.js';
 
 function isFillBlankItem(item: Item): item is FillBlankItem {
   return item.kind === 'FILL_IN_THE_BLANK';
@@ -21,10 +21,14 @@ function isEssayItem(item: Item): item is EssayItem {
   return item.kind === 'ESSAY';
 }
 
+function isNumericItem(item: Item): item is NumericEntryItem {
+  return item.kind === 'NUMERIC_ENTRY';
+}
+
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
@@ -37,6 +41,7 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
       ordering_schema_json = excluded.ordering_schema_json,
       short_answer_schema_json = excluded.short_answer_schema_json,
       essay_schema_json = excluded.essay_schema_json,
+      numeric_schema_json = excluded.numeric_schema_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -44,14 +49,15 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.tenantId,
     item.kind,
     item.prompt,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) ? [] : item.choices),
-    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) ? 'single' : item.answerMode,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) ? [] : item.correctIndexes),
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) ? [] : item.choices),
+    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) ? 'single' : item.answerMode,
+    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) ? [] : item.correctIndexes),
     isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
     isMatchingItem(item) ? JSON.stringify({ prompts: item.prompts, targets: item.targets, scoring: item.scoring }) : null,
     isOrderingItem(item) ? JSON.stringify({ options: item.options, correctOrder: item.correctOrder, scoring: item.scoring }) : null,
     isShortAnswerItem(item) ? JSON.stringify({ rubric: item.rubric, scoring: item.scoring }) : null,
     isEssayItem(item) ? JSON.stringify({ rubric: item.rubric, length: item.length, scoring: item.scoring }) : null,
+    isNumericItem(item) ? JSON.stringify({ validation: item.validation, units: item.units }) : null,
     item.createdAt,
     item.updatedAt,
   );
@@ -110,7 +116,7 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
@@ -181,6 +187,19 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
       rubric: schema?.rubric,
       length: schema?.length,
       scoring: schema?.scoring ?? { mode: 'manual', maxScore: 10 },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    } as Item;
+  }
+  if (row.kind === 'NUMERIC_ENTRY') {
+    const schema = row.numericSchemaJson ? JSON.parse(row.numericSchemaJson) : undefined;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      kind: 'NUMERIC_ENTRY',
+      prompt: row.prompt,
+      validation: schema?.validation,
+      units: schema?.units,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     } as Item;
@@ -294,6 +313,13 @@ function tenantSampleItems(seedTenantId: string) {
       length: { minWords: 250, maxWords: 600, recommendedWords: 400 },
       scoring: { mode: 'manual', maxScore: 10 },
     },
+    {
+      id: 'sample-item-10',
+      kind: 'NUMERIC_ENTRY' as Item['kind'],
+      prompt: 'Report the acceleration due to gravity on Earth in m/s^2.',
+      validation: { mode: 'exact', value: 9.81, tolerance: 0.05 },
+      units: { label: 'Meters per second squared', symbol: 'm/s^2', precision: 2 },
+    },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
 
@@ -369,6 +395,19 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
         rubric: item.rubric,
         length: item.length,
         scoring: item.scoring,
+        createdAt: now,
+        updatedAt: now,
+      } as Item);
+      continue;
+    }
+    if (item.kind === 'NUMERIC_ENTRY') {
+      insertItem(db, {
+        id: item.id,
+        tenantId,
+        kind: 'NUMERIC_ENTRY',
+        prompt: item.prompt,
+        validation: item.validation,
+        units: item.units,
         createdAt: now,
         updatedAt: now,
       } as Item);
