@@ -4,11 +4,19 @@ export interface BaseEntity extends TenantScoped { id: string; createdAt: string
 
 export type MCQChoice = { text: string };
 
-export interface Item extends BaseEntity { kind: 'MCQ'; prompt: string; choices: MCQChoice[]; correctIndex: number; }
+export type ItemAnswerMode = 'single' | 'multiple';
+
+export interface Item extends BaseEntity {
+	kind: 'MCQ';
+	prompt: string;
+	choices: MCQChoice[];
+	answerMode: ItemAnswerMode;
+	correctIndexes: number[];
+}
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
-export interface AttemptResponse { itemId: string; answerIndex?: number; }
+export interface AttemptResponse { itemId: string; answerIndexes?: number[]; }
 
 export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }
 

@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS items (
   kind TEXT NOT NULL,
   prompt TEXT NOT NULL,
   choices_json TEXT NOT NULL,
-  correct_index INTEGER NOT NULL,
+  answer_mode TEXT NOT NULL DEFAULT 'single',
+  correct_indexes_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

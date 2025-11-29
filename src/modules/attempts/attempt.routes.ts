@@ -8,7 +8,13 @@ import type { ItemRepository } from '../items/item.repository.js';
 import { eventBus } from '../../common/event-bus.js';
 
 const startSchema = z.object({ assessmentId: z.string(), userId: z.string() });
-const responsesSchema = z.object({ responses: z.array(z.object({ itemId: z.string(), answerIndex: z.number().int().nonnegative().optional() })) });
+const responseSchema = z.object({
+  itemId: z.string(),
+  answerIndex: z.number().int().nonnegative().optional(),
+  answerIndexes: z.array(z.number().int().nonnegative()).optional(),
+});
+
+const responsesSchema = z.object({ responses: z.array(responseSchema) });
 
 export interface AttemptRoutesOptions {
   attemptRepository: AttemptRepository;
@@ -38,9 +44,22 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     if (!attempt) { reply.code(404); return { error: 'Not found' }; }
     if (attempt.status !== 'in_progress') { reply.code(400); return { error: 'Attempt not editable' }; }
     const parsed = responsesSchema.parse(req.body);
-    for (const r of parsed.responses) {
+    const normalized = parsed.responses.map(r => {
+      if (r.answerIndexes && r.answerIndexes.length > 0) {
+        return { itemId: r.itemId, answerIndexes: Array.from(new Set(r.answerIndexes)) };
+      }
+      if (typeof r.answerIndex === 'number') {
+        return { itemId: r.itemId, answerIndexes: [r.answerIndex] };
+      }
+      return { itemId: r.itemId, answerIndexes: undefined };
+    });
+    for (const r of normalized) {
       const existing = attempt.responses.find(x => x.itemId === r.itemId);
-      if (existing) Object.assign(existing, r); else attempt.responses.push(r);
+      if (existing) {
+        existing.answerIndexes = r.answerIndexes;
+      } else {
+        attempt.responses.push(r);
+      }
     }
     attempt.updatedAt = new Date().toISOString();
     attemptRepository.save(attempt);
@@ -59,7 +78,16 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     for (const itemId of assessment.itemIds) {
       const item = itemRepository.getById(tenantId, itemId); if (!item) continue;
       const response = attempt.responses.find(r => r.itemId === itemId);
-      if (response && response.answerIndex === item.correctIndex) score++;
+      const correct = new Set(item.correctIndexes);
+      const answers = response?.answerIndexes ? Array.from(new Set(response.answerIndexes)).sort((a, b) => a - b) : [];
+      const expected = [...correct].sort((a, b) => a - b);
+      if (item.answerMode === 'single') {
+        if (answers.length === 1 && answers[0] === expected[0]) score++;
+        continue;
+      }
+      if (answers.length === expected.length && expected.every((value, idx) => value === answers[idx])) {
+        score++;
+      }
     }
     attempt.score = score; attempt.maxScore = maxScore; attempt.status = 'scored';
     attempt.updatedAt = new Date().toISOString();

@@ -133,7 +133,7 @@ describe('attemptRoutes', () => {
       assessmentId: 'assessment-1',
       userId: 'user-1',
       status: 'in_progress' as const,
-      responses: [{ itemId: 'item-1', answerIndex: 1 }],
+      responses: [{ itemId: 'item-1', answerIndexes: [1] }],
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
     };
@@ -144,8 +144,8 @@ describe('attemptRoutes', () => {
       url: '/attempts/attempt-1/responses',
       payload: {
         responses: [
-          { itemId: 'item-1', answerIndex: 2 },
-          { itemId: 'item-2', answerIndex: 0 },
+          { itemId: 'item-1', answerIndexes: [2] },
+          { itemId: 'item-2', answerIndexes: [0] },
         ],
       },
     });
@@ -153,11 +153,36 @@ describe('attemptRoutes', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.responses).toEqual([
-      { itemId: 'item-1', answerIndex: 2 },
-      { itemId: 'item-2', answerIndex: 0 },
+      { itemId: 'item-1', answerIndexes: [2] },
+      { itemId: 'item-2', answerIndexes: [0] },
     ]);
     expect(body.updatedAt).not.toBe('2025-01-01T00:00:00.000Z');
     expect(mocks.saveMock).toHaveBeenCalledWith(attempt);
+  });
+
+  it('accepts legacy answerIndex payloads', async () => {
+    const attempt = {
+      id: 'attempt-2',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-1',
+      userId: 'user-1',
+      status: 'in_progress' as const,
+      responses: [],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-2', attempt);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/attempts/attempt-2/responses',
+      payload: {
+        responses: [{ itemId: 'item-1', answerIndex: 3 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().responses).toEqual([{ itemId: 'item-1', answerIndexes: [3] }]);
   });
 
   it('returns 404 when patching missing attempt', async () => {
@@ -200,8 +225,8 @@ describe('attemptRoutes', () => {
       userId: 'user-1',
       status: 'in_progress' as const,
       responses: [
-        { itemId: 'item-1', answerIndex: 0 },
-        { itemId: 'item-2', answerIndex: 1 },
+        { itemId: 'item-1', answerIndexes: [0] },
+        { itemId: 'item-2', answerIndexes: [1] },
       ],
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
@@ -214,10 +239,10 @@ describe('attemptRoutes', () => {
     });
     mocks.itemGetByIdMock.mockImplementation((_tenantId: string, itemId: string) => {
       if (itemId === 'item-1') {
-        return { id: 'item-1', correctIndex: 0 };
+        return { id: 'item-1', answerMode: 'single', correctIndexes: [0] };
       }
       if (itemId === 'item-2') {
-        return { id: 'item-2', correctIndex: 2 };
+        return { id: 'item-2', answerMode: 'multiple', correctIndexes: [1, 2] };
       }
       return undefined;
     });
@@ -240,6 +265,36 @@ describe('attemptRoutes', () => {
     }));
     expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
     expect(mocks.itemGetByIdMock).toHaveBeenCalledWith('tenant-1', 'item-1');
+  });
+
+  it('scores multi-answer items when all correct indexes are provided', async () => {
+    const attempt = {
+      id: 'attempt-2',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-2',
+      userId: 'user-2',
+      status: 'in_progress' as const,
+      responses: [{ itemId: 'item-3', answerIndexes: [0, 2] }],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-2', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-2',
+      tenantId: 'tenant-1',
+      itemIds: ['item-3'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'item-3',
+      answerMode: 'multiple',
+      correctIndexes: [0, 2],
+    });
+    mocks.uuidMock.mockReturnValueOnce('score-event-2');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-2/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ score: 1, maxScore: 1, status: 'scored' });
   });
 
   it('returns 404 when submitting missing attempt', async () => {

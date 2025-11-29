@@ -82,7 +82,7 @@ describe('itemRoutes', () => {
       payload: {
         prompt: 'What is 2 + 2?',
         choices: [{ text: '3' }, { text: '4' }],
-        correctIndex: 1,
+        correctIndexes: [1],
       },
     });
 
@@ -94,7 +94,8 @@ describe('itemRoutes', () => {
       kind: 'MCQ',
       prompt: 'What is 2 + 2?',
       choices: [{ text: '3' }, { text: '4' }],
-      correctIndex: 1,
+      answerMode: 'single',
+      correctIndexes: [1],
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
@@ -108,21 +109,38 @@ describe('itemRoutes', () => {
     }));
   });
 
-  it('rejects items where correctIndex is out of range', async () => {
+  it('rejects items where correctIndexes are invalid', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/items',
       payload: {
         prompt: 'Capital of France?',
         choices: [{ text: 'Paris' }, { text: 'Berlin' }],
-        correctIndex: 5,
+        correctIndexes: [5],
       },
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: 'correctIndex out of range' });
+    expect(response.json()).toEqual({ error: 'correctIndexes out of range' });
     expect(saveMock).not.toHaveBeenCalled();
     expect(publishMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects multi-answer items without at least two indexes', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        prompt: 'Select prime numbers',
+        choices: [{ text: '2' }, { text: '3' }, { text: '4' }],
+        answerMode: 'multiple',
+        correctIndexes: [0],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Multi-answer items require at least two correct indexes' });
+    expect(saveMock).not.toHaveBeenCalled();
   });
 
   it('returns an item when found', async () => {
@@ -132,7 +150,8 @@ describe('itemRoutes', () => {
       kind: 'MCQ' as const,
       prompt: 'Largest planet?',
       choices: [{ text: 'Earth' }, { text: 'Jupiter' }],
-      correctIndex: 1,
+      answerMode: 'single' as const,
+      correctIndexes: [1],
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
     };

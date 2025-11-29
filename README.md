@@ -6,7 +6,7 @@ Headless assessment platform MVP in TypeScript + Fastify.
 
 - Auth (API key)
 - Tenant enforcement (header `x-tenant-id`)
-- Item Bank (MCQ only)
+- Item Bank (MCQ single or multi-answer)
 - Assessment Authoring (static list of item IDs)
 - Attempt & Response Capture
 - Scoring (auto for MCQ)

@@ -8,7 +8,8 @@ import { eventBus } from '../../common/event-bus.js';
 const createSchema = z.object({
   prompt: z.string().min(1),
   choices: z.array(z.object({ text: z.string().min(1) })).min(2),
-  correctIndex: z.number().int().nonnegative(),
+  answerMode: z.enum(['single', 'multiple']).default('single'),
+  correctIndexes: z.array(z.number().int().nonnegative()).nonempty(),
 });
 
 const listQuerySchema = z.object({
@@ -30,13 +31,35 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
   });
   app.post('/', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
-    const parsed = createSchema.parse(req.body);
-    if (parsed.correctIndex >= parsed.choices.length) {
+    const parsed = createSchema.parse(req.body ?? {});
+    const unique = new Set(parsed.correctIndexes);
+    if (unique.size !== parsed.correctIndexes.length) {
       reply.code(400);
-      return { error: 'correctIndex out of range' };
+      return { error: 'correctIndexes must be unique' };
+    }
+    const outOfRange = parsed.correctIndexes.some(index => index >= parsed.choices.length);
+    if (outOfRange) {
+      reply.code(400);
+      return { error: 'correctIndexes out of range' };
+    }
+    if (parsed.answerMode === 'single' && parsed.correctIndexes.length !== 1) {
+      reply.code(400);
+      return { error: 'Single-answer items must include exactly one correct index' };
+    }
+    if (parsed.answerMode === 'multiple' && parsed.correctIndexes.length < 2) {
+      reply.code(400);
+      return { error: 'Multi-answer items require at least two correct indexes' };
     }
     const id = uuid();
-    const item = createItem({ id, tenantId, kind: 'MCQ', ...parsed });
+    const item = createItem({
+      id,
+      tenantId,
+      kind: 'MCQ',
+      prompt: parsed.prompt,
+      choices: parsed.choices,
+      answerMode: parsed.answerMode,
+      correctIndexes: [...parsed.correctIndexes].sort((a, b) => a - b),
+    });
     repository.save(item);
     eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
     reply.code(201);

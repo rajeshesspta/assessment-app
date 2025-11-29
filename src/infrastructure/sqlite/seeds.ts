@@ -3,14 +3,15 @@ import type { Assessment, Attempt, Item } from '../../common/types.js';
 
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, correct_index, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
       prompt = excluded.prompt,
       choices_json = excluded.choices_json,
-      correct_index = excluded.correct_index,
+      answer_mode = excluded.answer_mode,
+      correct_indexes_json = excluded.correct_indexes_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -19,7 +20,8 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.kind,
     item.prompt,
     JSON.stringify(item.choices),
-    item.correctIndex,
+    item.answerMode,
+    JSON.stringify(item.correctIndexes),
     item.createdAt,
     item.updatedAt,
   );
@@ -78,7 +80,7 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, correct_index as correctIndex, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
@@ -91,7 +93,8 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
     kind: row.kind,
     prompt: row.prompt,
     choices: JSON.parse(row.choicesJson) as Item['choices'],
-    correctIndex: row.correctIndex,
+    answerMode: row.answerMode,
+    correctIndexes: JSON.parse(row.correctIndexesJson) as Item['correctIndexes'],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   } as Item;
@@ -103,19 +106,19 @@ function tenantSampleItems(seedTenantId: string) {
       id: 'sample-item-1',
       prompt: 'Capital of France?',
       choices: [{ text: 'Paris' }, { text: 'Berlin' }, { text: 'Madrid' }, { text: 'Rome' }],
-      correctIndex: 0,
+      correctIndexes: [0],
     },
     {
       id: 'sample-item-2',
       prompt: '2 + 2 = ?',
       choices: [{ text: '3' }, { text: '4' }, { text: '5' }],
-      correctIndex: 1,
+      correctIndexes: [1],
     },
     {
       id: 'sample-item-3',
-      prompt: 'Pick the odd number',
-      choices: [{ text: '6' }, { text: '8' }, { text: '9' }, { text: '10' }],
-      correctIndex: 2,
+      prompt: 'Select the prime numbers',
+      choices: [{ text: '2' }, { text: '3' }, { text: '4' }, { text: '5' }],
+      correctIndexes: [0, 1, 3],
     },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
@@ -135,7 +138,8 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
       kind: 'MCQ',
       prompt: item.prompt,
       choices: item.choices,
-      correctIndex: item.correctIndex,
+      answerMode: item.correctIndexes.length > 1 ? 'multiple' : 'single',
+      correctIndexes: item.correctIndexes,
       createdAt: now,
       updatedAt: now,
     });

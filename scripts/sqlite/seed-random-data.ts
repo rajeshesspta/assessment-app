@@ -78,7 +78,8 @@ function buildRandomItem(tenantId: string): Item {
     kind: 'MCQ',
     prompt: `What is ${a} + ${b}?`,
     choices: shuffled.map(value => ({ text: value.toString() })),
-    correctIndex,
+    answerMode: 'single',
+    correctIndexes: [correctIndex],
     createdAt: now,
     updatedAt: now,
   };
@@ -111,14 +112,28 @@ function buildRandomAttempt(
     if (!item) {
       return { itemId };
     }
-    return { itemId, answerIndex: randomInt(item.choices.length) };
+    if (item.answerMode === 'single') {
+      return { itemId, answerIndexes: [randomInt(item.choices.length)] };
+    }
+    const picks = new Set<number>();
+    const desired = Math.max(2, Math.min(item.choices.length, randomInt(item.choices.length) + 1));
+    while (picks.size < desired) {
+      picks.add(randomInt(item.choices.length));
+    }
+    return { itemId, answerIndexes: Array.from(picks) };
   });
   const maxScore = responses.length;
   const score = status === 'scored'
     ? responses.reduce((total, response) => {
         const item = itemById.get(response.itemId);
-        if (!item) return total;
-        return response.answerIndex === item.correctIndex ? total + 1 : total;
+        if (!item || !response.answerIndexes || response.answerIndexes.length === 0) return total;
+        const answers = Array.from(new Set(response.answerIndexes)).sort((x, y) => x - y);
+        const expected = [...item.correctIndexes].sort((x, y) => x - y);
+        if (item.answerMode === 'single') {
+          return answers.length === 1 && answers[0] === expected[0] ? total + 1 : total;
+        }
+        const matches = answers.length === expected.length && expected.every((value, idx) => value === answers[idx]);
+        return matches ? total + 1 : total;
       }, 0)
     : undefined;
 
