@@ -309,6 +309,53 @@ describe('attemptRoutes', () => {
     ]);
   });
 
+  it('stores scenario answers when provided', async () => {
+    const attempt = {
+      id: 'attempt-scenario',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-scenario',
+      userId: 'user-6',
+      status: 'in_progress' as const,
+      responses: [],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-scenario', attempt);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/attempts/attempt-scenario/responses',
+      payload: {
+        responses: [{
+          itemId: 'scenario-1',
+          scenarioAnswer: {
+            repositoryUrl: 'https://github.com/org/repo',
+            artifactUrl: 'https://storage.example.com/run.zip',
+            submissionNotes: '  Investigated issue  ',
+            files: [
+              { path: ' README.md ', url: 'https://storage.example.com/readme' },
+              { path: 'scripts/setup.sh' },
+            ],
+          },
+        }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().responses).toEqual([{
+      itemId: 'scenario-1',
+      scenarioAnswer: {
+        repositoryUrl: 'https://github.com/org/repo',
+        artifactUrl: 'https://storage.example.com/run.zip',
+        submissionNotes: 'Investigated issue',
+        files: [
+          { path: 'README.md', url: 'https://storage.example.com/readme' },
+          { path: 'scripts/setup.sh' },
+        ],
+      },
+    }]);
+  });
+
   it('returns 404 when patching missing attempt', async () => {
     const response = await app.inject({
       method: 'PATCH',
@@ -409,6 +456,105 @@ describe('attemptRoutes', () => {
     }));
     expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
     expect(mocks.itemGetByIdMock).toHaveBeenCalledWith('tenant-1', 'item-1');
+  });
+
+  it('defers scoring and emits scenario evaluation events for coding tasks', async () => {
+    const attempt = {
+      id: 'attempt-99',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-scenario',
+      userId: 'coder-1',
+      status: 'in_progress' as const,
+      responses: [
+        {
+          itemId: 'scenario-item',
+          scenarioAnswer: {
+            repositoryUrl: 'https://github.com/org/repo',
+            artifactUrl: 'https://storage.example.com/artifact.zip',
+            submissionNotes: 'Refactored flaky tests',
+            files: [{ path: 'src/index.ts', url: 'https://storage.example.com/src-index' }],
+          },
+        },
+        { itemId: 'item-auto', answerIndexes: [0] },
+      ],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-99', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-scenario',
+      tenantId: 'tenant-1',
+      itemIds: ['scenario-item', 'item-auto'],
+    });
+    mocks.itemGetByIdMock.mockImplementation((_tenantId: string, itemId: string) => {
+      if (itemId === 'scenario-item') {
+        return {
+          id: 'scenario-item',
+          tenantId: 'tenant-1',
+          kind: 'SCENARIO_TASK' as const,
+          prompt: 'Stabilize checkout flow',
+          brief: 'Address intermittent timeouts in payment service.',
+          attachments: [{ id: 'brief', label: 'Project brief', url: 'https://example.com/brief.pdf', kind: 'reference' }],
+          workspace: { templateRepositoryUrl: 'https://github.com/org/template', branch: 'main' },
+          evaluation: {
+            mode: 'automated',
+            automationServiceId: 'azure-devcenter',
+            runtime: 'node18',
+            entryPoint: 'npm run verify',
+            timeoutSeconds: 900,
+            testCases: [{ id: 'lint', weight: 1 }],
+          },
+          scoring: {
+            maxScore: 25,
+            rubric: [{ id: 'correctness', description: 'All checks pass', weight: 25 }],
+          },
+          createdAt: 'now',
+          updatedAt: 'now',
+        };
+      }
+      if (itemId === 'item-auto') {
+        return {
+          id: 'item-auto',
+          tenantId: 'tenant-1',
+          kind: 'MCQ' as const,
+          prompt: '2 + 2',
+          choices: [{ text: '4' }, { text: '5' }],
+          answerMode: 'single' as const,
+          correctIndexes: [0],
+          createdAt: 'now',
+          updatedAt: 'now',
+        };
+      }
+      return undefined;
+    });
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-99/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: 'attempt-99',
+      status: 'submitted',
+      score: 1,
+      maxScore: 26,
+    });
+    const scenarioEventCall = mocks.publishMock.mock.calls.find(call => call[0].type === 'ScenarioEvaluationRequested');
+    expect(scenarioEventCall).toBeDefined();
+    expect(scenarioEventCall?.[0]).toMatchObject({
+      tenantId: 'tenant-1',
+      payload: {
+        attemptId: 'attempt-99',
+        itemId: 'scenario-item',
+        evaluation: expect.objectContaining({ automationServiceId: 'azure-devcenter' }),
+        response: {
+          repositoryUrl: 'https://github.com/org/repo',
+          artifactUrl: 'https://storage.example.com/artifact.zip',
+          submissionNotes: 'Refactored flaky tests',
+          files: [{ path: 'src/index.ts', url: 'https://storage.example.com/src-index' }],
+        },
+      },
+    });
+    const attemptScoredCall = mocks.publishMock.mock.calls.find(call => call[0].type === 'AttemptScored');
+    expect(attemptScoredCall).toBeUndefined();
   });
 
   it('scores hotspot responses with all-or-nothing grading', async () => {

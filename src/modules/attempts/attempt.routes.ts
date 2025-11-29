@@ -5,7 +5,15 @@ import { createAttempt } from './attempt.model.js';
 import type { AttemptRepository } from './attempt.repository.js';
 import type { AssessmentRepository } from '../assessments/assessment.repository.js';
 import type { ItemRepository } from '../items/item.repository.js';
-import type { FillBlankMatcher, HotspotPoint } from '../../common/types.js';
+import type {
+  AttemptResponse,
+  FillBlankMatcher,
+  HotspotPoint,
+  ScenarioAttachment,
+  ScenarioEvaluationConfig,
+  ScenarioScoringRule,
+  ScenarioWorkspaceTemplate,
+} from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
 
 const startSchema = z.object({ assessmentId: z.string(), userId: z.string() });
@@ -22,6 +30,14 @@ const responseSchema = z.object({
   hotspotAnswers: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).optional(),
   dragDropAnswers: z
     .array(z.object({ tokenId: z.string().min(1), dropZoneId: z.string().min(1), position: z.number().int().optional() }))
+    .optional(),
+  scenarioAnswer: z
+    .object({
+      repositoryUrl: z.string().url().optional(),
+      artifactUrl: z.string().url().optional(),
+      submissionNotes: z.string().max(4000).optional(),
+      files: z.array(z.object({ path: z.string().min(1), url: z.string().url().optional() })).max(50).optional(),
+    })
     .optional(),
 });
 
@@ -165,6 +181,28 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       } else {
         dragDropAnswers = undefined;
       }
+      let scenarioAnswer: AttemptResponse['scenarioAnswer'] | undefined;
+      if (r.scenarioAnswer) {
+        const submissionNotes = r.scenarioAnswer.submissionNotes?.trim();
+        let files = r.scenarioAnswer.files
+          ?.map(file => ({
+            path: file.path.trim(),
+            url: file.url?.trim(),
+          }))
+          .filter(file => file.path.length > 0);
+        if (files && files.length === 0) {
+          files = undefined;
+        }
+        scenarioAnswer = {
+          repositoryUrl: r.scenarioAnswer.repositoryUrl?.trim(),
+          artifactUrl: r.scenarioAnswer.artifactUrl?.trim(),
+          submissionNotes: submissionNotes && submissionNotes.length > 0 ? submissionNotes : undefined,
+          files,
+        };
+        if (!scenarioAnswer.repositoryUrl && !scenarioAnswer.artifactUrl && !scenarioAnswer.submissionNotes && !scenarioAnswer.files) {
+          scenarioAnswer = undefined;
+        }
+      }
       return {
         itemId: r.itemId,
         answerIndexes,
@@ -175,6 +213,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         numericAnswer,
         hotspotAnswers,
         dragDropAnswers,
+        scenarioAnswer,
       };
     });
     for (const r of normalized) {
@@ -188,6 +227,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         existing.numericAnswer = r.numericAnswer;
         existing.hotspotAnswers = r.hotspotAnswers;
         existing.dragDropAnswers = r.dragDropAnswers;
+        existing.scenarioAnswer = r.scenarioAnswer;
       } else {
         attempt.responses.push(r);
       }
@@ -219,6 +259,17 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       lengthExpectation?: { minWords?: number; maxWords?: number; recommendedWords?: number };
       responseText?: string;
     }> = [];
+    const pendingScenarioEvaluations: Array<{
+      attemptId: string;
+      itemId: string;
+      prompt: string;
+      brief: string;
+      evaluation: ScenarioEvaluationConfig;
+      scoring: ScenarioScoringRule;
+      attachments?: ScenarioAttachment[];
+      workspace?: ScenarioWorkspaceTemplate;
+      response?: AttemptResponse['scenarioAnswer'];
+    }> = [];
     for (const itemId of assessment.itemIds) {
       const item = itemRepository.getById(tenantId, itemId); if (!item) continue;
       const response = attempt.responses.find(r => r.itemId === itemId);
@@ -242,6 +293,22 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
             score += 1;
           }
         }
+        continue;
+      }
+      if (item.kind === 'SCENARIO_TASK') {
+        const scenarioScore = item.scoring?.maxScore ?? 0;
+        maxScore += scenarioScore;
+        pendingScenarioEvaluations.push({
+          attemptId: attempt.id,
+          itemId: item.id,
+          prompt: item.prompt,
+          brief: item.brief,
+          evaluation: item.evaluation,
+          scoring: item.scoring,
+          attachments: item.attachments,
+          workspace: item.workspace,
+          response: response?.scenarioAnswer,
+        });
         continue;
       }
       if (item.kind === 'MATCHING') {
@@ -484,7 +551,9 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     }
     attempt.score = score; attempt.maxScore = maxScore;
     const hasPendingFreeResponse = pendingFreeResponseEvaluations.length > 0;
-    attempt.status = hasPendingFreeResponse ? 'submitted' : 'scored';
+    const hasPendingScenarioEvaluations = pendingScenarioEvaluations.length > 0;
+    const hasPendingEvaluations = hasPendingFreeResponse || hasPendingScenarioEvaluations;
+    attempt.status = hasPendingEvaluations ? 'submitted' : 'scored';
     attempt.updatedAt = new Date().toISOString();
     attemptRepository.save(attempt);
     if (hasPendingFreeResponse) {
@@ -510,7 +579,29 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
           },
         });
       }
-    } else {
+    }
+    if (hasPendingScenarioEvaluations) {
+      for (const evaluation of pendingScenarioEvaluations) {
+        eventBus.publish({
+          id: uuid(),
+          type: 'ScenarioEvaluationRequested',
+          occurredAt: new Date().toISOString(),
+          tenantId: attempt.tenantId,
+          payload: {
+            attemptId: evaluation.attemptId,
+            itemId: evaluation.itemId,
+            prompt: evaluation.prompt,
+            brief: evaluation.brief,
+            evaluation: evaluation.evaluation,
+            scoring: evaluation.scoring,
+            attachments: evaluation.attachments,
+            workspace: evaluation.workspace,
+            response: evaluation.response,
+          },
+        });
+      }
+    }
+    if (!hasPendingEvaluations) {
       eventBus.publish({ id: uuid(), type: 'AttemptScored', occurredAt: new Date().toISOString(), tenantId: attempt.tenantId, payload: { attemptId: id, score } });
     }
     return attempt;

@@ -12,6 +12,7 @@ import type {
   MatchingItem,
   NumericEntryItem,
   OrderingItem,
+  ScenarioTaskItem,
   ShortAnswerItem,
 } from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
@@ -199,13 +200,109 @@ const dragDropSchema = z.object({
   scoring: z.object({ mode: z.enum(['all', 'per_zone', 'per_token']).default('all') }).default({ mode: 'all' }),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema, essaySchema, numericEntrySchema, hotspotSchema, dragDropSchema]);
+const scenarioAttachmentSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).max(160),
+  url: z.string().url(),
+  kind: z.enum(['reference', 'starter', 'supporting', 'dataset']).default('reference'),
+  contentType: z.string().min(1).max(120).optional(),
+  sizeBytes: z.number().int().positive().max(50_000_000).optional(),
+});
+
+const scenarioWorkspaceSchema = z.object({
+  templateRepositoryUrl: z.string().url().optional(),
+  branch: z.string().min(1).max(120).optional(),
+  instructions: z.array(z.string().min(1).max(1000)).max(20).optional(),
+}).refine(data => {
+  if (!data.templateRepositoryUrl && !data.instructions && !data.branch) {
+    return true;
+  }
+  if (!data.templateRepositoryUrl && data.branch) {
+    return false;
+  }
+  return true;
+}, { message: 'workspace.branch requires templateRepositoryUrl' });
+
+const scenarioTestCaseSchema = z.object({
+  id: z.string().min(1),
+  description: z.string().min(1).max(500).optional(),
+  weight: z.number().positive().max(100).default(1),
+});
+
+const scenarioEvaluationSchema = z.object({
+  mode: z.enum(['manual', 'automated']),
+  automationServiceId: z.string().min(1).optional(),
+  runtime: z.string().min(1).max(120).optional(),
+  entryPoint: z.string().min(1).max(200).optional(),
+  timeoutSeconds: z.number().int().positive().max(900).optional(),
+  testCases: z.array(scenarioTestCaseSchema).max(50).optional(),
+}).superRefine((value, ctx) => {
+  if (value.mode === 'automated' && !value.automationServiceId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['automationServiceId'],
+      message: 'automationServiceId is required when evaluation.mode is automated',
+    });
+  }
+});
+
+const scenarioScoringSchema = z.object({
+  maxScore: z.number().int().positive().max(100).default(10),
+  rubric: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        description: z.string().min(1).max(500).optional(),
+        weight: z.number().positive().max(100).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+
+const scenarioTaskSchema = z.object({
+  kind: z.literal('SCENARIO_TASK'),
+  prompt: z.string().min(1),
+  brief: z.string().min(1).max(5000),
+  attachments: z.array(scenarioAttachmentSchema).max(10).optional(),
+  workspace: scenarioWorkspaceSchema.optional(),
+  evaluation: scenarioEvaluationSchema,
+  scoring: scenarioScoringSchema,
+});
+
+const createSchema = z.discriminatedUnion('kind', [
+  mcqSchema,
+  trueFalseSchema,
+  fillBlankSchema,
+  matchingSchema,
+  orderingSchema,
+  shortAnswerSchema,
+  essaySchema,
+  numericEntrySchema,
+  hotspotSchema,
+  dragDropSchema,
+  scenarioTaskSchema,
+]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
-  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER', 'ESSAY', 'NUMERIC_ENTRY', 'HOTSPOT', 'DRAG_AND_DROP']).optional(),
+  kind: z
+    .enum([
+      'MCQ',
+      'TRUE_FALSE',
+      'FILL_IN_THE_BLANK',
+      'MATCHING',
+      'ORDERING',
+      'SHORT_ANSWER',
+      'ESSAY',
+      'NUMERIC_ENTRY',
+      'HOTSPOT',
+      'DRAG_AND_DROP',
+      'SCENARIO_TASK',
+    ])
+    .optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -623,6 +720,54 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         prompt: parsed.prompt,
         tokens,
         zones,
+        scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    if (parsed.kind === 'SCENARIO_TASK') {
+      const attachments = parsed.attachments ?? [];
+      if (new Set(attachments.map(attachment => attachment.id)).size !== attachments.length) {
+        reply.code(400);
+        return { error: 'Attachment ids must be unique' };
+      }
+
+      const trimmedInstructions = parsed.workspace?.instructions
+        ?.map(instruction => instruction.trim())
+        .filter(instruction => instruction.length > 0);
+      if (parsed.workspace?.instructions && trimmedInstructions && trimmedInstructions.length !== parsed.workspace.instructions.length) {
+        reply.code(400);
+        return { error: 'Workspace instructions cannot be empty strings' };
+      }
+
+      if (parsed.evaluation.testCases) {
+        const testCaseIds = new Set(parsed.evaluation.testCases.map(test => test.id));
+        if (testCaseIds.size !== parsed.evaluation.testCases.length) {
+          reply.code(400);
+          return { error: 'Test case ids must be unique' };
+        }
+      }
+
+      const item = createItem<ScenarioTaskItem>({
+        id,
+        tenantId,
+        kind: 'SCENARIO_TASK',
+        prompt: parsed.prompt,
+        brief: parsed.brief,
+        attachments: attachments.length ? attachments : undefined,
+        workspace: parsed.workspace
+          ? {
+              ...parsed.workspace,
+              instructions: trimmedInstructions,
+            }
+          : undefined,
+        evaluation: {
+          ...parsed.evaluation,
+          testCases: parsed.evaluation.testCases?.map(test => ({ ...test, weight: test.weight ?? 1 })),
+        },
         scoring: parsed.scoring,
       });
       repository.save(item);

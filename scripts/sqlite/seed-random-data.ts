@@ -15,6 +15,7 @@ import type {
   MatchingItem,
   NumericEntryItem,
   OrderingItem,
+  ScenarioTaskItem,
   ShortAnswerItem,
 } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
@@ -369,6 +370,85 @@ function buildRandomDragDropItem(tenantId: string): Item {
   } satisfies Item;
 }
 
+const scenarioTemplates = [
+  {
+    prompt: 'Stabilize the checkout service',
+    brief: 'Investigate flaky payments and ship a reliable pipeline run.',
+    attachments: [
+      { id: 'checkout-spec', label: 'Checkout spec', url: 'https://example.com/docs/checkout.pdf', kind: 'reference' },
+      { id: 'starter', label: 'Starter repo', url: 'https://github.com/example/checkout-starter', kind: 'starter' },
+    ],
+    workspace: { templateRepositoryUrl: 'https://github.com/example/checkout-template', branch: 'main' },
+    evaluation: {
+      mode: 'automated' as const,
+      automationServiceId: 'azure-devcenter',
+      runtime: 'node18',
+      entryPoint: 'npm run verify',
+      timeoutSeconds: 900,
+      testCases: [{ id: 'lint' }, { id: 'unit', weight: 2 }],
+    },
+  },
+  {
+    prompt: 'Refactor the analytics ingestion job',
+    brief: 'Clean up the Spark job and ensure it passes regression harnesses.',
+    attachments: [
+      { id: 'dataset', label: 'Sample dataset', url: 'https://storage.example.com/datasets/analytics.zip', kind: 'dataset' },
+    ],
+    workspace: {
+      instructions: ['Install Java 17', 'Run ./gradlew test', 'Attach job logs to submission'],
+    },
+    evaluation: {
+      mode: 'manual' as const,
+    },
+  },
+  {
+    prompt: 'Harden the incident response bot',
+    brief: 'Add retry/backoff logic and document operational runbooks.',
+    attachments: [
+      { id: 'runbook', label: 'On-call runbook', url: 'https://example.com/runbooks/incident.pdf', kind: 'reference' },
+      { id: 'dataset', label: 'Webhook samples', url: 'https://storage.example.com/hooks.json', kind: 'dataset' },
+    ],
+    workspace: {
+      templateRepositoryUrl: 'https://github.com/example/bot-framework',
+      branch: 'staging',
+      instructions: ['npm install', 'npm run lint', 'npm run test'],
+    },
+    evaluation: {
+      mode: 'automated' as const,
+      automationServiceId: 'azure-devcenter',
+      runtime: 'node20',
+      entryPoint: 'npm run ci',
+      timeoutSeconds: 600,
+      testCases: [{ id: 'lint' }, { id: 'unit' }, { id: 'integration', weight: 3 }],
+    },
+  },
+];
+
+function buildRandomScenarioTaskItem(tenantId: string): Item {
+  const template = scenarioTemplates[randomInt(scenarioTemplates.length)];
+  const now = new Date().toISOString();
+  const rubric = [
+    { id: 'correctness', description: 'Automated checks pass', weight: 20 },
+    { id: 'quality', description: 'Readable commits & docs', weight: 5 },
+  ];
+  return {
+    id: `random-scenario-item-${randomUUID()}`,
+    tenantId,
+    kind: 'SCENARIO_TASK',
+    prompt: template.prompt,
+    brief: template.brief,
+    attachments: template.attachments,
+    workspace: template.workspace,
+    evaluation: template.evaluation,
+    scoring: {
+      maxScore: 25,
+      rubric,
+    },
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
 const shortAnswerTemplates = [
   {
     prompt: 'Explain how photosynthesis converts sunlight into chemical energy.',
@@ -489,20 +569,22 @@ function buildRandomItem(tenantId: string, index: number): Item {
     buildRandomNumericItem,
     buildRandomHotspotItem,
     buildRandomDragDropItem,
+    buildRandomScenarioTaskItem,
   ] as const;
   if (index < builders.length) {
     return builders[index](tenantId);
   }
   const roll = Math.random();
-  if (roll < 0.1) return buildRandomFillBlankItem(tenantId);
-  if (roll < 0.2) return buildRandomTrueFalseItem(tenantId);
-  if (roll < 0.3) return buildRandomMatchingItem(tenantId);
-  if (roll < 0.4) return buildRandomOrderingItem(tenantId);
-  if (roll < 0.5) return buildRandomShortAnswerItem(tenantId);
-  if (roll < 0.6) return buildRandomEssayItem(tenantId);
-  if (roll < 0.7) return buildRandomNumericItem(tenantId);
-  if (roll < 0.82) return buildRandomHotspotItem(tenantId);
-  if (roll < 0.94) return buildRandomDragDropItem(tenantId);
+  if (roll < 0.08) return buildRandomFillBlankItem(tenantId);
+  if (roll < 0.16) return buildRandomTrueFalseItem(tenantId);
+  if (roll < 0.24) return buildRandomMatchingItem(tenantId);
+  if (roll < 0.32) return buildRandomOrderingItem(tenantId);
+  if (roll < 0.4) return buildRandomShortAnswerItem(tenantId);
+  if (roll < 0.48) return buildRandomEssayItem(tenantId);
+  if (roll < 0.56) return buildRandomNumericItem(tenantId);
+  if (roll < 0.68) return buildRandomHotspotItem(tenantId);
+  if (roll < 0.8) return buildRandomDragDropItem(tenantId);
+  if (roll < 0.9) return buildRandomScenarioTaskItem(tenantId);
   return buildRandomMCQItem(tenantId);
 }
 
@@ -556,6 +638,10 @@ function isDragDropItem(item: Item): item is DragDropItem {
   return item.kind === 'DRAG_AND_DROP';
 }
 
+function isScenarioTaskItem(item: Item): item is ScenarioTaskItem {
+  return item.kind === 'SCENARIO_TASK';
+}
+
 function pointCentroid(points: HotspotPoint[]): HotspotPoint {
   if (!points || points.length === 0) {
     return { x: 0.5, y: 0.5 };
@@ -597,7 +683,7 @@ function buildRandomAttempt(
   const now = new Date().toISOString();
   const containsFreeResponse = assessment.itemIds.some(itemId => {
     const item = itemById.get(itemId);
-    return item ? isShortAnswerItem(item) || isEssayItem(item) : false;
+    return item ? isShortAnswerItem(item) || isEssayItem(item) || isScenarioTaskItem(item) : false;
   });
   if (containsFreeResponse && status === 'scored') {
     status = 'submitted';
@@ -719,6 +805,23 @@ function buildRandomAttempt(
       }
       return answers.length > 0 ? { itemId, dragDropAnswers: answers } : { itemId };
     }
+    if (isScenarioTaskItem(item)) {
+      const provideRepo = Math.random() > 0.3;
+      const provideArtifact = Math.random() > 0.5;
+      const provideNotes = Math.random() > 0.2;
+      const files = Math.random() > 0.6
+        ? [{ path: 'reports/status.md', url: 'https://storage.example.com/artifacts/status.md' }]
+        : undefined;
+      return {
+        itemId,
+        scenarioAnswer: {
+          repositoryUrl: provideRepo ? `https://github.com/submissions/${randomUUID().slice(0, 8)}` : undefined,
+          artifactUrl: provideArtifact ? `https://storage.example.com/builds/${randomUUID().slice(0, 6)}.zip` : undefined,
+          submissionNotes: provideNotes ? 'Implemented requested fixes and captured notes in README.' : undefined,
+          files,
+        },
+      };
+    }
     if (isChoiceItem(item) && item.answerMode === 'single') {
       return { itemId, answerIndexes: [randomInt(item.choices.length)] };
     }
@@ -773,6 +876,9 @@ function buildRandomAttempt(
         return total + tokenCredit;
       }
       return total + 1;
+    }
+    if (isScenarioTaskItem(item)) {
+      return total + item.scoring.maxScore;
     }
     return total + 1;
   }, 0);
@@ -943,6 +1049,9 @@ function buildRandomAttempt(
           }
           return total + correctTokenCount;
         }
+      if (isScenarioTaskItem(item)) {
+        return total;
+      }
       if (!isChoiceItem(item) || !response.answerIndexes || response.answerIndexes.length === 0) {
         return total;
       }

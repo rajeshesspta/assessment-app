@@ -6,10 +6,10 @@ Headless assessment platform MVP in TypeScript + Fastify.
 
 - Auth (API key)
 - Tenant enforcement (header `x-tenant-id`)
-- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking, short-answer, essay/long-form, numeric entry)
+- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking, short-answer, essay/long-form, numeric entry, hotspot, drag-and-drop, scenario/coding tasks)
 - Assessment Authoring (static list of item IDs)
 - Attempt & Response Capture
-- Scoring (auto for MCQ + structured types; short-answer and essay routes events for manual/AI rubric review)
+- Scoring (auto for MCQ + structured types; short-answer, essay, and scenario tasks route events for manual/AI rubric or automation review)
 - Analytics (attempt count + average score)
 - Event Bus (in-memory pub/sub)
 
@@ -36,7 +36,7 @@ The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by defaul
 
 - `npm run db:provision -- --tenant=<tenantId>`: create or update the tenant database, apply migrations, and (by default) seed a sample item and assessment. Pass `--seed=false` to skip seeding when you only want schema changes.
 - `npm run db:seed -- --tenant=<tenantId>`: idempotently upsert the sample content for the tenant. Safe to re-run after clearing data or rotating tenants.
-- `npm run db:seed:random-data -- --tenant=<tenantId> [--items=12 --assessments=4 --attempts=10 --append]`: populate items, assemble assessments, and create attempts in one shot. Clears tenant tables first unless `--append` is provided.
+- `npm run db:seed:random-data -- --tenant=<tenantId> [--items=12 --assessments=4 --attempts=10 --append]`: populate items (covering every kind, including scenario/coding tasks), assemble assessments, and create attempts in one shot. Scenario items receive realistic repository/artifact submissions so downstream automation can be tested. Clears tenant tables first unless `--append` is provided.
 - `npm run db:clear -- --tenant=<tenantId>`: wipe attempts/assessments/items for the tenant without touching schema.
 - `npm run db:migrate [-- --tenant=<tenantId> | -- --all-tenants]`: apply migrations to specific tenants or all known tenants (including the tenant directory database).
 - `npm run db:reset -- --tenant=<tenantId>`: clear tenant data and reseed the sample content in one shot.
@@ -67,10 +67,10 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 
 ## API (Summary)
 
-- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering, short-answer, essay, numeric entry)
-- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING|SHORT_ANSWER|ESSAY|NUMERIC_ENTRY` filter)
+- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering, short-answer, essay, numeric entry, hotspot, drag-and-drop, scenario tasks)
+- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING|SHORT_ANSWER|ESSAY|NUMERIC_ENTRY|HOTSPOT|DRAG_AND_DROP|SCENARIO_TASK` filter)
 - Ordering responses submit `orderingAnswer` (array of option ids) and support either binary (`mode: all`) or partial pairwise credit (`mode: partial_pairs`).
-- Short-answer responses submit `textAnswer` or `textAnswers[0]`; essay responses submit `essayAnswer`. Both emit `FreeResponseEvaluationRequested` events so reviewers or AI rubric services can assign up to the configured `maxScore`. Numeric entry responses submit `numericAnswer.value` (with optional `unit`) and are auto-scored using either exact-with-tolerance or range validation.
+- Short-answer responses submit `textAnswer` or `textAnswers[0]`; essay responses submit `essayAnswer`. Both emit `FreeResponseEvaluationRequested` events so reviewers or AI rubric services can assign up to the configured `maxScore`. Scenario tasks submit `scenarioAnswer` (repository/artifact links, submission notes, supporting files) and emit `ScenarioEvaluationRequested` events so automation pipelines or reviewers can perform evaluation before the attempt is scored. Numeric entry responses submit `numericAnswer.value` (with optional `unit`) and are auto-scored using either exact-with-tolerance or range validation.
 - GET /items/:id
 - POST /assessments
 - GET /assessments/:id

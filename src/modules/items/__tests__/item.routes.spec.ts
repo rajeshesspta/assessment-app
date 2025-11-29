@@ -506,6 +506,99 @@ describe('itemRoutes', () => {
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'DRAG_AND_DROP' }));
   });
 
+  it('creates a scenario task item with automation metadata', async () => {
+    uuidMock.mockReturnValueOnce('scenario-item-id').mockReturnValueOnce('event-id-10');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'SCENARIO_TASK',
+        prompt: 'Fix flaky tests',
+        brief: 'Stabilize the checkout flow by updating mocks.',
+        attachments: [
+          { id: 'spec', label: 'Spec Doc', url: 'https://example.com/spec.pdf', kind: 'reference' },
+          { id: 'starter', label: 'Starter Repo', url: 'https://github.com/org/starter', kind: 'starter' },
+        ],
+        workspace: {
+          templateRepositoryUrl: 'https://github.com/org/template',
+          branch: 'main',
+          instructions: ['  run npm test  ', 'ship code'],
+        },
+        evaluation: {
+          mode: 'automated',
+          automationServiceId: 'azure-pipelines',
+          runtime: 'node18',
+          entryPoint: 'npm run test-ci',
+          timeoutSeconds: 600,
+          testCases: [
+            { id: 'lint' },
+            { id: 'unit', weight: 2 },
+          ],
+        },
+        scoring: {
+          maxScore: 25,
+          rubric: [
+            { id: 'correctness', description: 'All tests pass', weight: 20 },
+            { id: 'quality', description: 'Code quality', weight: 5 },
+          ],
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: 'scenario-item-id',
+      kind: 'SCENARIO_TASK',
+      prompt: 'Fix flaky tests',
+      brief: 'Stabilize the checkout flow by updating mocks.',
+      workspace: {
+        templateRepositoryUrl: 'https://github.com/org/template',
+        branch: 'main',
+        instructions: ['run npm test', 'ship code'],
+      },
+      evaluation: {
+        mode: 'automated',
+        automationServiceId: 'azure-pipelines',
+        testCases: [
+          { id: 'lint', weight: 1 },
+          { id: 'unit', weight: 2 },
+        ],
+      },
+      scoring: {
+        maxScore: 25,
+        rubric: [
+          { id: 'correctness', weight: 20 },
+          { id: 'quality', weight: 5 },
+        ],
+      },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'SCENARIO_TASK' }));
+    expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({ payload: { itemId: 'scenario-item-id' } }));
+  });
+
+  it('rejects scenario task payloads with duplicate attachment ids', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'SCENARIO_TASK',
+        prompt: 'Fix pipeline',
+        brief: 'Resolve infra issues.',
+        attachments: [
+          { id: 'dup', label: 'Doc', url: 'https://example.com/doc', kind: 'reference' },
+          { id: 'dup', label: 'Repo', url: 'https://example.com/repo', kind: 'starter' },
+        ],
+        evaluation: { mode: 'manual' },
+        scoring: { maxScore: 10 },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Attachment ids must be unique' });
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it('rejects drag-and-drop payloads when zones reference unknown tokens', async () => {
     const response = await app.inject({
       method: 'POST',

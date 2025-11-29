@@ -166,6 +166,40 @@
 	],
 	"scoring": { "mode": "per_zone" }
 }
+
+// Scenario / coding task (attachments + workspace metadata, evaluated manually or via automation)
+{
+	"kind": "SCENARIO_TASK",
+	"prompt": "Stabilize the checkout pipeline",
+	"brief": "Investigate flaky payments, land a fix, and document the rollout plan.",
+	"attachments": [
+		{ "id": "spec", "label": "Design brief", "url": "https://example.com/checkout.pdf", "kind": "reference" },
+		{ "id": "starter", "label": "Starter repo", "url": "https://github.com/example/checkout-starter", "kind": "starter" }
+	],
+	"workspace": {
+		"templateRepositoryUrl": "https://github.com/example/checkout-template",
+		"branch": "main",
+		"instructions": ["npm install", "npm run verify"]
+	},
+	"evaluation": {
+		"mode": "automated",
+		"automationServiceId": "azure-devcenter",
+		"runtime": "node20",
+		"entryPoint": "npm test",
+		"timeoutSeconds": 900,
+		"testCases": [
+			{ "id": "lint" },
+			{ "id": "unit", "weight": 2 }
+		]
+	},
+	"scoring": {
+		"maxScore": 25,
+		"rubric": [
+			{ "id": "correctness", "description": "Automation suite passes", "weight": 20 },
+			{ "id": "quality", "description": "Readable commits & docs", "weight": 5 }
+		]
+	}
+}
 ```
 
 TRUE_FALSE items are persisted as single-answer MCQs with canonical choices, which keeps downstream scoring logic untouched.
@@ -185,6 +219,8 @@ Numeric entry items persist validation + units metadata in `numeric_schema_json`
 Hotspot items persist their image metadata, region polygons, and scoring rules inside `hotspot_schema_json`. Points are normalized to the `[0, 1]` coordinate space relative to the background image dimensions, which keeps scoring resolution independent of pixel density. Attempts submit `hotspotAnswers` arrays containing normalized `{ x, y }` coordinates. During submission, the API counts how many clicks land inside the configured polygons: `scoring.mode = "all"` requires every hotspot to be identified (awarding a single point), whereas `mode = "partial"` awards up to `maxSelections` points—one per correctly identified region.
 
 Drag-and-drop items persist their token metadata, drop zones, and scoring rules inside `drag_drop_schema_json`. Each token has a stable id plus optional category tags; zones can restrict acceptable tokens via explicit ids or categories, set `maxTokens`, and opt into `evaluation: "set"` (unordered classification) or `"ordered"` (sequencing). Attempts submit `dragDropAnswers` entries shaped as `{ tokenId, dropZoneId, position? }`, where `position` is only needed for ordered zones. Scoring supports three modes: `all` (one point when every zone is satisfied), `per_zone` (one point per correct zone), or `per_token` (fine-grained partial credit per correctly placed/ordered token).
+
+Scenario task items persist their workspace + evaluation metadata inside `scenario_schema_json`. The schema captures attachments (reference docs, starter repos, datasets), workspace bootstrapping instructions, and either manual or automated evaluation directives. Attempts submit `scenarioAnswer` payloads containing repository and artifact URLs, optional submission notes, and supporting files. Submissions always remain in `submitted` status until downstream automation or reviewers finish processing a `ScenarioEvaluationRequested` event, at which point score + status can be finalized.
 
 `GET /items` supports optional query params: `search` (full-text on prompts) and `kind`, enabling callers to fetch only a specific item type.
 

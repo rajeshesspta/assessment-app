@@ -10,6 +10,7 @@ import type {
   MatchingItem,
   NumericEntryItem,
   OrderingItem,
+  ScenarioTaskItem,
   ShortAnswerItem,
 } from '../../common/types.js';
 
@@ -45,10 +46,14 @@ function isDragDropItem(item: Item): item is DragDropItem {
   return item.kind === 'DRAG_AND_DROP';
 }
 
+function isScenarioTaskItem(item: Item): item is ScenarioTaskItem {
+  return item.kind === 'SCENARIO_TASK';
+}
+
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
-    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, drag_drop_schema_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, drag_drop_schema_json, scenario_schema_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       kind = excluded.kind,
@@ -61,9 +66,10 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
       ordering_schema_json = excluded.ordering_schema_json,
       short_answer_schema_json = excluded.short_answer_schema_json,
       essay_schema_json = excluded.essay_schema_json,
-      numeric_schema_json = excluded.numeric_schema_json,
-      hotspot_schema_json = excluded.hotspot_schema_json,
-      drag_drop_schema_json = excluded.drag_drop_schema_json,
+        numeric_schema_json = excluded.numeric_schema_json,
+        hotspot_schema_json = excluded.hotspot_schema_json,
+        drag_drop_schema_json = excluded.drag_drop_schema_json,
+        scenario_schema_json = excluded.scenario_schema_json,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -71,9 +77,43 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     item.tenantId,
     item.kind,
     item.prompt,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) || isDragDropItem(item) ? [] : item.choices),
-    isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) || isDragDropItem(item) ? 'single' : item.answerMode,
-    JSON.stringify(isFillBlankItem(item) || isMatchingItem(item) || isOrderingItem(item) || isShortAnswerItem(item) || isEssayItem(item) || isNumericItem(item) || isHotspotItem(item) || isDragDropItem(item) ? [] : item.correctIndexes),
+    JSON.stringify(
+      isFillBlankItem(item)
+        || isMatchingItem(item)
+        || isOrderingItem(item)
+        || isShortAnswerItem(item)
+        || isEssayItem(item)
+        || isNumericItem(item)
+        || isHotspotItem(item)
+        || isDragDropItem(item)
+        || isScenarioTaskItem(item)
+        ? []
+        : item.choices,
+    ),
+    isFillBlankItem(item)
+      || isMatchingItem(item)
+      || isOrderingItem(item)
+      || isShortAnswerItem(item)
+      || isEssayItem(item)
+      || isNumericItem(item)
+      || isHotspotItem(item)
+      || isDragDropItem(item)
+      || isScenarioTaskItem(item)
+      ? 'single'
+      : item.answerMode,
+    JSON.stringify(
+      isFillBlankItem(item)
+        || isMatchingItem(item)
+        || isOrderingItem(item)
+        || isShortAnswerItem(item)
+        || isEssayItem(item)
+        || isNumericItem(item)
+        || isHotspotItem(item)
+        || isDragDropItem(item)
+        || isScenarioTaskItem(item)
+        ? []
+        : item.correctIndexes,
+    ),
     isFillBlankItem(item) ? JSON.stringify({ blanks: item.blanks, scoring: item.scoring }) : null,
     isMatchingItem(item) ? JSON.stringify({ prompts: item.prompts, targets: item.targets, scoring: item.scoring }) : null,
     isOrderingItem(item) ? JSON.stringify({ options: item.options, correctOrder: item.correctOrder, scoring: item.scoring }) : null,
@@ -82,6 +122,15 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
     isNumericItem(item) ? JSON.stringify({ validation: item.validation, units: item.units }) : null,
     isHotspotItem(item) ? JSON.stringify({ image: item.image, hotspots: item.hotspots, scoring: item.scoring }) : null,
     isDragDropItem(item) ? JSON.stringify({ tokens: item.tokens, zones: item.zones, scoring: item.scoring }) : null,
+    isScenarioTaskItem(item)
+      ? JSON.stringify({
+          brief: item.brief,
+          attachments: item.attachments,
+          workspace: item.workspace,
+          evaluation: item.evaluation,
+          scoring: item.scoring,
+        })
+      : null,
     item.createdAt,
     item.updatedAt,
   );
@@ -140,7 +189,7 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {
   const row = db.prepare(`
-    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, created_at as createdAt, updated_at as updatedAt
+    SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, scenario_schema_json as scenarioSchemaJson, created_at as createdAt, updated_at as updatedAt
     FROM items
     WHERE tenant_id = ? AND id = ?
   `).get(tenantId, itemId);
@@ -252,6 +301,22 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
       tokens: schema?.tokens ?? [],
       zones: schema?.zones ?? [],
       scoring: schema?.scoring ?? { mode: 'all' },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    } as Item;
+  }
+  if (row.kind === 'SCENARIO_TASK') {
+    const schema = row.scenarioSchemaJson ? JSON.parse(row.scenarioSchemaJson) : undefined;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      kind: 'SCENARIO_TASK',
+      prompt: row.prompt,
+      brief: schema?.brief ?? row.prompt,
+      attachments: schema?.attachments,
+      workspace: schema?.workspace,
+      evaluation: schema?.evaluation ?? { mode: 'manual' },
+      scoring: schema?.scoring ?? { maxScore: 0 },
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     } as Item;
@@ -407,6 +472,36 @@ function tenantSampleItems(seedTenantId: string) {
       ],
       scoring: { mode: 'per_zone' },
     },
+    {
+      id: 'sample-item-13',
+      kind: 'SCENARIO_TASK' as Item['kind'],
+      prompt: 'Stabilize the checkout microservice',
+      brief: 'Investigate flaky checkout tests and harden telemetry before peak traffic.',
+      attachments: [
+        { id: 'runbook', label: 'Runbook', url: 'https://example.com/runbooks/checkout.pdf', kind: 'reference' },
+        { id: 'repo', label: 'Service Repo', url: 'https://github.com/example/checkout', kind: 'starter' },
+      ],
+      workspace: {
+        templateRepositoryUrl: 'https://github.com/example/checkout-template',
+        branch: 'main',
+        instructions: ['Install dependencies', 'Run npm test', 'Attach pipeline report'],
+      },
+      evaluation: {
+        mode: 'automated',
+        automationServiceId: 'azure-devcenter',
+        runtime: 'node18',
+        entryPoint: 'npm run verify',
+        timeoutSeconds: 900,
+        testCases: [{ id: 'lint' }, { id: 'unit', weight: 2 }],
+      },
+      scoring: {
+        maxScore: 25,
+        rubric: [
+          { id: 'correctness', description: 'Pipelines green', weight: 20 },
+          { id: 'quality', description: 'Readable diffs', weight: 5 },
+        ],
+      },
+    },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
 
@@ -522,6 +617,22 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
         prompt: item.prompt,
         tokens: item.tokens,
         zones: item.zones,
+        scoring: item.scoring,
+        createdAt: now,
+        updatedAt: now,
+      } as Item);
+      continue;
+    }
+    if (item.kind === 'SCENARIO_TASK') {
+      insertItem(db, {
+        id: item.id,
+        tenantId,
+        kind: 'SCENARIO_TASK',
+        prompt: item.prompt,
+        brief: item.brief,
+        attachments: item.attachments,
+        workspace: item.workspace,
+        evaluation: item.evaluation,
         scoring: item.scoring,
         createdAt: now,
         updatedAt: now,

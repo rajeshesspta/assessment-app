@@ -6,7 +6,7 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
-export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY' | 'NUMERIC_ENTRY' | 'HOTSPOT' | 'DRAG_AND_DROP';
+export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER' | 'ESSAY' | 'NUMERIC_ENTRY' | 'HOTSPOT' | 'DRAG_AND_DROP' | 'SCENARIO_TASK';
 
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
@@ -184,7 +184,51 @@ export interface DragDropItem extends BaseItemEntity {
 	scoring: DragDropScoringRule;
 }
 
-export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem | HotspotItem | DragDropItem;
+export interface ScenarioAttachment {
+	id: string;
+	label: string;
+	url: string;
+	kind: 'reference' | 'starter' | 'supporting' | 'dataset';
+	contentType?: string;
+	sizeBytes?: number;
+}
+
+export interface ScenarioWorkspaceTemplate {
+	templateRepositoryUrl?: string;
+	branch?: string;
+	instructions?: string[];
+}
+
+export interface ScenarioTestCase {
+	id: string;
+	description?: string;
+	weight?: number;
+}
+
+export interface ScenarioEvaluationConfig {
+	mode: 'manual' | 'automated';
+	automationServiceId?: string;
+	runtime?: string;
+	entryPoint?: string;
+	timeoutSeconds?: number;
+	testCases?: ScenarioTestCase[];
+}
+
+export interface ScenarioScoringRule {
+	maxScore: number;
+	rubric?: { id: string; description?: string; weight?: number }[];
+}
+
+export interface ScenarioTaskItem extends BaseItemEntity {
+	kind: 'SCENARIO_TASK';
+	brief: string;
+	attachments?: ScenarioAttachment[];
+	workspace?: ScenarioWorkspaceTemplate;
+	evaluation: ScenarioEvaluationConfig;
+	scoring: ScenarioScoringRule;
+}
+
+export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem | HotspotItem | DragDropItem | ScenarioTaskItem;
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
@@ -198,6 +242,7 @@ export interface AttemptResponse {
 	numericAnswer?: { value: number; unit?: string };
 	hotspotAnswers?: HotspotPoint[];
 	dragDropAnswers?: { tokenId: string; dropZoneId: string; position?: number }[];
+	scenarioAnswer?: { repositoryUrl?: string; artifactUrl?: string; submissionNotes?: string; files?: { path: string; url?: string }[] };
 }
 
 export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }
