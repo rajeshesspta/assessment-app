@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from './client.js';
-import type { Assessment, Item } from '../../common/types.js';
+import type { Assessment, Attempt, Item } from '../../common/types.js';
 
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
@@ -45,6 +45,35 @@ export function insertAssessment(db: SQLiteDatabase, assessment: Assessment): As
     assessment.updatedAt,
   );
   return assessment;
+}
+
+export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
+  db.prepare(`
+    INSERT INTO attempts (id, tenant_id, assessment_id, user_id, status, responses_json, score, max_score, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      tenant_id = excluded.tenant_id,
+      assessment_id = excluded.assessment_id,
+      user_id = excluded.user_id,
+      status = excluded.status,
+      responses_json = excluded.responses_json,
+      score = excluded.score,
+      max_score = excluded.max_score,
+      created_at = excluded.created_at,
+      updated_at = excluded.updated_at
+  `).run(
+    attempt.id,
+    attempt.tenantId,
+    attempt.assessmentId,
+    attempt.userId,
+    attempt.status,
+    JSON.stringify(attempt.responses),
+    attempt.score ?? null,
+    attempt.maxScore ?? null,
+    attempt.createdAt,
+    attempt.updatedAt,
+  );
+  return attempt;
 }
 
 export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string): Item | undefined {

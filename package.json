@@ -10,7 +10,7 @@
     "test": "vitest run",
     "db:provision": "tsx scripts/sqlite/provision.ts",
     "db:seed": "tsx scripts/sqlite/seed.ts",
-    "db:seed:random": "tsx scripts/sqlite/seed-random-items.ts",
+    "db:seed:random-data": "tsx scripts/sqlite/seed-random-data.ts",
     "db:clear": "tsx scripts/sqlite/clear.ts",
     "db:migrate": "tsx scripts/sqlite/migrate.ts",
     "db:reset": "tsx scripts/sqlite/reset.ts"

@@ -36,6 +36,7 @@ The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by defaul
 
 - `npm run db:provision -- --tenant=<tenantId>`: create or update the tenant database, apply migrations, and (by default) seed a sample item and assessment. Pass `--seed=false` to skip seeding when you only want schema changes.
 - `npm run db:seed -- --tenant=<tenantId>`: idempotently upsert the sample content for the tenant. Safe to re-run after clearing data or rotating tenants.
+- `npm run db:seed:random-data -- --tenant=<tenantId> [--items=12 --assessments=4 --attempts=10 --append]`: populate items, assemble assessments, and create attempts in one shot. Clears tenant tables first unless `--append` is provided.
 - `npm run db:clear -- --tenant=<tenantId>`: wipe attempts/assessments/items for the tenant without touching schema.
 - `npm run db:migrate [-- --tenant=<tenantId> | -- --all-tenants]`: apply migrations to specific tenants or all known tenants (including the tenant directory database).
 - `npm run db:reset -- --tenant=<tenantId>`: clear tenant data and reseed the sample content in one shot.
