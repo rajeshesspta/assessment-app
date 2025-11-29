@@ -6,7 +6,7 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
-export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING';
+export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' | 'ORDERING' | 'SHORT_ANSWER';
 
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
@@ -66,7 +66,24 @@ export interface OrderingItem extends BaseItemEntity {
 	scoring: OrderingScoringRule;
 }
 
-export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem;
+export interface ShortAnswerRubric {
+	keywords?: string[];
+	guidance?: string;
+}
+
+export interface ShortAnswerScoringRule {
+	mode: 'manual' | 'ai_rubric';
+	maxScore: number;
+	aiEvaluatorId?: string;
+}
+
+export interface ShortAnswerItem extends BaseItemEntity {
+	kind: 'SHORT_ANSWER';
+	rubric?: ShortAnswerRubric;
+	scoring: ShortAnswerScoringRule;
+}
+
+export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem;
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 

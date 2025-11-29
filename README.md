@@ -6,10 +6,10 @@ Headless assessment platform MVP in TypeScript + Fastify.
 
 - Auth (API key)
 - Tenant enforcement (header `x-tenant-id`)
-- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking)
+- Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking, short-answer/free response)
 - Assessment Authoring (static list of item IDs)
 - Attempt & Response Capture
-- Scoring (auto for MCQ)
+- Scoring (auto for MCQ + structured types; short-answer routes events for manual/AI rubric review)
 - Analytics (attempt count + average score)
 - Event Bus (in-memory pub/sub)
 
@@ -67,9 +67,10 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 
 ## API (Summary)
 
-- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering)
-- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING` filter)
+- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering, short-answer)
+- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING|SHORT_ANSWER` filter)
 - Ordering responses submit `orderingAnswer` (array of option ids) and support either binary (`mode: all`) or partial pairwise credit (`mode: partial_pairs`).
+- Short-answer responses submit `textAnswer` or `textAnswers[0]`; scoring emits `ShortAnswerEvaluationRequested` events so reviewers or AI rubric services can assign up to the configured `maxScore`.
 - GET /items/:id
 - POST /assessments
 - GET /assessments/:id

@@ -314,6 +314,73 @@ describe('attemptRoutes', () => {
     expect(mocks.itemGetByIdMock).toHaveBeenCalledWith('tenant-1', 'item-1');
   });
 
+  it('defers scoring when short-answer items require review', async () => {
+    const attempt = {
+      id: 'attempt-sa',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-sa',
+      userId: 'user-1',
+      status: 'in_progress' as const,
+      responses: [
+        { itemId: 'item-choice', answerIndexes: [0] },
+        { itemId: 'item-sa', textAnswers: ['Earth tilt drives the seasons.'] },
+      ],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-sa', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-sa',
+      tenantId: 'tenant-1',
+      itemIds: ['item-choice', 'item-sa'],
+    });
+    mocks.itemGetByIdMock.mockImplementation((_tenantId: string, itemId: string) => {
+      if (itemId === 'item-choice') {
+        return {
+          id: 'item-choice',
+          tenantId: 'tenant-1',
+          kind: 'MCQ' as const,
+          prompt: 'Pick true statement',
+          choices: [{ text: 'True' }, { text: 'False' }],
+          answerMode: 'single' as const,
+          correctIndexes: [0],
+          createdAt: 'now',
+          updatedAt: 'now',
+        };
+      }
+      if (itemId === 'item-sa') {
+        return {
+          id: 'item-sa',
+          tenantId: 'tenant-1',
+          kind: 'SHORT_ANSWER' as const,
+          prompt: 'Explain why seasons change.',
+          rubric: { keywords: ['tilt'], guidance: 'Mention Earth tilt' },
+          scoring: { mode: 'manual', maxScore: 3 },
+          createdAt: 'now',
+          updatedAt: 'now',
+        };
+      }
+      return undefined;
+    });
+    mocks.uuidMock.mockReturnValueOnce('short-eval-event');
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-sa/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'submitted', score: 1, maxScore: 4 });
+    expect(mocks.publishMock).toHaveBeenCalledTimes(1);
+    expect(mocks.publishMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'ShortAnswerEvaluationRequested',
+      payload: expect.objectContaining({
+        attemptId: 'attempt-sa',
+        itemId: 'item-sa',
+        mode: 'manual',
+        maxScore: 3,
+        responseText: 'Earth tilt drives the seasons.',
+      }),
+    }));
+  });
+
   it('scores multi-answer items when all correct indexes are provided', async () => {
     const attempt = {
       id: 'attempt-2',

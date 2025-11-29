@@ -62,13 +62,30 @@ const orderingSchema = z.object({
     .default({ mode: 'all' }),
 });
 
-const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema]);
+const shortAnswerSchema = z.object({
+  kind: z.literal('SHORT_ANSWER'),
+  prompt: z.string().min(1),
+  rubric: z
+    .object({
+      keywords: z.array(z.string().min(1).max(80)).max(10).optional(),
+      guidance: z.string().min(1).max(500).optional(),
+    })
+    .optional(),
+  scoring: z
+    .object({
+      mode: z.enum(['manual', 'ai_rubric']).default('manual'),
+      maxScore: z.number().int().positive().max(10).default(1),
+      aiEvaluatorId: z.string().min(1).optional(),
+    }),
+});
+
+const createSchema = z.discriminatedUnion('kind', [mcqSchema, trueFalseSchema, fillBlankSchema, matchingSchema, orderingSchema, shortAnswerSchema]);
 
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
-  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING']).optional(),
+  kind: z.enum(['MCQ', 'TRUE_FALSE', 'FILL_IN_THE_BLANK', 'MATCHING', 'ORDERING', 'SHORT_ANSWER']).optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -167,78 +184,100 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       reply.code(201);
       return item;
     }
-
-  if (parsed.kind === 'MATCHING') {
-    const promptIds = new Set(parsed.prompts.map(p => p.id));
-    const targetIds = new Set(parsed.targets.map(t => t.id));
-    if (promptIds.size !== parsed.prompts.length) {
-      reply.code(400);
-      return { error: 'Prompt ids must be unique' };
-    }
-    if (targetIds.size !== parsed.targets.length) {
-      reply.code(400);
-      return { error: 'Target ids must be unique' };
-    }
-    const invalidReference = parsed.prompts.find(prompt => !targetIds.has(prompt.correctTargetId));
-    if (invalidReference) {
-      reply.code(400);
-      return { error: `Unknown target id: ${invalidReference.correctTargetId}` };
-    }
-
-    const item = createItem({
-      id,
-      tenantId,
-      kind: 'MATCHING',
-      prompt: parsed.prompt,
-      prompts: parsed.prompts,
-      targets: parsed.targets,
-      scoring: parsed.scoring,
-    });
-    repository.save(item);
-    eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
-    reply.code(201);
-    return item;
-  }
-
-  if (parsed.kind === 'ORDERING') {
-    const optionIds = new Set(parsed.options.map(option => option.id));
-    if (optionIds.size !== parsed.options.length) {
-      reply.code(400);
-      return { error: 'Option ids must be unique' };
-    }
-    if (parsed.correctOrder.length !== parsed.options.length) {
-      reply.code(400);
-      return { error: 'correctOrder must include every option exactly once' };
-    }
-    const invalid = parsed.correctOrder.find(id => !optionIds.has(id));
-    if (invalid) {
-      reply.code(400);
-      return { error: `Unknown option id: ${invalid}` };
-    }
-    const seen = new Set<string>();
-    for (const id of parsed.correctOrder) {
-      if (seen.has(id)) {
+    if (parsed.kind === 'MATCHING') {
+      const promptIds = new Set(parsed.prompts.map(p => p.id));
+      const targetIds = new Set(parsed.targets.map(t => t.id));
+      if (promptIds.size !== parsed.prompts.length) {
         reply.code(400);
-        return { error: 'correctOrder cannot contain duplicates' };
+        return { error: 'Prompt ids must be unique' };
       }
-      seen.add(id);
-    }
-    const item = createItem({
-      id,
-      tenantId,
-      kind: 'ORDERING',
-      prompt: parsed.prompt,
-      options: parsed.options,
-      correctOrder: parsed.correctOrder,
-      scoring: parsed.scoring,
-    });
-    repository.save(item);
-    eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
-    reply.code(201);
-    return item;
-  }
+      if (targetIds.size !== parsed.targets.length) {
+        reply.code(400);
+        return { error: 'Target ids must be unique' };
+      }
+      const invalidReference = parsed.prompts.find(prompt => !targetIds.has(prompt.correctTargetId));
+      if (invalidReference) {
+        reply.code(400);
+        return { error: `Unknown target id: ${invalidReference.correctTargetId}` };
+      }
 
-  return reply.code(400).send({ error: 'Unsupported item kind' });
+      const item = createItem({
+        id,
+        tenantId,
+        kind: 'MATCHING',
+        prompt: parsed.prompt,
+        prompts: parsed.prompts,
+        targets: parsed.targets,
+        scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    if (parsed.kind === 'ORDERING') {
+      const optionIds = new Set(parsed.options.map(option => option.id));
+      if (optionIds.size !== parsed.options.length) {
+        reply.code(400);
+        return { error: 'Option ids must be unique' };
+      }
+      if (parsed.correctOrder.length !== parsed.options.length) {
+        reply.code(400);
+        return { error: 'correctOrder must include every option exactly once' };
+      }
+      const invalid = parsed.correctOrder.find(id => !optionIds.has(id));
+      if (invalid) {
+        reply.code(400);
+        return { error: `Unknown option id: ${invalid}` };
+      }
+      const seen = new Set<string>();
+      for (const id of parsed.correctOrder) {
+        if (seen.has(id)) {
+          reply.code(400);
+          return { error: 'correctOrder cannot contain duplicates' };
+        }
+        seen.add(id);
+      }
+      const item = createItem({
+        id,
+        tenantId,
+        kind: 'ORDERING',
+        prompt: parsed.prompt,
+        options: parsed.options,
+        correctOrder: parsed.correctOrder,
+        scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    if (parsed.kind === 'SHORT_ANSWER') {
+      if (parsed.scoring.mode === 'ai_rubric' && !parsed.scoring.aiEvaluatorId) {
+        reply.code(400);
+        return { error: 'ai_rubric scoring requires aiEvaluatorId' };
+      }
+      const keywords = parsed.rubric?.keywords
+        ?.map(keyword => keyword.trim())
+        .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index);
+      const rubric = parsed.rubric ? { ...parsed.rubric, keywords } : undefined;
+      const item = createItem({
+        id,
+        tenantId,
+        kind: 'SHORT_ANSWER',
+        prompt: parsed.prompt,
+        rubric,
+        scoring: parsed.scoring,
+      });
+      repository.save(item);
+      eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
+      reply.code(201);
+      return item;
+    }
+
+    return reply.code(400).send({ error: 'Unsupported item kind' });
   });
 
   app.get('/:id', async (req, reply) => {

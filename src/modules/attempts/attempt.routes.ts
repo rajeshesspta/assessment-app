@@ -116,6 +116,17 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     if (attempt.status !== 'in_progress') { reply.code(400); return { error: 'Already submitted' }; }
     const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId)!;
     let score = 0; let maxScore = 0;
+    const pendingShortAnswerEvaluations: Array<{
+      attemptId: string;
+      itemId: string;
+      prompt: string;
+      mode: 'manual' | 'ai_rubric';
+      maxScore: number;
+      aiEvaluatorId?: string;
+      rubricKeywords?: string[];
+      rubricGuidance?: string;
+      responseText?: string;
+    }> = [];
     for (const itemId of assessment.itemIds) {
       const item = itemRepository.getById(tenantId, itemId); if (!item) continue;
       const response = attempt.responses.find(r => r.itemId === itemId);
@@ -199,6 +210,22 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         score += correctPairs;
         continue;
       }
+      if (item.kind === 'SHORT_ANSWER') {
+        const shortAnswerScore = item.scoring?.maxScore ?? 1;
+        maxScore += shortAnswerScore;
+        pendingShortAnswerEvaluations.push({
+          attemptId: attempt.id,
+          itemId: item.id,
+          prompt: item.prompt,
+          mode: item.scoring.mode,
+          maxScore: shortAnswerScore,
+          aiEvaluatorId: item.scoring.aiEvaluatorId,
+          rubricKeywords: item.rubric?.keywords,
+          rubricGuidance: item.rubric?.guidance,
+          responseText: response?.textAnswers?.[0]?.trim(),
+        });
+        continue;
+      }
       maxScore += 1;
       const correct = new Set(item.correctIndexes);
       const answers = response?.answerIndexes ? Array.from(new Set(response.answerIndexes)).sort((a, b) => a - b) : [];
@@ -211,10 +238,34 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         score++;
       }
     }
-    attempt.score = score; attempt.maxScore = maxScore; attempt.status = 'scored';
+    attempt.score = score; attempt.maxScore = maxScore;
+    const hasPendingShortAnswer = pendingShortAnswerEvaluations.length > 0;
+    attempt.status = hasPendingShortAnswer ? 'submitted' : 'scored';
     attempt.updatedAt = new Date().toISOString();
     attemptRepository.save(attempt);
-    eventBus.publish({ id: uuid(), type: 'AttemptScored', occurredAt: new Date().toISOString(), tenantId: attempt.tenantId, payload: { attemptId: id, score } });
+    if (hasPendingShortAnswer) {
+      for (const evaluation of pendingShortAnswerEvaluations) {
+        eventBus.publish({
+          id: uuid(),
+          type: 'ShortAnswerEvaluationRequested',
+          occurredAt: new Date().toISOString(),
+          tenantId: attempt.tenantId,
+          payload: {
+            attemptId: evaluation.attemptId,
+            itemId: evaluation.itemId,
+            prompt: evaluation.prompt,
+            mode: evaluation.mode,
+            maxScore: evaluation.maxScore,
+            aiEvaluatorId: evaluation.aiEvaluatorId,
+            rubricKeywords: evaluation.rubricKeywords,
+            rubricGuidance: evaluation.rubricGuidance,
+            responseText: evaluation.responseText,
+          },
+        });
+      }
+    } else {
+      eventBus.publish({ id: uuid(), type: 'AttemptScored', occurredAt: new Date().toISOString(), tenantId: attempt.tenantId, payload: { attemptId: id, score } });
+    }
     return attempt;
   });
 

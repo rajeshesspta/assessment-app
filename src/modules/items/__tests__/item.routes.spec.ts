@@ -279,6 +279,49 @@ describe('itemRoutes', () => {
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'ORDERING' }));
   });
 
+  it('creates a short-answer item and deduplicates keywords', async () => {
+    uuidMock.mockReturnValueOnce('sa-item-id').mockReturnValueOnce('event-id-5');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'SHORT_ANSWER',
+        prompt: 'Explain gravity.',
+        rubric: {
+          keywords: [' gravity ', 'mass', 'gravity'],
+          guidance: 'Mention mass and attraction.',
+        },
+        scoring: { mode: 'ai_rubric', maxScore: 4, aiEvaluatorId: 'azure-ai' },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: 'sa-item-id',
+      tenantId: 'tenant-1',
+      kind: 'SHORT_ANSWER',
+      rubric: { keywords: ['gravity', 'mass'], guidance: 'Mention mass and attraction.' },
+      scoring: { mode: 'ai_rubric', maxScore: 4, aiEvaluatorId: 'azure-ai' },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'SHORT_ANSWER' }));
+  });
+
+  it('requires aiEvaluatorId when ai_rubric mode selected', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'SHORT_ANSWER',
+        prompt: 'Explain gravity.',
+        scoring: { mode: 'ai_rubric', maxScore: 3 },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it('returns an item when found', async () => {
     const storedItem = {
       id: 'item-123',

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadConfig } from '../../src/config/index.js';
 import { createSQLiteTenantClient } from '../../src/infrastructure/sqlite/client.js';
 import { insertAssessment, insertAttempt, insertItem } from '../../src/infrastructure/sqlite/seeds.js';
-import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item, MatchingItem, OrderingItem } from '../../src/common/types.js';
+import type { Assessment, Attempt, ChoiceItem, FillBlankItem, Item, MatchingItem, OrderingItem, ShortAnswerItem } from '../../src/common/types.js';
 import { clearTenantTables } from './utils.js';
 
 interface SeedOptions {
@@ -235,6 +235,45 @@ function buildRandomMatchingItem(tenantId: string): Item {
     } satisfies Item;
   }
 
+const shortAnswerTemplates = [
+  {
+    prompt: 'Explain how photosynthesis converts sunlight into chemical energy.',
+    keywords: ['sunlight', 'chlorophyll', 'glucose'],
+  },
+  {
+    prompt: 'Describe a mitigation strategy for distributed denial-of-service attacks.',
+    keywords: ['rate limit', 'cdn', 'filtering'],
+  },
+  {
+    prompt: 'Summarize the causes of the American Civil War.',
+    keywords: ['slavery', 'states rights', 'secession'],
+  },
+];
+
+function buildRandomShortAnswerItem(tenantId: string): Item {
+  const template = shortAnswerTemplates[randomInt(shortAnswerTemplates.length)];
+  const now = new Date().toISOString();
+  const useAi = Math.random() > 0.6;
+  const scoring = {
+    mode: useAi ? 'ai_rubric' : 'manual',
+    maxScore: useAi ? 5 : 3,
+    aiEvaluatorId: useAi ? 'azure-openai-default' : undefined,
+  } satisfies ShortAnswerItem['scoring'];
+  const rubric = {
+    keywords: template.keywords,
+  } satisfies ShortAnswerItem['rubric'];
+  return {
+    id: `random-short-item-${randomUUID()}`,
+    tenantId,
+    kind: 'SHORT_ANSWER',
+    prompt: template.prompt,
+    rubric,
+    scoring,
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Item;
+}
+
 function buildRandomItem(tenantId: string, index: number): Item {
     const builders = [
       buildRandomMCQItem,
@@ -242,15 +281,17 @@ function buildRandomItem(tenantId: string, index: number): Item {
       buildRandomFillBlankItem,
       buildRandomMatchingItem,
       buildRandomOrderingItem,
+      buildRandomShortAnswerItem,
     ] as const;
   if (index < builders.length) {
     return builders[index](tenantId);
   }
   const roll = Math.random();
-    if (roll < 0.2) return buildRandomFillBlankItem(tenantId);
-    if (roll < 0.4) return buildRandomTrueFalseItem(tenantId);
-    if (roll < 0.6) return buildRandomMatchingItem(tenantId);
-    if (roll < 0.8) return buildRandomOrderingItem(tenantId);
+    if (roll < 0.17) return buildRandomFillBlankItem(tenantId);
+    if (roll < 0.34) return buildRandomTrueFalseItem(tenantId);
+    if (roll < 0.51) return buildRandomMatchingItem(tenantId);
+    if (roll < 0.68) return buildRandomOrderingItem(tenantId);
+    if (roll < 0.85) return buildRandomShortAnswerItem(tenantId);
     return buildRandomMCQItem(tenantId);
 }
 
@@ -284,14 +325,25 @@ function isOrderingItem(item: Item): item is OrderingItem {
   return item.kind === 'ORDERING';
 }
 
+function isShortAnswerItem(item: Item): item is ShortAnswerItem {
+  return item.kind === 'SHORT_ANSWER';
+}
+
 function buildRandomAttempt(
   tenantId: string,
   assessment: Assessment,
   itemById: Map<string, Item>,
 ): Attempt {
   const statuses: Attempt['status'][] = ['in_progress', 'submitted', 'scored'];
-  const status = statuses[randomInt(statuses.length)];
+  let status = statuses[randomInt(statuses.length)];
   const now = new Date().toISOString();
+  const containsShortAnswer = assessment.itemIds.some(itemId => {
+    const item = itemById.get(itemId);
+    return item ? isShortAnswerItem(item) : false;
+  });
+  if (containsShortAnswer && status === 'scored') {
+    status = 'submitted';
+  }
   const responses = assessment.itemIds.map(itemId => {
     const item = itemById.get(itemId);
     if (!item) {
@@ -324,6 +376,12 @@ function buildRandomAttempt(
       });
       return { itemId, textAnswers: answers };
     }
+    if (isShortAnswerItem(item)) {
+      const responseText = Math.random() > 0.4
+        ? 'Seasonal shifts occur because Earth is tilted on its axis.'
+        : 'Need to research more before answering.';
+      return { itemId, textAnswers: [responseText] };
+    }
     if (isChoiceItem(item) && item.answerMode === 'single') {
       return { itemId, answerIndexes: [randomInt(item.choices.length)] };
     }
@@ -349,12 +407,18 @@ function buildRandomAttempt(
     if (isFillBlankItem(item) && item.scoring.mode === 'partial') {
       return total + item.blanks.length;
     }
+    if (isShortAnswerItem(item)) {
+      return total + (item.scoring?.maxScore ?? 1);
+    }
     return total + 1;
   }, 0);
   const score = status === 'scored'
     ? responses.reduce((total, response) => {
         const item = itemById.get(response.itemId);
         if (!item) return total;
+        if (isShortAnswerItem(item)) {
+          return total;
+        }
         if (isFillBlankItem(item)) {
           const provided = response.textAnswers ?? [];
           const blanksCorrect = item.blanks.reduce((count, blank, index) => {

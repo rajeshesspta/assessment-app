@@ -3,5 +3,6 @@ export const EVENT_TYPES = {
   ItemCreated: 'ItemCreated',
   AssessmentCreated: 'AssessmentCreated',
   AttemptStarted: 'AttemptStarted',
-  AttemptScored: 'AttemptScored'
+  AttemptScored: 'AttemptScored',
+  ShortAnswerEvaluationRequested: 'ShortAnswerEvaluationRequested'
 } as const;
