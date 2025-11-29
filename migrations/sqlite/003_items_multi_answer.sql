@@ -1,6 +1,8 @@
 PRAGMA foreign_keys = OFF;
 BEGIN TRANSACTION;
 
+DROP INDEX IF EXISTS idx_items_tenant_id;
+
 ALTER TABLE items RENAME TO items_old;
 
 CREATE TABLE items (
