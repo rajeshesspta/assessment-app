@@ -5,16 +5,16 @@ import Fastify from 'fastify';
 const mocks = vi.hoisted(() => ({
   registerAuth: vi.fn(async (_req: FastifyRequest, _reply: FastifyReply) => {}),
   itemRoutes: vi.fn(async (app: FastifyInstance, _opts?: unknown) => {
-    app.get('/items/mock', async () => ({ ok: true }));
+    app.get('/mock', async () => ({ ok: true }));
   }),
   assessmentRoutes: vi.fn(async (app: FastifyInstance, _opts?: unknown) => {
-    app.get('/assessments/mock', async () => ({ ok: true }));
+    app.get('/mock', async () => ({ ok: true }));
   }),
   attemptRoutes: vi.fn(async (app: FastifyInstance, _opts?: unknown) => {
-    app.get('/attempts/mock', async () => ({ ok: true }));
+    app.get('/mock', async () => ({ ok: true }));
   }),
   analyticsRoutes: vi.fn(async (app: FastifyInstance, _opts?: unknown) => {
-    app.get('/analytics/mock', async () => ({ ok: true }));
+    app.get('/mock', async () => ({ ok: true }));
   }),
 }));
 
@@ -60,6 +60,15 @@ describe('buildApp', () => {
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: 'ok' });
+    const secured = await app.inject({
+      method: 'GET',
+      url: '/items/mock',
+      headers: {
+        'x-api-key': 'test',
+        'x-tenant-id': 'tenant-1',
+      },
+    });
+    expect(secured.statusCode).toBe(200);
     expect(mocks.registerAuth).toHaveBeenCalled();
     expect(mocks.itemRoutes).toHaveBeenCalled();
     expect(mocks.assessmentRoutes).toHaveBeenCalled();

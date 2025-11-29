@@ -11,12 +11,23 @@ const createSchema = z.object({
   correctIndex: z.number().int().nonnegative(),
 });
 
+const listQuerySchema = z.object({
+  search: z.string().min(1).optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+  offset: z.coerce.number().int().nonnegative().optional(),
+});
+
 export interface ItemRoutesOptions {
   repository: ItemRepository;
 }
 
 export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOptions) {
   const { repository } = options;
+  app.get('/', async req => {
+    const tenantId = (req as any).tenantId as string;
+    const { search, limit, offset } = listQuerySchema.parse(req.query ?? {});
+    return repository.list(tenantId, { search, limit: limit ?? 10, offset: offset ?? 0 });
+  });
   app.post('/', async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
     const parsed = createSchema.parse(req.body);

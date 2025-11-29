@@ -25,7 +25,12 @@ export function buildApp(deps: AppDependencies = {}) {
   const tenantRepository = deps.tenantRepository ?? createInMemoryTenantRepository();
 
   // Register auth & tenant enforcement
-  app.addHook('onRequest', registerAuth);
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.raw.url?.startsWith('/health')) {
+      return;
+    }
+    await registerAuth(request, reply);
+  });
 
   // Routes
   app.register(itemRoutes, { prefix: '/items', repository: repositories.item });

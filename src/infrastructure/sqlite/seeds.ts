@@ -1,14 +1,6 @@
 import type { SQLiteDatabase } from './client.js';
 import type { Assessment, Item } from '../../common/types.js';
 
-function safeRollback(db: SQLiteDatabase) {
-  try {
-    db.exec('ROLLBACK');
-  } catch {
-    // rollback can fail when no transaction is active; ignore in that case
-  }
-}
-
 export function insertItem(db: SQLiteDatabase, item: Item): Item {
   db.prepare(`
     INSERT INTO items (id, tenant_id, kind, prompt, choices_json, correct_index, created_at, updated_at)
@@ -76,36 +68,55 @@ export function getItemById(db: SQLiteDatabase, tenantId: string, itemId: string
   } as Item;
 }
 
+function tenantSampleItems(seedTenantId: string) {
+  return [
+    {
+      id: 'sample-item-1',
+      prompt: 'Capital of France?',
+      choices: [{ text: 'Paris' }, { text: 'Berlin' }, { text: 'Madrid' }, { text: 'Rome' }],
+      correctIndex: 0,
+    },
+    {
+      id: 'sample-item-2',
+      prompt: '2 + 2 = ?',
+      choices: [{ text: '3' }, { text: '4' }, { text: '5' }],
+      correctIndex: 1,
+    },
+    {
+      id: 'sample-item-3',
+      prompt: 'Pick the odd number',
+      choices: [{ text: '6' }, { text: '8' }, { text: '9' }, { text: '10' }],
+      correctIndex: 2,
+    },
+  ].map(item => ({ ...item, tenantId: seedTenantId }));
+}
+
 export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): void {
-  const existing = getItemById(db, tenantId, 'sample-item-2');
+  const sampleItems = tenantSampleItems(tenantId);
+  const existing = getItemById(db, tenantId, sampleItems[0].id);
   if (existing) {
     console.log('Seed data already exists for tenant:', tenantId);
     return;
   }
   const now = new Date().toISOString();
-  db.exec('BEGIN');
-  try {
+  for (const item of sampleItems) {
     insertItem(db, {
-      id: 'sample-item-2',
+      id: item.id,
       tenantId,
       kind: 'MCQ',
-      prompt: '2 + 2?',
-      choices: [{ text: '3' }, { text: '4' }],
-      correctIndex: 1,
+      prompt: item.prompt,
+      choices: item.choices,
+      correctIndex: item.correctIndex,
       createdAt: now,
       updatedAt: now,
     });
-    insertAssessment(db, {
-      id: 'sample-assessment-1',
-      tenantId,
-      title: 'Sample Assessment',
-      itemIds: ['sample-item-2'],
-      createdAt: now,
-      updatedAt: now,
-    });
-    db.exec('COMMIT');
-  } catch (error) {
-    safeRollback(db);
-    throw error;
   }
+  insertAssessment(db, {
+    id: 'sample-assessment-1',
+    tenantId,
+    title: 'Sample Assessment',
+    itemIds: sampleItems.map(item => item.id),
+    createdAt: now,
+    updatedAt: now,
+  });
 }

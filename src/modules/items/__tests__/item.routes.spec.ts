@@ -1,9 +1,10 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { saveMock, getByIdMock, publishMock, uuidMock } = vi.hoisted(() => ({
+const { saveMock, getByIdMock, listMock, publishMock, uuidMock } = vi.hoisted(() => ({
   saveMock: vi.fn(),
   getByIdMock: vi.fn(),
+  listMock: vi.fn(),
   publishMock: vi.fn(),
   uuidMock: vi.fn(),
 }));
@@ -30,6 +31,7 @@ async function buildTestApp() {
     repository: {
       save: saveMock,
       getById: getByIdMock,
+      list: listMock,
     },
   });
   return app;
@@ -41,11 +43,34 @@ describe('itemRoutes', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     saveMock.mockImplementation(entity => entity);
+    listMock.mockReturnValue([]);
     app = await buildTestApp();
   });
 
   afterEach(async () => {
     await app.close();
+  });
+
+  it('lists items with default limit', async () => {
+    const results = [{ id: '1' }] as any;
+    listMock.mockReturnValueOnce(results);
+
+    const response = await app.inject({ method: 'GET', url: '/items' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(results);
+    expect(listMock).toHaveBeenCalledWith('tenant-1', { search: undefined, limit: 10, offset: 0 });
+  });
+
+  it('lists items filtered by search query with paging', async () => {
+    const results = [{ id: '2' }] as any;
+    listMock.mockReturnValueOnce(results);
+
+    const response = await app.inject({ method: 'GET', url: '/items?search=math&limit=5&offset=10' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(results);
+    expect(listMock).toHaveBeenCalledWith('tenant-1', { search: 'math', limit: 5, offset: 10 });
   });
 
   it('creates an item when payload is valid', async () => {

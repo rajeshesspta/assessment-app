@@ -9,6 +9,14 @@ function ensureMigrationsTable(db: SQLiteDatabase) {
   )`);
 }
 
+function safeRollback(db: SQLiteDatabase) {
+  try {
+    db.exec('ROLLBACK');
+  } catch {
+    // ignore rollback errors when no transaction is active
+  }
+}
+
 export function runMigrations(db: SQLiteDatabase, migrationsDir: string): void {
   if (!migrationsDir) {
     throw new Error('SQLite migrations directory not configured');
@@ -29,13 +37,10 @@ export function runMigrations(db: SQLiteDatabase, migrationsDir: string): void {
     }
     const fullPath = path.join(resolvedDir, file);
     const sql = fs.readFileSync(fullPath, 'utf8');
-    db.exec('BEGIN');
     try {
       db.exec(sql);
       db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
-      db.exec('COMMIT');
     } catch (error) {
-      db.exec('ROLLBACK');
       throw error;
     }
   }
