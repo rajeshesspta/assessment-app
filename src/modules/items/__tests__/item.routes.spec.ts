@@ -80,6 +80,7 @@ describe('itemRoutes', () => {
       method: 'POST',
       url: '/items',
       payload: {
+        kind: 'MCQ',
         prompt: 'What is 2 + 2?',
         choices: [{ text: '3' }, { text: '4' }],
         correctIndexes: [1],
@@ -114,6 +115,7 @@ describe('itemRoutes', () => {
       method: 'POST',
       url: '/items',
       payload: {
+        kind: 'MCQ',
         prompt: 'Capital of France?',
         choices: [{ text: 'Paris' }, { text: 'Berlin' }],
         correctIndexes: [5],
@@ -131,6 +133,7 @@ describe('itemRoutes', () => {
       method: 'POST',
       url: '/items',
       payload: {
+        kind: 'MCQ',
         prompt: 'Select prime numbers',
         choices: [{ text: '2' }, { text: '3' }, { text: '4' }],
         answerMode: 'multiple',
@@ -141,6 +144,33 @@ describe('itemRoutes', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: 'Multi-answer items require at least two correct indexes' });
     expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  it('creates a true/false item', async () => {
+    uuidMock.mockReturnValueOnce('tf-item-id').mockReturnValueOnce('event-id-2');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'TRUE_FALSE',
+        prompt: 'The sky is blue.',
+        answerIsTrue: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body).toMatchObject({
+      id: 'tf-item-id',
+      tenantId: 'tenant-1',
+      kind: 'TRUE_FALSE',
+      prompt: 'The sky is blue.',
+      choices: [{ text: 'True' }, { text: 'False' }],
+      answerMode: 'single',
+      correctIndexes: [0],
+    });
+    expect(saveMock).toHaveBeenCalledWith(body);
   });
 
   it('returns an item when found', async () => {

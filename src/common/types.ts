@@ -6,8 +6,10 @@ export type MCQChoice = { text: string };
 
 export type ItemAnswerMode = 'single' | 'multiple';
 
+export type ItemKind = 'MCQ' | 'TRUE_FALSE';
+
 export interface Item extends BaseEntity {
-	kind: 'MCQ';
+	kind: ItemKind;
 	prompt: string;
 	choices: MCQChoice[];
 	answerMode: ItemAnswerMode;

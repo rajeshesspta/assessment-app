@@ -104,21 +104,31 @@ function tenantSampleItems(seedTenantId: string) {
   return [
     {
       id: 'sample-item-1',
+      kind: 'MCQ' as Item['kind'],
       prompt: 'Capital of France?',
       choices: [{ text: 'Paris' }, { text: 'Berlin' }, { text: 'Madrid' }, { text: 'Rome' }],
       correctIndexes: [0],
     },
     {
       id: 'sample-item-2',
+      kind: 'MCQ' as Item['kind'],
       prompt: '2 + 2 = ?',
       choices: [{ text: '3' }, { text: '4' }, { text: '5' }],
       correctIndexes: [1],
     },
     {
       id: 'sample-item-3',
+      kind: 'MCQ' as Item['kind'],
       prompt: 'Select the prime numbers',
       choices: [{ text: '2' }, { text: '3' }, { text: '4' }, { text: '5' }],
       correctIndexes: [0, 1, 3],
+    },
+    {
+      id: 'sample-item-4',
+      kind: 'TRUE_FALSE' as Item['kind'],
+      prompt: 'The Pacific Ocean is the largest on Earth.',
+      choices: [{ text: 'True' }, { text: 'False' }],
+      correctIndexes: [0],
     },
   ].map(item => ({ ...item, tenantId: seedTenantId }));
 }
@@ -132,12 +142,14 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
   }
   const now = new Date().toISOString();
   for (const item of sampleItems) {
+    const kind = item.kind ?? 'MCQ';
+    const choices = item.choices ?? (kind === 'TRUE_FALSE' ? [{ text: 'True' }, { text: 'False' }] : []);
     insertItem(db, {
       id: item.id,
       tenantId,
-      kind: 'MCQ',
+      kind,
       prompt: item.prompt,
-      choices: item.choices,
+      choices,
       answerMode: item.correctIndexes.length > 1 ? 'multiple' : 'single',
       correctIndexes: item.correctIndexes,
       createdAt: now,

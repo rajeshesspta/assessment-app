@@ -53,7 +53,7 @@ function shuffle<T>(input: T[]): T[] {
   return copy;
 }
 
-function buildRandomItem(tenantId: string): Item {
+function buildRandomMCQItem(tenantId: string): Item {
   const a = randomInt(40) + 10;
   const b = randomInt(40) + 5;
   const correctValue = a + b;
@@ -83,6 +83,33 @@ function buildRandomItem(tenantId: string): Item {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+const trueFalseFacts = [
+  { prompt: 'The Earth orbits the Sun.', answerIsTrue: true },
+  { prompt: 'Sound travels faster than light.', answerIsTrue: false },
+  { prompt: 'Water boils at 100°C at sea level.', answerIsTrue: true },
+  { prompt: 'The human body has four lungs.', answerIsTrue: false },
+];
+
+function buildRandomTrueFalseItem(tenantId: string): Item {
+  const fact = trueFalseFacts[randomInt(trueFalseFacts.length)];
+  const now = new Date().toISOString();
+  return {
+    id: `random-tf-item-${randomUUID()}`,
+    tenantId,
+    kind: 'TRUE_FALSE',
+    prompt: fact.prompt,
+    choices: [{ text: 'True' }, { text: 'False' }],
+    answerMode: 'single',
+    correctIndexes: [fact.answerIsTrue ? 0 : 1],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function buildRandomItem(tenantId: string): Item {
+  return Math.random() < 0.25 ? buildRandomTrueFalseItem(tenantId) : buildRandomMCQItem(tenantId);
 }
 
 function buildRandomAssessment(tenantId: string, items: Item[], index: number): Assessment {
