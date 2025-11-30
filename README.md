@@ -1,6 +1,6 @@
 # Assessment App (MVP)
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue) ![Build](https://img.shields.io/badge/build-passing-brightgreen)
+![Version](https://img.shields.io/badge/version-0.1.1-blue) ![Build](https://img.shields.io/badge/build-passing-brightgreen)
 
 Headless assessment platform MVP in TypeScript + Fastify.
 
