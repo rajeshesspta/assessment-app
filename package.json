@@ -3,11 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/dev-portal"
+  ],
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "dev:portal": "npm run dev --workspace dev-portal",
+    "build:portal": "npm run build --workspace dev-portal",
     "db:seed:init": "tsx scripts/sqlite/seed-init.ts",
     "db:provision": "tsx scripts/sqlite/provision.ts",
     "db:seed": "tsx scripts/sqlite/seed.ts",
@@ -19,6 +24,8 @@
   },
   "dependencies": {
     "@azure/cosmos": "^4.8.0",
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^1.10.2",
     "fastify": "^4.27.2",
     "pino": "^9.0.0",
     "sql.js": "^1.10.3",

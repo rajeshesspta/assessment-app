@@ -74,6 +74,19 @@ npm run dev
 
 The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by default. Cosmos DB is optional; with the default `AUTH_PROVIDER=memory` no emulator or cloud dependency is required.
 
+-### Developer Portal
+
+- `npm run dev:portal` launches the Vite-powered portal at `http://127.0.0.1:5173`. Set `VITE_API_BASE_URL` to point the portal at a remote API (defaults to `http://localhost:3000`).
+- `npm run build:portal` outputs a static bundle in `apps/dev-portal/dist` (serve via any static host).
+- The portal proxies `/docs` to the API during local dev so interactive Swagger UI continues to function without extra CORS wiring.
+- See `docs/dev-portal.md` for an end-to-end workflow covering bootstrap scripts, Postman imports, and deployment tips.
+
+### API Docs
+
+- `GET /docs`: Interactive Swagger UI backed by the live OpenAPI spec.
+- `GET /docs/json`: Raw OpenAPI 3.0 document (useful for Postman/Insomnia imports).
+- Set `API_PUBLIC_URL` to change the server URL advertised inside the spec (defaults to `http://localhost:3000`).
+
 ### Database Provisioning (SQLite)
 
 The following commands help you manage the local SQLite databases.
