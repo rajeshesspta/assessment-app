@@ -707,3 +707,19 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
     });
   }
 }
+
+export function seedSuperAdmin(db: SQLiteDatabase, tenantId: string, email: string = 'admin@bettershift.com'): void {
+  const now = new Date().toISOString();
+  insertUser(db, {
+    id: 'super-admin-user',
+    tenantId,
+    role: 'SUPER_ADMIN',
+    email,
+    displayName: 'System Super Admin',
+    status: 'active',
+    createdBy: 'system',
+    createdAt: now,
+    updatedAt: now,
+  });
+  console.log(`Seeded Super Admin: ${email} (${tenantId})`);
+}

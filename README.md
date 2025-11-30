@@ -76,12 +76,44 @@ The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by defaul
 
 ### Database Provisioning (SQLite)
 
-- `npm run db:provision -- --tenant=<tenantId>`: create or update the tenant database, apply migrations, and (by default) seed a sample item and assessment. Pass `--seed=false` to skip seeding when you only want schema changes.
-- `npm run db:seed -- --tenant=<tenantId>`: idempotently upsert the sample content for the tenant. Safe to re-run after clearing data or rotating tenants.
-- `npm run db:seed:random-data -- --tenant=<tenantId> [--items=12 --assessments=4 --attempts=10 --append]`: populate items (covering every kind, including scenario/coding tasks), assemble assessments, and create attempts in one shot. Scenario items receive realistic repository/artifact submissions so downstream automation can be tested. Clears tenant tables first unless `--append` is provided.
-- `npm run db:clear -- --tenant=<tenantId>`: wipe attempts/assessments/items for the tenant without touching schema.
-- `npm run db:migrate [-- --tenant=<tenantId> | -- --all-tenants]`: apply migrations to specific tenants or all known tenants (including the tenant directory database). Use this after pulling to apply `013_users_table.sql`, which backs the user management APIs.
-- `npm run db:reset -- --tenant=<tenantId>`: clear tenant data and reseed the sample content in one shot.
+The following commands help you manage the local SQLite databases.
+
+#### 1. System Initialization (Run First)
+
+- `npm run db:seed:init`: **Bootstraps the system.** Creates the System Tenant (`sys-tenant`) and the first Super Admin user (`admin@bettershift.com`).
+  - _Why:_ You cannot use the API without a valid user/tenant. This script creates the "root" user directly in the database.
+  - _Alias:_ `npm run db:bootstrap` (does the same thing).
+
+#### 2. Tenant Management
+
+- `npm run db:provision -- --tenant=<tenantId>`: **Creates or updates a tenant database.**
+  - Applies the latest schema migrations.
+  - By default, seeds a sample item and assessment (pass `--seed=false` to skip).
+  - _Use when:_ You want to create a new tenant manually or update an existing one's schema.
+
+#### 3. Data Seeding (Development)
+
+- `npm run db:seed -- --tenant=<tenantId>`: **Seeds sample content.**
+  - Adds a basic set of items and assessments to a specific tenant.
+  - Safe to run multiple times (idempotent).
+  - _Use when:_ You have a blank tenant and want some "Hello World" content.
+- `npm run db:seed:random-data -- --tenant=<tenantId> [--items=12 --assessments=4 --attempts=10 --append]`: **Seeds bulk random data.**
+  - Generates realistic data for load testing or demos (Items, Assessments, Attempts).
+  - _Use when:_ You need a "lived-in" database to test analytics or performance.
+
+#### 4. Maintenance & Utilities
+
+- `npm run db:migrate [-- --tenant=<tenantId> | -- --all-tenants]`: **Applies schema changes.**
+  - Runs SQL migration files (e.g., `013_users_table.sql`) against tenant databases.
+  - _Use when:_ You've pulled code updates that include new database tables or columns.
+- `npm run db:clear -- --tenant=<tenantId>`: **Wipes data.**
+  - Deletes all Attempts, Assessments, and Items, but keeps the database schema intact.
+  - _Use when:_ You want a fresh start for a tenant without deleting the database file itself.
+- `npm run db:reset -- --tenant=<tenantId>`: **Full Reset.**
+
+  - Clears data and re-runs the default seed.
+  - _Use when:_ You want to return a tenant to its "factory default" state.
+
 - SQLite persistence uses the WebAssembly-powered [`sql.js`](https://github.com/sql-js/sql.js) runtime, so no native toolchains or Python installs are required. Databases are materialized as files under `data/sqlite/` using the configured file pattern.
 
 ## Configuration
