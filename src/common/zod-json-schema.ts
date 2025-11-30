@@ -19,6 +19,19 @@ function stripDefaults<T>(value: T): T {
 }
 
 export function toJsonSchema(schema: ZodTypeAny, name?: string) {
-  const jsonSchema = zodToJsonSchema(schema, { name, $refStrategy: 'none' });
-  return stripDefaults(jsonSchema);
+  type ZodJsonOptions = Parameters<typeof zodToJsonSchema>[1];
+  const baseOptions: ZodJsonOptions = { $refStrategy: 'none' };
+  const options = name
+    ? ({ ...baseOptions, name, nameStrategy: 'title' } as ZodJsonOptions)
+    : baseOptions;
+  const jsonSchema = zodToJsonSchema(schema, options);
+  const stripped = stripDefaults(jsonSchema) as Record<string, unknown>;
+  delete stripped.$schema;
+  delete stripped.definitions;
+  delete stripped.$defs;
+  delete stripped.components;
+  if ('$ref' in stripped) {
+    delete stripped.$ref;
+  }
+  return stripped;
 }

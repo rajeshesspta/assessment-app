@@ -28,9 +28,9 @@ const methods: AllowedMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
 export default function App() {
   const { spec, loading, error } = useOpenApiSpec(openApiJsonUrl);
 
-  const { endpoints, postOperations } = useMemo(() => {
+  const { endpoints, postOperations, tenantCreateSchema } = useMemo(() => {
     if (!spec?.paths) {
-      return { endpoints: [], postOperations: [] };
+      return { endpoints: [], postOperations: [], tenantCreateSchema: null };
     }
 
     const entries = Object.entries(spec.paths)
@@ -51,6 +51,7 @@ export default function App() {
       })
       .slice(0, 10);
 
+    let tenantCreateSchema: string | null = null;
     const posts = Object.entries(spec.paths)
       .flatMap(([path, item]) => {
         const operation = item?.post as OpenAPIV3.OperationObject | undefined;
@@ -61,6 +62,9 @@ export default function App() {
         const example = schema ? generateExampleFromSchema(schema, spec.components) : {};
         const prettyExample = JSON.stringify(example ?? {}, null, 2) ?? '{\n  \n}';
         const schemaString = resolvedSchema ? JSON.stringify(resolvedSchema, null, 2) : null;
+        if (path === '/tenants') {
+          tenantCreateSchema = schemaString;
+        }
         return [
           {
             id: `${path}-post`,
@@ -71,10 +75,26 @@ export default function App() {
             schema: schemaString,
           },
         ];
-      })
-      .slice(0, 3);
+      });
 
-    return { endpoints: entries, postOperations: posts };
+    const prioritizedPaths = ['/tenants', '/users', '/items'];
+    const priorityOps = prioritizedPaths
+      .map(path => posts.find(operation => operation.path === path))
+      .filter((op): op is (typeof posts)[number] => Boolean(op));
+
+    const ordered: typeof posts = [];
+    const seen = new Set<string>();
+    const pushUnique = (list: typeof posts) => {
+      for (const op of list) {
+        if (seen.has(op.id)) continue;
+        seen.add(op.id);
+        ordered.push(op);
+      }
+    };
+    pushUnique(priorityOps);
+    pushUnique(posts);
+
+    return { endpoints: entries, postOperations: ordered.slice(0, 3), tenantCreateSchema };
   }, [spec]);
 
   return (
@@ -143,6 +163,18 @@ export default function App() {
               <span className="muted">Send real POST requests without leaving the portal.</span>
             </div>
             <PostPlayground baseUrl={apiBaseUrl} operations={postOperations} />
+          </section>
+        )}
+
+        {tenantCreateSchema && (
+          <section className="card">
+            <h2>Tenant Creation Schema</h2>
+            <p className="muted small">Direct excerpt from POST /tenants (Super Admin scope).</p>
+            <div className="schema-block schema-static">
+              <pre>
+                <code>{tenantCreateSchema}</code>
+              </pre>
+            </div>
           </section>
         )}
 
