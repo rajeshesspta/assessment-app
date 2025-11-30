@@ -7,12 +7,13 @@ import type { UserRepository } from '../user.repository.js';
 async function buildTestApp() {
   const repository = createInMemoryUserRepository();
   let currentTenantId = 'tenant-1';
+  let currentActorTenantId = 'tenant-1';
   let currentIsSuperAdmin = false;
 
   const app = Fastify();
   app.addHook('onRequest', async request => {
     (request as any).tenantId = currentTenantId;
-    (request as any).actorTenantId = currentTenantId;
+    (request as any).actorTenantId = currentActorTenantId;
     (request as any).isSuperAdmin = currentIsSuperAdmin;
   });
 
@@ -26,10 +27,17 @@ async function buildTestApp() {
     repository,
     setTenant(id: string) {
       currentTenantId = id;
+      currentActorTenantId = id;
+      currentIsSuperAdmin = false;
+    },
+    setTenantContext(tenantId: string, actorTenantId: string) {
+      currentTenantId = tenantId;
+      currentActorTenantId = actorTenantId;
       currentIsSuperAdmin = false;
     },
     setSuperAdminTenant(id: string) {
       currentTenantId = id;
+      currentActorTenantId = id;
       currentIsSuperAdmin = true;
     },
   };
@@ -39,6 +47,7 @@ describe('userRoutes', () => {
   let app: FastifyInstance;
   let repository: UserRepository;
   let setTenant: (id: string) => void;
+  let setTenantContext: (tenantId: string, actorTenantId: string) => void;
   let setSuperAdminTenant: (id: string) => void;
 
   beforeEach(async () => {
@@ -46,6 +55,7 @@ describe('userRoutes', () => {
     app = ctx.app;
     repository = ctx.repository;
     setTenant = ctx.setTenant;
+    setTenantContext = ctx.setTenantContext;
     setSuperAdminTenant = ctx.setSuperAdminTenant;
     setTenant('tenant-1');
   });
@@ -99,6 +109,22 @@ describe('userRoutes', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({ error: 'User with email already exists' });
+  });
+
+  it('rejects tenant mismatches between header and API key', async () => {
+    setTenantContext('tenant-2', 'tenant-1');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/users',
+      payload: {
+        email: 'mismatch@example.com',
+        displayName: 'Mismatch User',
+        role: 'LEARNER',
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Tenant mismatch for API key' });
   });
 
   it('blocks super admin contexts', async () => {

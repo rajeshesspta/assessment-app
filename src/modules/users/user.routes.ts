@@ -30,6 +30,17 @@ function forbidSuperAdmin(request: any, reply: any): boolean {
   return false;
 }
 
+function ensureTenantScope(request: any, reply: any): boolean {
+  const tenantId = request.tenantId as string | undefined;
+  const actorTenantId = request.actorTenantId as string | undefined;
+  if (tenantId && actorTenantId && tenantId !== actorTenantId) {
+    reply.code(403);
+    reply.send({ error: 'Tenant mismatch for API key' });
+    return false;
+  }
+  return true;
+}
+
 export interface UserRoutesOptions {
   repository: UserRepository;
 }
@@ -47,6 +58,9 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     validatorCompiler: passThroughValidator,
   }, async (req, reply) => {
     if (forbidSuperAdmin(req, reply)) {
+      return;
+    }
+    if (!ensureTenantScope(req, reply)) {
       return;
     }
     const tenantId = (req as any).tenantId as string;
