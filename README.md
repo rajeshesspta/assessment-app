@@ -60,6 +60,29 @@ Once a tenant exists, the Super Admin keeps using the same platform API key but 
 - `POST /users`: Tenant-level route (Tenant Admin contexts); creates Content Authors, Learners, or Raters. Provide a non-empty `roles` array (values drawn from `GET /users/roles`); duplicates are deduped server-side. Duplicate emails per tenant return `409`.
 - `GET /users/roles`: Tenant-level route for any authenticated caller; returns the canonical list of tenant-manageable roles so portals and SDKs stay in sync with backend enums.
 
+### End-to-End Workflow (Happy Path)
+
+1. **Super Admin bootstraps a tenant**
+
+- Call `POST /tenants` with the Super Admin API key (`x-tenant-id=sys-tenant` by default) to create tenant metadata and receive the tenant-scoped API key.
+- Immediately call `POST /tenants/:id/admins` (still authenticated as Super Admin but with `x-tenant-id=<tenantId>`) to invite at least one Tenant Admin.
+
+2. **Tenant Admin locks down the tenant**
+
+- Exchanges the tenant API key for all future calls (`x-tenant-id=<tenantId>`).
+- Calls `POST /users` to invite Content Authors, Learners, and optional Raters; duplicates are rejected per-tenant.
+- Seeds initial cohorts with `POST /cohorts`, ensuring each learner id corresponds to a stored user that includes the `LEARNER` role.
+
+3. **Content Authors assemble content**
+
+- Use `/items` to author questions and `/assessments` to group them, specifying `allowedAttempts` per learner (defaults to `1`).
+- Coordinate with Tenant Admins to attach assessments to cohorts via `POST /cohorts/:id/assessments` so every learner inherits the assignment.
+
+4. **Learners complete assigned work**
+
+- `POST /attempts` receives `assessmentId`/`userId`, validates that the learner exists, belongs to a cohort that includes the requested assessment, and has remaining `allowedAttempts`.
+- Subsequent PATCH/submit routes capture responses and scoring; analytics surfaces completed attempt counts per assessment.
+
 ### Actor Role Header
 
 - Every authenticated request should declare the caller’s tenant-scoped roles via `x-actor-roles`. Provide a comma-separated list (e.g., `CONTENT_AUTHOR,LEARNER`); the auth middleware normalizes case, dedupes, and exposes the result on `request.actorRoles`.

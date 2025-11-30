@@ -25,15 +25,16 @@
    - Response returns tenant record plus bootstrap API key and invitation token for the first Tenant Admin.
    - Optional: specify `initialTenantAdmin` payload to auto-create that admin user; otherwise invoke `POST /tenants/:id/admins` after provisioning to invite additional tenant admins.
 2. **Tenant Admin workflow**
-   - Authenticates with tenant API key + `x-tenant-id`.
-   - Calls `POST /users` to invite Content Authors or Learners (payload includes `role: 'CONTENT_AUTHOR' | 'LEARNER'`). Duplicate emails within the tenant return `409`.
-   - Manages cohorts via `POST /cohorts`, `PATCH /cohorts/:id`, `POST /cohorts/:id/learners`.
+   - Authenticates with the tenant API key (`x-tenant-id=<tenantId>`), rotates keys as needed, and manages rate limits/feature flags.
+   - Calls `POST /users` to invite Content Authors, Learners, or Raters (payload supplies `roles[]`). Duplicate emails per tenant return `409`.
+   - Creates cohorts via `POST /cohorts` (requires at least one learner id and validates each referenced user includes the `LEARNER` role) and attaches assessments with `POST /cohorts/:id/assessments` as content becomes available.
 3. **Content Author workflow**
-   - Uses shared item bank endpoints (`/items`, `/assessments`) to create or reuse tenant-owned content.
-   - Assigns assessments via `POST /assessments/:id/assignments` targeting `cohortId[]` or `learnerId[]` and sets `allowedAttempts`.
+   - Uses `/items` to author the shared question bank.
+   - Builds assessments with `/assessments`, setting `allowedAttempts` (defaults to `1`) for every learner that launches the assessment.
+   - Partners with Tenant Admins (or uses their own `CONTENT_AUTHOR` credentials) to map assessments to cohorts so assignments propagate automatically.
 4. **Learner workflow**
-   - Lists available assignments via `/assessments?assignedTo=me`.
-   - Starts an attempt with `POST /attempts` (server validates assignment + remaining attempts) and submits via existing attempt routes.
+   - Launches attempts with `POST /attempts`. The handler enforces learner existence/role, cohort membership for the requested assessment, and the `allowedAttempts` limit before persisting a new attempt.
+   - Uses PATCH/submit endpoints to store responses; analytics surfaces completion metrics per assessment.
 
 ## Data Model & API Hooks
 
@@ -51,30 +52,30 @@
 
 ### Cohorts
 
-| Column                                   | Notes                                   |
-| ---------------------------------------- | --------------------------------------- |
-| `id`, `tenant_id`, `name`, `description` |
-| `created_by`                             | Tenant Admin or Content Author.         |
-| `metadata_json`                          | Optional labels (program, track, etc.). |
+| Column                                   | Notes                                                                |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| `id`, `tenant_id`, `name`, `description` | Core metadata for the cohort.                                        |
+| `learner_ids_json`                       | Array of learner ids; every id must reference a user with `LEARNER`. |
+| `assessment_ids_json`                    | Array of assessment ids assigned to the cohort.                      |
+| `created_at` / `updated_at`              | ISO timestamps (Fastify model helper sets these fields on save).     |
 
-`cohort_members` join table records `{ cohort_id, learner_id, tenant_id }`.
+Learners inherit access to any assessment listed in the cohort’s `assessmentIds`. The repository implementation persists both arrays as JSON for SQLite and memory providers.
 
 ### Assessments & Assignments
 
-- Extend `assessments` table with `allowed_attempts` (default `1`).
-- New `assessment_assignments` table:
-  - `id`, `assessment_id`, `tenant_id`, `target_type` (`cohort` | `learner`), `target_id`, `assigned_by`, `assigned_at`.
-  - Derived learner-specific entries (materialized or on-the-fly) ensure attempt limits per learner.
+- `assessments` now include an `allowed_attempts` column (default `1`) persisted via migration `016_assessment_attempt_limits.sql`.
+- Attempt creation (`POST /attempts`) queries existing attempts scoped by `{ tenantId, assessmentId, learnerId }` and blocks new records once `allowedAttempts` is exhausted.
+- Cohort repositories store which assessments a cohort can access; learners must belong to at least one cohort that contains the requested assessment.
 
 ### APIs
 
-| Endpoint                               | Description                                                                                                                     |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /tenants`                        | Super Admin only; creates tenant + bootstrap admin.                                                                             |
-| `POST /tenants/:id/admins`             | Super Admin adds additional tenant admins.                                                                                      |
-| `POST /users`                          | Tenant Admin creates content authors or learners.                                                                               |
-| `POST /cohorts` / `PATCH /cohorts/:id` | Tenant Admin or Content Author manages cohorts.                                                                                 |
-| `POST /assessments/:id/assignments`    | Content Author assigns to `cohortIds[]` or `learnerIds[]`, sets `allowedAttempts` per assignment (overrides default if needed). |
-| `POST /attempts`                       | Validates learner assignment + remaining attempts before creating attempt record.                                               |
+| Endpoint                                          | Description                                                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `POST /tenants`                                   | Super Admin only; creates tenant + bootstrap API key.                                       |
+| `POST /tenants/:id/admins`                        | Super Admin invites tenant admins while impersonating the tenant scope.                     |
+| `POST /users`                                     | Tenant Admin creates Content Authors, Learners, or Raters (non-empty `roles[]` required).   |
+| `POST /cohorts` / `POST /cohorts/:id/assessments` | Tenant Admin or Content Author manages cohorts and assigns assessments.                     |
+| `POST /assessments`                               | Content Author creates assessments and sets the tenant-wide `allowedAttempts` value.        |
+| `POST /attempts`                                  | Validates learner record, cohort membership, and `allowedAttempts` before starting attempt. |
 
 The `users` table is now implemented via migration `013_users_table.sql`, and corresponding routes (`POST /tenants/:id/admins`, `POST /users`) persist real user records for tenant administration and invitations. Apply the migration (e.g., `npm run db:migrate -- --all-tenants`) before calling the new APIs in existing environments.
