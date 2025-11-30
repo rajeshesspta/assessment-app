@@ -117,12 +117,25 @@ npm run dev
 
 The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by default. Cosmos DB is optional; with the default `AUTH_PROVIDER=memory` no emulator or cloud dependency is required.
 
--### Developer Portal
+### Developer Portal
 
 - `npm run dev:portal` launches the Vite-powered portal at `http://127.0.0.1:5173`. Set `VITE_API_BASE_URL` to point the portal at a remote API (defaults to `http://localhost:3000`).
 - `npm run build:portal` outputs a static bundle in `apps/dev-portal/dist` (serve via any static host).
 - The portal proxies `/docs` to the API during local dev so interactive Swagger UI continues to function without extra CORS wiring.
 - See `docs/dev-portal.md` for an end-to-end workflow covering bootstrap scripts, Postman imports, and deployment tips.
+
+### Consumer Portal (Tenant Learner App)
+
+- `npm run dev:consumer:bff` starts the local BFF at `http://127.0.0.1:4000`; `npm run dev:consumer` launches the Vite portal at `http://127.0.0.1:6000` (override via `VITE_PORT`).
+- The portal session banner now only asks for the BFF base URL (defaults to `/api`), learner id, and optional actor roles—the BFF keeps the tenant API key + id inside its `.env` file.
+- All learner calls (`GET /analytics/assessments/:id`, `POST /attempts`, `GET /attempts/:id`) flow through the BFF, which injects tenant headers before calling the headless API.
+- `/api/*` requests are proxied to the BFF during dev (override with `VITE_PROXY_API` or edit `apps/consumer-portal/.env.local`).
+
+### Consumer BFF
+
+- Fastify proxy that frontends the headless API with tenant credentials pulled from environment variables.
+- Copy `apps/consumer-bff/.env.example` to `.env` and set `HEADLESS_API_BASE_URL`, `CONSUMER_API_KEY`, `CONSUMER_TENANT_ID`, and optional `CONSUMER_ACTOR_ROLES`.
+- `npm run dev:consumer:bff` runs the watcher; `npm run build:consumer:bff && npm start --workspace consumer-bff` produces and launches the compiled server.
 
 ### API Docs
 

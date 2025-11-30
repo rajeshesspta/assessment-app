@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/dev-portal"
+    "apps/dev-portal",
+    "apps/consumer-portal",
+    "apps/consumer-bff"
   ],
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server.ts",
@@ -13,6 +15,10 @@
     "test": "vitest run",
     "dev:portal": "npm run dev --workspace dev-portal",
     "build:portal": "npm run build --workspace dev-portal",
+    "dev:consumer": "npm run dev --workspace consumer-portal",
+    "build:consumer": "npm run build --workspace consumer-portal",
+    "dev:consumer:bff": "npm run dev --workspace consumer-bff",
+    "build:consumer:bff": "npm run build --workspace consumer-bff",
     "db:seed:init": "tsx scripts/sqlite/seed-init.ts",
     "db:provision": "tsx scripts/sqlite/provision.ts",
     "db:seed": "tsx scripts/sqlite/seed.ts",
