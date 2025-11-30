@@ -140,12 +140,13 @@ export function insertItem(db: SQLiteDatabase, item: Item): Item {
 
 export function insertAssessment(db: SQLiteDatabase, assessment: Assessment): Assessment {
   db.prepare(`
-    INSERT INTO assessments (id, tenant_id, title, item_ids_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO assessments (id, tenant_id, title, item_ids_json, allowed_attempts, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       title = excluded.title,
       item_ids_json = excluded.item_ids_json,
+      allowed_attempts = excluded.allowed_attempts,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `).run(
@@ -153,6 +154,7 @@ export function insertAssessment(db: SQLiteDatabase, assessment: Assessment): As
     assessment.tenantId,
     assessment.title,
     JSON.stringify(assessment.itemIds),
+    assessment.allowedAttempts,
     assessment.createdAt,
     assessment.updatedAt,
   );
@@ -688,6 +690,7 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
     tenantId,
     title: 'Sample Assessment',
     itemIds: sampleItems.map(item => item.id),
+    allowedAttempts: 1,
     createdAt: now,
     updatedAt: now,
   });

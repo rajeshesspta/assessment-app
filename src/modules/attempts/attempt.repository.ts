@@ -5,6 +5,7 @@ export interface AttemptRepository {
   save(attempt: Attempt): Attempt;
   getById(tenantId: string, id: string): Attempt | undefined;
   listByAssessment(tenantId: string, assessmentId: string): Attempt[];
+  listByLearner(tenantId: string, assessmentId: string, userId: string): Attempt[];
 }
 
 export function createInMemoryAttemptRepository(): AttemptRepository {
@@ -20,6 +21,11 @@ export function createInMemoryAttemptRepository(): AttemptRepository {
     },
     listByAssessment(tenantId, assessmentId) {
       return Array.from(store.values()).filter(a => a.tenantId === tenantId && a.assessmentId === assessmentId);
+    },
+    listByLearner(tenantId, assessmentId, userId) {
+      return Array.from(store.values()).filter(
+        a => a.tenantId === tenantId && a.assessmentId === assessmentId && a.userId === userId,
+      );
     },
   };
 }
@@ -85,6 +91,30 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
         FROM attempts
         WHERE assessment_id = ? AND tenant_id = ?
       `).all(assessmentId, tenantId);
+      return rows.map(row => {
+        const attempt: Attempt = {
+          id: row.id,
+          tenantId: row.tenantId,
+          assessmentId: row.assessmentId,
+          userId: row.userId,
+          status: row.status as Attempt['status'],
+          responses: JSON.parse(row.responsesJson) ?? [],
+          score: row.score ?? undefined,
+          maxScore: row.maxScore ?? undefined,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        };
+        return attempt;
+      });
+    },
+    listByLearner(tenantId, assessmentId, userId) {
+      const db = client.getConnection(tenantId);
+      const rows = db.prepare(`
+        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
+        FROM attempts
+        WHERE tenant_id = ? AND assessment_id = ? AND user_id = ?
+        ORDER BY created_at ASC
+      `).all(tenantId, assessmentId, userId);
       return rows.map(row => {
         const attempt: Attempt = {
           id: row.id,

@@ -1,13 +1,14 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { attemptStore, listByAssessmentMock, saveMock, getMock } = vi.hoisted(() => {
+const { attemptStore, listByAssessmentMock, listByLearnerMock, saveMock, getMock } = vi.hoisted(() => {
   const attemptStore: any[] = [];
   return {
     attemptStore,
     listByAssessmentMock: vi.fn((tenantId: string, assessmentId: string) =>
       attemptStore.filter(attempt => attempt.tenantId === tenantId && attempt.assessmentId === assessmentId)
     ),
+    listByLearnerMock: vi.fn(),
     saveMock: vi.fn(),
     getMock: vi.fn(),
   };
@@ -26,6 +27,7 @@ async function buildApp() {
       save: saveMock,
       getById: getMock,
       listByAssessment: listByAssessmentMock,
+      listByLearner: listByLearnerMock,
     },
   });
   return app;

@@ -33,7 +33,9 @@ describe('createRepositoryBundleFromConfig', () => {
     expect(typeof bundle.item.save).toBe('function');
     expect(typeof bundle.assessment.getById).toBe('function');
     expect(typeof bundle.attempt.listByAssessment).toBe('function');
+    expect(typeof bundle.attempt.listByLearner).toBe('function');
     expect(typeof bundle.user.getById).toBe('function');
+    expect(typeof bundle.cohort.listByLearner).toBe('function');
   });
 
   it('returns sqlite bundle when provider is sqlite', () => {
@@ -48,7 +50,9 @@ describe('createRepositoryBundleFromConfig', () => {
     expect(typeof bundle.item.save).toBe('function');
     expect(typeof bundle.assessment.getById).toBe('function');
     expect(typeof bundle.attempt.listByAssessment).toBe('function');
+    expect(typeof bundle.attempt.listByLearner).toBe('function');
     expect(typeof bundle.user.getById).toBe('function');
+    expect(typeof bundle.cohort.listByLearner).toBe('function');
     expect(typeof bundle.dispose).toBe('function');
     bundle.dispose?.();
   });

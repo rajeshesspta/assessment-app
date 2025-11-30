@@ -66,6 +66,7 @@ describe('assessmentRoutes', () => {
       tenantId: 'tenant-1',
       title: 'Sample Assessment',
       itemIds: ['item-1', 'item-2'],
+      allowedAttempts: 1,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
@@ -78,12 +79,29 @@ describe('assessmentRoutes', () => {
     }));
   });
 
+  it('accepts custom allowedAttempts values', async () => {
+    uuidMock.mockReturnValueOnce('assessment-id-2').mockReturnValueOnce('event-id-2');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/assessments',
+      payload: {
+        title: 'Attempt-limited Assessment',
+        itemIds: ['item-1'],
+        allowedAttempts: 4,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ allowedAttempts: 4 });
+  });
+
   it('returns assessment when found', async () => {
     const existing = {
       id: 'assessment-1',
       tenantId: 'tenant-1',
       title: 'Existing',
       itemIds: ['item-1'],
+      allowedAttempts: 3,
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
     };

@@ -20,6 +20,15 @@ const mocks = vi.hoisted(() => {
     publishMock: vi.fn(),
     uuidMock: vi.fn(),
     listByAssessmentMock: vi.fn(),
+    listByLearnerMock: vi.fn(),
+    userSaveMock: vi.fn(),
+    userGetByIdMock: vi.fn(),
+    userGetByEmailMock: vi.fn(),
+    userListByRoleMock: vi.fn(),
+    cohortSaveMock: vi.fn(),
+    cohortGetByIdMock: vi.fn(),
+    cohortListMock: vi.fn(),
+    cohortListByLearnerMock: vi.fn(),
   };
 });
 
@@ -46,6 +55,7 @@ async function buildApp() {
       save: mocks.saveMock,
       getById: mocks.getByIdMock,
       listByAssessment: mocks.listByAssessmentMock,
+      listByLearner: mocks.listByLearnerMock,
     },
     assessmentRepository: {
       save: mocks.assessmentSaveMock,
@@ -54,6 +64,18 @@ async function buildApp() {
     itemRepository: {
       save: mocks.itemSaveMock,
       getById: mocks.itemGetByIdMock,
+    },
+    userRepository: {
+      save: mocks.userSaveMock,
+      getById: mocks.userGetByIdMock,
+      getByEmail: mocks.userGetByEmailMock,
+      listByRole: mocks.userListByRoleMock,
+    },
+    cohortRepository: {
+      save: mocks.cohortSaveMock,
+      getById: mocks.cohortGetByIdMock,
+      list: mocks.cohortListMock,
+      listByLearner: mocks.cohortListByLearnerMock,
     },
   });
   return app;
@@ -65,6 +87,26 @@ describe('attemptRoutes', () => {
   beforeEach(async () => {
     mocks.attemptStore.clear();
     vi.clearAllMocks();
+    const now = new Date().toISOString();
+    mocks.userGetByIdMock.mockReturnValue({
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      roles: ['LEARNER'],
+      email: 'user-1@example.com',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    });
+    mocks.cohortListByLearnerMock.mockReturnValue([{
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Alpha Cohort',
+      learnerIds: ['user-1'],
+      assessmentIds: ['assessment-1'],
+      createdAt: now,
+      updatedAt: now,
+    }]);
+    mocks.listByLearnerMock.mockReturnValue([]);
     app = await buildApp();
   });
 
@@ -77,6 +119,7 @@ describe('attemptRoutes', () => {
       id: 'assessment-1',
       tenantId: 'tenant-1',
       itemIds: ['item-1'],
+      allowedAttempts: 2,
     });
     mocks.uuidMock.mockReturnValueOnce('attempt-1').mockReturnValueOnce('event-1');
 
@@ -106,6 +149,9 @@ describe('attemptRoutes', () => {
       payload: { attemptId: 'attempt-1' },
     }));
     expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'assessment-1');
+    expect(mocks.userGetByIdMock).toHaveBeenCalledWith('tenant-1', 'user-1');
+    expect(mocks.cohortListByLearnerMock).toHaveBeenCalledWith('tenant-1', 'user-1');
+    expect(mocks.listByLearnerMock).toHaveBeenCalledWith('tenant-1', 'assessment-1', 'user-1');
   });
 
   it('rejects start when assessment missing', async () => {
@@ -124,6 +170,100 @@ describe('attemptRoutes', () => {
     expect(response.json()).toEqual({ error: 'Invalid assessmentId' });
     expect(mocks.publishMock).not.toHaveBeenCalled();
     expect(mocks.assessmentGetByIdMock).toHaveBeenCalledWith('tenant-1', 'unknown');
+  });
+
+  it('rejects start when learner record missing', async () => {
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: [],
+      allowedAttempts: 1,
+    });
+    mocks.userGetByIdMock.mockReturnValueOnce(undefined);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'missing-user' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Learner does not exist' });
+  });
+
+  it('rejects start when user is not a learner', async () => {
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: [],
+      allowedAttempts: 1,
+    });
+    mocks.userGetByIdMock.mockReturnValueOnce({
+      id: 'user-99',
+      tenantId: 'tenant-1',
+      roles: ['CONTENT_AUTHOR'],
+      email: 'author@example.com',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'user-99' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'User is not a learner' });
+  });
+
+  it('rejects start when learner is not assigned to the assessment', async () => {
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: [],
+      allowedAttempts: 1,
+    });
+    mocks.cohortListByLearnerMock.mockReturnValueOnce([{
+      id: 'cohort-x',
+      tenantId: 'tenant-1',
+      name: 'Unassigned',
+      learnerIds: ['user-1'],
+      assessmentIds: ['assessment-2'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'user-1' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Learner is not assigned to this assessment' });
+  });
+
+  it('rejects start when learner reached allowed attempts', async () => {
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: [],
+      allowedAttempts: 1,
+    });
+    mocks.listByLearnerMock.mockReturnValueOnce([
+      { id: 'attempt-existing', tenantId: 'tenant-1', assessmentId: 'assessment-1', userId: 'user-1', status: 'submitted', responses: [], createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'user-1' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'Attempt limit reached' });
   });
 
   it('updates responses on patch', async () => {

@@ -70,6 +70,8 @@ Both endpoints rely on the `users` table (`migrations/sqlite/013_users_table.sql
 
 Cohort APIs rely on the `cohorts` table introduced in `migrations/sqlite/015_cohorts_table.sql`. Run the same migration command (all tenants or one-by-one) after upgrading so cohort routes have the required schema.
 
+Attempt limits and learner-scoped indexes depend on `migrations/sqlite/016_assessment_attempt_limits.sql`, which adds the `allowed_attempts` column plus an index on `(tenant_id, assessment_id, user_id)`. Apply this migration for every tenant before relying on the new validations.
+
 For deeper implementation details (role lifecycle, APIs, data model), see `docs/domain.md`.
 
 ### Cohorts
@@ -79,6 +81,7 @@ For deeper implementation details (role lifecycle, APIs, data model), see `docs/
 - Tenant Admins or Content Authors create cohorts via `POST /cohorts`, providing a name, optional description, and at least one learner id (only users with the `LEARNER` role are accepted). Optional assessment ids can be included at creation time.
 - Use `POST /cohorts/:id/assessments` to add additional assessments later. The service validates that every referenced assessment exists before persisting the assignment.
 - `GET /cohorts` returns the tenant’s cohorts so portals can display membership and assignment data. Super Admin callers are blocked from these routes to reinforce tenant-managed ownership.
+- Learners can only launch attempts for assessments assigned to at least one of their cohorts, and `POST /attempts` enforces both cohort membership and the per-assessment `allowedAttempts` limit (defaults to `1`).
 
 ## Running
 
@@ -181,9 +184,9 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - POST /cohorts (creates a tenant-managed cohort with one or more learners and optional assessments; requires `CONTENT_AUTHOR` or `TENANT_ADMIN` and rejects Super Admin callers)
 - GET /cohorts (lists cohorts for the tenant; same role requirements)
 - POST /cohorts/:id/assessments (assigns additional assessments to an existing cohort; same role requirements)
-- POST /assessments
+- POST /assessments (creates assessments with required `title`, `itemIds[]`, and optional `allowedAttempts` cap per learner)
 - GET /assessments/:id
-- POST /attempts (start)
+- POST /attempts (start; validates learner existence/role, cohort assignment for the requested assessment, and remaining `allowedAttempts`)
 - PATCH /attempts/:id/responses (partial save)
 - POST /attempts/:id/submit
 - GET /attempts/:id

@@ -4,6 +4,7 @@ export interface CohortRepository {
   save(cohort: Cohort): Cohort;
   getById(tenantId: string, id: string): Cohort | undefined;
   list(tenantId: string): Cohort[];
+  listByLearner(tenantId: string, learnerId: string): Cohort[];
 }
 
 export { createInMemoryCohortRepository } from './cohort.repository.memory.js';

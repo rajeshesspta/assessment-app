@@ -25,11 +25,12 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
     save(assessment) {
       const db = client.getConnection(assessment.tenantId);
       db.prepare(`
-        INSERT INTO assessments (id, tenant_id, title, item_ids_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO assessments (id, tenant_id, title, item_ids_json, allowed_attempts, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           item_ids_json = excluded.item_ids_json,
+          allowed_attempts = excluded.allowed_attempts,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `).run(
@@ -37,6 +38,7 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
         assessment.tenantId,
         assessment.title,
         JSON.stringify(assessment.itemIds),
+        assessment.allowedAttempts,
         assessment.createdAt,
         assessment.updatedAt,
       );
@@ -45,7 +47,8 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
     getById(tenantId, id) {
       const db = client.getConnection(tenantId);
       const row = db.prepare(`
-        SELECT id, tenant_id as tenantId, title, item_ids_json as itemIdsJson, created_at as createdAt, updated_at as updatedAt
+         SELECT id, tenant_id as tenantId, title, item_ids_json as itemIdsJson, allowed_attempts as allowedAttempts,
+           created_at as createdAt, updated_at as updatedAt
         FROM assessments
         WHERE id = ? AND tenant_id = ?
       `).get(id, tenantId);
@@ -57,6 +60,7 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
         tenantId: row.tenantId,
         title: row.title,
         itemIds: JSON.parse(row.itemIdsJson) as Assessment['itemIds'],
+        allowedAttempts: row.allowedAttempts ?? 1,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       };

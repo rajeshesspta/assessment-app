@@ -94,6 +94,8 @@ describe('buildApp', () => {
       attemptRepository: expect.any(Object),
       assessmentRepository: expect.any(Object),
       itemRepository: expect.any(Object),
+      userRepository: expect.any(Object),
+      cohortRepository: expect.any(Object),
     });
 
     const [, analyticsOptions] = mocks.analyticsRoutes.mock.calls[0];

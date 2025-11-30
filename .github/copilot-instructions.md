@@ -4,6 +4,7 @@
 
 - Fastify + TypeScript (native ESM) app rooted in `src/`; `buildApp` wires auth, tenant routing, and per-module routes (`src/modules/**`). Each module exposes `*.routes.ts`, repositories, and tests in `__tests__`. The new `users` module follows the same pattern—inject its repository and register routes alongside items/assessments/attempts/tenants.
 - Cohort management lives under `src/modules/cohorts/` and follows the same plugin/repository structure. Repositories persist `learnerIds`/`assessmentIds` as JSON, and routes validate learner membership (must exist with the `LEARNER` role) plus assessment existence before saving.
+- Attempt creation (`POST /attempts`) now checks the learner record, enforces that they hold the `LEARNER` role, ensures they belong to a cohort with the requested assessment, and blocks new attempts once `assessment.allowedAttempts` (default `1`) is exhausted.
 - Persistence is abstracted behind repository bundles. Default provider is SQLite via `sql.js` (see `src/infrastructure/sqlite/**`), but memory and Cosmos implementations exist; do not instantiate databases directly—inject the appropriate repository through options.
 - Multi-tenant enforcement relies on the `x-tenant-id` header and repositories expect the tenant id as their first parameter. Always preserve this signature when adding repository APIs.
 - Auth middleware normalizes a comma-separated `x-actor-roles` header (case-insensitive) and attaches `request.actorRoles`; when the header is missing, tenant-scoped API keys default to `['TENANT_ADMIN']` and the Super Admin key defaults to `['SUPER_ADMIN']`. Use these roles for authorization checks—e.g., `/items` and `/cohorts` routes must only allow `CONTENT_AUTHOR` or `TENANT_ADMIN`, and Super Admin identities must be rejected even when impersonating a tenant scope.
@@ -20,7 +21,7 @@
 
 ## Database & Tooling
 
-- SQLite schema lives under `migrations/sqlite/`. Run `npm run db:migrate -- --tenant=<id>` (or `--all-tenants`) whenever migrations change—`013_users_table.sql` adds the `users` table required by the new user routes, `014_users_roles_json.sql` adds multi-role storage, and `015_cohorts_table.sql` introduces cohort storage. Local files are stored under `data/sqlite/{tenantId}.db`.
+- SQLite schema lives under `migrations/sqlite/`. Run `npm run db:migrate -- --tenant=<id>` (or `--all-tenants`) whenever migrations change—`013_users_table.sql` adds the `users` table required by the new user routes, `014_users_roles_json.sql` adds multi-role storage, `015_cohorts_table.sql` introduces cohort storage, and `016_assessment_attempt_limits.sql` adds the `allowed_attempts` column plus an index on `(tenant_id, assessment_id, user_id)` for attempt lookups. Local files are stored under `data/sqlite/{tenantId}.db`.
 - Seeding utilities are in `scripts/sqlite/`. Use `npm run db:reset -- --tenant=<id>` for deterministic sample data or `npm run db:seed:random-data -- --tenant=<id> --items=12 --assessments=4 --attempts=10 [--append]` for randomized math drills across items/assessments/attempts.
 - Repository helpers (`insertItem`, etc.) encapsulate SQL statements; reuse them from scripts to avoid drift.
 

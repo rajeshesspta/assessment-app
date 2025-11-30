@@ -21,5 +21,10 @@ export function createInMemoryCohortRepository(): CohortRepository {
       }
       return results;
     },
+    listByLearner(tenantId, learnerId) {
+      return Array.from(store.values()).filter(
+        cohort => cohort.tenantId === tenantId && cohort.learnerIds.includes(learnerId),
+      );
+    },
   };
 }

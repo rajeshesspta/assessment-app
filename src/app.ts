@@ -94,6 +94,8 @@ export function buildApp(deps: AppDependencies = {}) {
     attemptRepository: repositories.attempt,
     assessmentRepository: repositories.assessment,
     itemRepository: repositories.item,
+    userRepository: repositories.user,
+    cohortRepository: repositories.cohort,
   });
   app.register(analyticsRoutes, { prefix: '/analytics', attemptRepository: repositories.attempt });
   app.register(userRoutes, { prefix: '/users', repository: repositories.user });

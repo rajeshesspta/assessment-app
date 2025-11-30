@@ -5,6 +5,8 @@ import { createAttempt } from './attempt.model.js';
 import type { AttemptRepository } from './attempt.repository.js';
 import type { AssessmentRepository } from '../assessments/assessment.repository.js';
 import type { ItemRepository } from '../items/item.repository.js';
+import type { CohortRepository } from '../cohorts/cohort.repository.js';
+import type { UserRepository } from '../users/user.repository.js';
 import type {
   AttemptResponse,
   FillBlankMatcher,
@@ -18,7 +20,7 @@ import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
 
-const startSchema = z.object({ assessmentId: z.string(), userId: z.string() });
+const startSchema = z.object({ assessmentId: z.string().min(1), userId: z.string().min(1) });
 const responseSchema = z.object({
   itemId: z.string(),
   answerIndex: z.number().int().nonnegative().optional(),
@@ -51,6 +53,8 @@ export interface AttemptRoutesOptions {
   attemptRepository: AttemptRepository;
   assessmentRepository: AssessmentRepository;
   itemRepository: ItemRepository;
+  cohortRepository: CohortRepository;
+  userRepository: UserRepository;
 }
 
 function normalizeTextAnswers(textAnswer?: string, textAnswers?: string[]): string[] | undefined {
@@ -100,14 +104,35 @@ function isPointInPolygon(point: HotspotPoint, polygon: HotspotPoint[]): boolean
 }
 
 export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
-  const { attemptRepository, assessmentRepository, itemRepository } = options;
+  const { attemptRepository, assessmentRepository, itemRepository, cohortRepository, userRepository } = options;
   app.post('/', { schema: { body: startBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
     const parsed = startSchema.parse(req.body);
     const assessment = assessmentRepository.getById(tenantId, parsed.assessmentId);
     if (!assessment) { reply.code(400); return { error: 'Invalid assessmentId' }; }
+    const learner = userRepository.getById(tenantId, parsed.userId);
+    if (!learner) {
+      reply.code(400);
+      return { error: 'Learner does not exist' };
+    }
+    if (!learner.roles.includes('LEARNER')) {
+      reply.code(400);
+      return { error: 'User is not a learner' };
+    }
+    const cohorts = cohortRepository.listByLearner(tenantId, learner.id);
+    const isAssigned = cohorts.some(cohort => cohort.assessmentIds.includes(assessment.id));
+    if (!isAssigned) {
+      reply.code(403);
+      return { error: 'Learner is not assigned to this assessment' };
+    }
+    const learnerAttempts = attemptRepository.listByLearner(tenantId, assessment.id, learner.id);
+    const allowedAttempts = Math.max(1, assessment.allowedAttempts ?? 1);
+    if (learnerAttempts.length >= allowedAttempts) {
+      reply.code(409);
+      return { error: 'Attempt limit reached' };
+    }
     const id = uuid();
-    const attempt = createAttempt({ id, tenantId, assessmentId: assessment.id, userId: parsed.userId });
+    const attempt = createAttempt({ id, tenantId, assessmentId: assessment.id, userId: learner.id });
     attemptRepository.save(attempt);
     eventBus.publish({ id: uuid(), type: 'AttemptStarted', occurredAt: new Date().toISOString(), tenantId, payload: { attemptId: id } });
     reply.code(201);

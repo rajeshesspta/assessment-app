@@ -7,6 +7,7 @@ const cohortRepository = {
   save: vi.fn(),
   list: vi.fn(),
   getById: vi.fn(),
+  listByLearner: vi.fn(),
 };
 
 const userRepository = {

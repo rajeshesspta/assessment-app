@@ -10,6 +10,7 @@ import { passThroughValidator } from '../../common/fastify-schema.js';
 const createSchema = z.object({
   title: z.string().min(1),
   itemIds: z.array(z.string()).min(1),
+  allowedAttempts: z.number().int().min(1).max(10).optional(),
 });
 
 const createAssessmentBodySchema = toJsonSchema(createSchema, 'CreateAssessmentRequest');

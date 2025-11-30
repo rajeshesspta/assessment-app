@@ -64,5 +64,15 @@ export function createSQLiteCohortRepository(client: SQLiteTenantClient): Cohort
       `).all(tenantId);
       return rows.map(rowToCohort);
     },
+    listByLearner(tenantId, learnerId) {
+      const db = client.getConnection(tenantId);
+      const rows = db.prepare(`
+        SELECT id, tenant_id as tenantId, name, description, learner_ids_json as learnerIdsJson,
+               assessment_ids_json as assessmentIdsJson, created_at as createdAt, updated_at as updatedAt
+        FROM cohorts
+        WHERE tenant_id = ?
+      `).all(tenantId);
+      return rows.map(rowToCohort).filter(cohort => cohort.learnerIds.includes(learnerId));
+    },
   };
 }
