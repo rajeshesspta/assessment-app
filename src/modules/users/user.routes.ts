@@ -4,22 +4,25 @@ import type { UserRepository } from './user.repository.js';
 import { createUser } from './user.model.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
+import { TENANT_USER_ROLES, type TenantUserRole } from '../../common/types.js';
 
-const allowedRoles = ['CONTENT_AUTHOR', 'LEARNER'] as const;
 const allowedStatuses = ['active', 'invited', 'disabled'] as const;
-
-type AllowedRole = (typeof allowedRoles)[number];
-
 type AllowedStatus = (typeof allowedStatuses)[number];
 
 const createSchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(1).max(120).optional(),
-  role: z.enum(allowedRoles),
+  role: z.enum(TENANT_USER_ROLES),
   status: z.enum(allowedStatuses).optional(),
 });
 
 const createUserBodySchema = toJsonSchema(createSchema, 'CreateUserRequest');
+const listRolesResponseSchema = toJsonSchema(
+  z.object({
+    roles: z.array(z.enum(TENANT_USER_ROLES)),
+  }),
+  'SupportedUserRolesResponse',
+);
 
 function forbidSuperAdmin(request: any, reply: any): boolean {
   if (request.isSuperAdmin) {
@@ -48,10 +51,22 @@ export interface UserRoutesOptions {
 export async function userRoutes(app: FastifyInstance, options: UserRoutesOptions) {
   const { repository } = options;
 
+  app.get('/roles', {
+    schema: {
+      tags: ['Users'],
+      summary: 'List supported user roles',
+      response: {
+        200: listRolesResponseSchema,
+      },
+    },
+  }, async () => ({
+    roles: [...TENANT_USER_ROLES],
+  }));
+
   app.post('/', {
     schema: {
       tags: ['Users'],
-      summary: 'Invite a Content Author or Learner',
+      summary: 'Invite a Content Author, Learner, or Rater',
       body: createUserBodySchema,
     },
     attachValidation: true,
@@ -72,7 +87,7 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     }
     const user = createUser({
       tenantId,
-      role: parsed.role as AllowedRole,
+      role: parsed.role as TenantUserRole,
       email: parsed.email,
       displayName: parsed.displayName,
       status: (parsed.status as AllowedStatus | undefined) ?? 'invited',

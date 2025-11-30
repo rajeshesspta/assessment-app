@@ -11,7 +11,7 @@ Headless assessment platform MVP in TypeScript + Fastify.
 - Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking, short-answer, essay/long-form, numeric entry, hotspot, drag-and-drop, scenario/coding tasks)
 - Assessment Authoring (static list of item IDs)
 - Attempt & Response Capture
-- User Management (tenant-scoped Content Authors + Learners, Super Admin-managed Tenant Admins)
+- User Management (tenant-scoped Content Authors, Learners, Raters; Super Admin-managed Tenant Admins)
 - Scoring (auto for MCQ + structured types; short-answer, essay, and scenario tasks route events for manual/AI rubric or automation review)
 - Analytics (attempt count + average score)
 - Event Bus (in-memory pub/sub)
@@ -22,7 +22,7 @@ Headless assessment platform MVP in TypeScript + Fastify.
 - Tenant Admin: provisions the tenant, manages API keys + rate limits, and enforces compliance policies.
 - Content Author: curates the tenant’s item bank and assembles assessments from those shared items.
 - Learner (Assessment Participant): receives cohort-based assignments, records responses, and reviews released feedback.
-- Reviewer / Rater: scores deferred items (short-answer, essay, scenario tasks) and finalizes results.
+- Reviewer / Rater: scores deferred items (short-answer, essay, scenario tasks) and finalizes results. The Rater API role (`RATER`) is surfaced to clients via `GET /users/roles`.
 - Proctor / Operations: monitors live attempts, unlocks sessions, and handles incident workflows.
 - Analytics Consumer: pulls reporting/insights for cohorts, programs, or compliance exports.
 
@@ -33,8 +33,10 @@ Headless assessment platform MVP in TypeScript + Fastify.
    - Creates tenants, rotates global API keys, and seeds each tenant with at least one Tenant Admin user via `POST /tenants/:id/admins`.
    - Delegates management by generating tenant-scoped API credentials and invitations for Tenant Admins; when impersonating a tenant, the Super Admin is limited to managing that tenant’s admins and lifecycle events.
 2. **Tenant Admin** (per-tenant)
-   - Manages tenant configuration, rotates tenant API keys, and creates Content Author + Learner accounts via `/users` endpoints.
-   - Owns cohort administration (grouping learners) and can manage items/assessments alongside authors.
+
+- Manages tenant configuration, rotates tenant API keys, and creates Content Author, Learner, and Rater accounts via `/users` endpoints (see `GET /users/roles` for the authoritative list).
+- Owns cohort administration (grouping learners) and can manage items/assessments alongside authors.
+
 3. **Content Author** (per-tenant)
    - Creates new items or reuses any items authored within the same tenant.
    - Builds assessments, sets the maximum attempts allowed, and assigns them to cohorts or individual learners.
@@ -54,7 +56,8 @@ Once a tenant exists, the Super Admin keeps using the same platform API key but 
 ### Tenant User Management API
 
 - `POST /tenants/:id/admins`: Super Admin–only route; requires `x-tenant-id` header that matches the target tenant id/slug. Creates a tenant admin record and returns the persisted user.
-- `POST /users`: Tenant-level route (Tenant Admin contexts); creates Content Authors or Learners. Duplicate emails per tenant return `409`.
+- `POST /users`: Tenant-level route (Tenant Admin contexts); creates Content Authors, Learners, or Raters. Duplicate emails per tenant return `409`.
+- `GET /users/roles`: Tenant-level route for any authenticated caller; returns the canonical list of tenant-manageable roles so portals and SDKs stay in sync with backend enums.
 
 Both endpoints rely on the new `users` table (`migrations/sqlite/013_users_table.sql`). After pulling these changes, run `npm run db:migrate -- --all-tenants` (or target individual tenants) so every tenant database gains the new schema before invoking the APIs.
 
@@ -171,7 +174,8 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - GET /attempts/:id
 - GET /analytics/assessments/:id
 - POST /tenants/:id/admins (Super Admin only; creates tenant admins while impersonating the tenant)
-- POST /users (Tenant Admin contexts; invites Content Authors or Learners)
+- POST /users (Tenant Admin contexts; invites Content Authors, Learners, or Raters)
+- GET /users/roles (lists tenant-manageable roles: `CONTENT_AUTHOR`, `LEARNER`, `RATER`)
 
 Headers required: `x-api-key`, `x-tenant-id`.
 

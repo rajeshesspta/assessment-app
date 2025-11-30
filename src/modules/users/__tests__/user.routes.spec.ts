@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { userRoutes } from '../user.routes.js';
 import { createInMemoryUserRepository } from '../user.repository.js';
 import type { UserRepository } from '../user.repository.js';
+import { TENANT_USER_ROLES } from '../../../common/types.js';
 
 async function buildTestApp() {
   const repository = createInMemoryUserRepository();
@@ -84,6 +85,16 @@ describe('userRoutes', () => {
       status: 'invited',
     });
     expect(repository.getByEmail('tenant-1', 'author@example.com')).toBeTruthy();
+  });
+
+  it('lists supported roles for clients', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/users/roles',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ roles: [...TENANT_USER_ROLES] });
   });
 
   it('rejects duplicate emails within the tenant', async () => {

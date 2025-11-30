@@ -2,7 +2,11 @@ export interface TenantScoped { tenantId: string; }
 
 export interface BaseEntity extends TenantScoped { id: string; createdAt: string; updatedAt: string; }
 
-export type UserRole = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'CONTENT_AUTHOR' | 'LEARNER';
+export const USER_ROLES = ['SUPER_ADMIN', 'TENANT_ADMIN', 'CONTENT_AUTHOR', 'LEARNER', 'RATER'] as const;
+export const TENANT_USER_ROLES = ['CONTENT_AUTHOR', 'LEARNER', 'RATER'] as const;
+
+export type UserRole = (typeof USER_ROLES)[number];
+export type TenantUserRole = (typeof TENANT_USER_ROLES)[number];
 
 export type UserStatus = 'active' | 'invited' | 'disabled';
 
