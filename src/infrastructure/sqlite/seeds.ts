@@ -190,11 +190,12 @@ export function insertAttempt(db: SQLiteDatabase, attempt: Attempt): Attempt {
 
 export function insertUser(db: SQLiteDatabase, user: User): User {
   db.prepare(`
-    INSERT INTO users (id, tenant_id, role, email, display_name, status, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, tenant_id, role, roles_json, email, display_name, status, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tenant_id = excluded.tenant_id,
       role = excluded.role,
+      roles_json = excluded.roles_json,
       email = excluded.email,
       display_name = excluded.display_name,
       status = excluded.status,
@@ -204,7 +205,8 @@ export function insertUser(db: SQLiteDatabase, user: User): User {
   `).run(
     user.id,
     user.tenantId,
-    user.role,
+    user.roles[0],
+    JSON.stringify(user.roles),
     user.email,
     user.displayName ?? null,
     user.status,
@@ -697,7 +699,7 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
     insertUser(db, {
       id: `seed-admin-${tenantId}`,
       tenantId,
-      role: 'TENANT_ADMIN',
+      roles: ['TENANT_ADMIN'],
       email: `seed-admin+${tenantId}@example.com`,
       displayName: `Seed Admin (${tenantId})`,
       status: 'active',
@@ -713,7 +715,7 @@ export function seedSuperAdmin(db: SQLiteDatabase, tenantId: string, email: stri
   insertUser(db, {
     id: 'super-admin-user',
     tenantId,
-    role: 'SUPER_ADMIN',
+    roles: ['SUPER_ADMIN'],
     email,
     displayName: 'System Super Admin',
     status: 'active',

@@ -11,7 +11,7 @@ export type TenantUserRole = (typeof TENANT_USER_ROLES)[number];
 export type UserStatus = 'active' | 'invited' | 'disabled';
 
 export interface User extends BaseEntity {
-	role: UserRole;
+	roles: UserRole[];
 	email: string;
 	displayName?: string;
 	status: UserStatus;

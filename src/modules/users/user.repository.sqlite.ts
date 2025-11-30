@@ -6,6 +6,7 @@ interface UserRow {
   id: string;
   tenant_id: string;
   role: string;
+  roles_json: string | null;
   email: string;
   display_name: string | null;
   status: string;
@@ -18,10 +19,24 @@ function mapRow(row?: UserRow): User | undefined {
   if (!row) {
     return undefined;
   }
+  let parsedRoles: User['roles'] = [];
+  if (row.roles_json) {
+    try {
+      const value = JSON.parse(row.roles_json);
+      if (Array.isArray(value)) {
+        parsedRoles = value.filter((role): role is User['roles'][number] => typeof role === 'string');
+      }
+    } catch {
+      parsedRoles = [];
+    }
+  }
+  if (parsedRoles.length === 0 && row.role) {
+    parsedRoles = [row.role as User['roles'][number]];
+  }
   return {
     id: row.id,
     tenantId: row.tenant_id,
-    role: row.role as User['role'],
+    roles: parsedRoles,
     email: row.email,
     displayName: row.display_name ?? undefined,
     status: row.status as User['status'],
@@ -36,10 +51,11 @@ export function createSQLiteUserRepository(client: SQLiteTenantClient): UserRepo
     save(user) {
       const db = client.getConnection(user.tenantId);
       db.prepare(`
-        INSERT INTO users (id, tenant_id, role, email, display_name, status, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, tenant_id, role, roles_json, email, display_name, status, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           role = excluded.role,
+          roles_json = excluded.roles_json,
           email = excluded.email,
           display_name = excluded.display_name,
           status = excluded.status,
@@ -49,7 +65,8 @@ export function createSQLiteUserRepository(client: SQLiteTenantClient): UserRepo
       `).run(
         user.id,
         user.tenantId,
-        user.role,
+        user.roles[0],
+        JSON.stringify(user.roles),
         user.email,
         user.displayName ?? null,
         user.status,
@@ -75,14 +92,11 @@ export function createSQLiteUserRepository(client: SQLiteTenantClient): UserRepo
     },
     listByRole(tenantId, role) {
       const db = client.getConnection(tenantId);
-      const rows = role
-        ? (db
-            .prepare('SELECT * FROM users WHERE tenant_id = ? AND role = ? ORDER BY created_at')
-            .all(tenantId, role) as UserRow[])
-        : (db
-            .prepare('SELECT * FROM users WHERE tenant_id = ? ORDER BY created_at')
-            .all(tenantId) as UserRow[]);
-      return rows.map(mapRow).filter((user): user is User => Boolean(user));
+      const rows = db
+        .prepare('SELECT * FROM users WHERE tenant_id = ? ORDER BY created_at')
+        .all(tenantId) as UserRow[];
+      const users = rows.map(mapRow).filter((user): user is User => Boolean(user));
+      return role ? users.filter(user => user.roles.includes(role)) : users;
     },
   };
 }

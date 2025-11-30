@@ -234,7 +234,7 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
     }
     const adminUser = createUser({
       tenantId: tenant.id,
-      role: 'TENANT_ADMIN',
+      roles: ['TENANT_ADMIN'],
       email: parsed.data.email,
       displayName: parsed.data.displayName,
       status: parsed.data.status ?? 'invited',

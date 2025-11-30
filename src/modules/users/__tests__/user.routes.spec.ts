@@ -72,7 +72,7 @@ describe('userRoutes', () => {
       payload: {
         email: 'author@example.com',
         displayName: 'Author Example',
-        role: 'CONTENT_AUTHOR',
+        roles: ['CONTENT_AUTHOR'],
       },
     });
 
@@ -80,11 +80,47 @@ describe('userRoutes', () => {
     const body = response.json();
     expect(body).toMatchObject({
       email: 'author@example.com',
-      role: 'CONTENT_AUTHOR',
+      roles: ['CONTENT_AUTHOR'],
       tenantId: 'tenant-1',
       status: 'invited',
     });
     expect(repository.getByEmail('tenant-1', 'author@example.com')).toBeTruthy();
+  });
+
+  it('creates users with multiple roles', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/users',
+      payload: {
+        email: 'multi@example.com',
+        displayName: 'Multi Role',
+        roles: ['CONTENT_AUTHOR', 'RATER'],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      email: 'multi@example.com',
+      roles: ['CONTENT_AUTHOR', 'RATER'],
+    });
+  });
+
+  it('accepts legacy single role payloads for backward compatibility', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/users',
+      payload: {
+        email: 'legacy@example.com',
+        displayName: 'Legacy Role',
+        role: 'LEARNER',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      email: 'legacy@example.com',
+      roles: ['LEARNER'],
+    });
   });
 
   it('lists supported roles for clients', async () => {
@@ -104,7 +140,7 @@ describe('userRoutes', () => {
       payload: {
         email: 'learner@example.com',
         displayName: 'Learner One',
-        role: 'LEARNER',
+        roles: ['LEARNER'],
       },
     });
 
@@ -114,7 +150,7 @@ describe('userRoutes', () => {
       payload: {
         email: 'learner@example.com',
         displayName: 'Another Learner',
-        role: 'LEARNER',
+        roles: ['LEARNER'],
       },
     });
 
@@ -130,7 +166,7 @@ describe('userRoutes', () => {
       payload: {
         email: 'mismatch@example.com',
         displayName: 'Mismatch User',
-        role: 'LEARNER',
+        roles: ['LEARNER'],
       },
     });
 
@@ -146,7 +182,7 @@ describe('userRoutes', () => {
       payload: {
         email: 'blocked@example.com',
         displayName: 'Blocked',
-        role: 'CONTENT_AUTHOR',
+        roles: ['CONTENT_AUTHOR'],
       },
     });
 

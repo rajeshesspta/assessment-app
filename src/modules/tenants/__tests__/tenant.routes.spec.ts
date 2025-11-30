@@ -180,7 +180,7 @@ describe('tenantRoutes', () => {
 
     expect(response.statusCode).toBe(201);
     const saved = userRepository.getByEmail(tenantId, 'admin@umbrella.test');
-    expect(saved).toMatchObject({ role: 'TENANT_ADMIN', displayName: 'Umbrella Admin' });
+    expect(saved).toMatchObject({ roles: ['TENANT_ADMIN'], displayName: 'Umbrella Admin' });
   });
 
   it('rejects tenant admin creation when header tenant mismatches target', async () => {

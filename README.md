@@ -56,10 +56,10 @@ Once a tenant exists, the Super Admin keeps using the same platform API key but 
 ### Tenant User Management API
 
 - `POST /tenants/:id/admins`: Super Admin–only route; requires `x-tenant-id` header that matches the target tenant id/slug. Creates a tenant admin record and returns the persisted user.
-- `POST /users`: Tenant-level route (Tenant Admin contexts); creates Content Authors, Learners, or Raters. Duplicate emails per tenant return `409`.
+- `POST /users`: Tenant-level route (Tenant Admin contexts); creates Content Authors, Learners, or Raters. Provide a non-empty `roles` array (values drawn from `GET /users/roles`); duplicates are deduped server-side. Duplicate emails per tenant return `409`.
 - `GET /users/roles`: Tenant-level route for any authenticated caller; returns the canonical list of tenant-manageable roles so portals and SDKs stay in sync with backend enums.
 
-Both endpoints rely on the new `users` table (`migrations/sqlite/013_users_table.sql`). After pulling these changes, run `npm run db:migrate -- --all-tenants` (or target individual tenants) so every tenant database gains the new schema before invoking the APIs.
+Both endpoints rely on the `users` table (`migrations/sqlite/013_users_table.sql`) plus the follow-up `014_users_roles_json.sql` migration that stores multi-role assignments. After pulling these changes, run `npm run db:migrate -- --all-tenants` (or target individual tenants) so every tenant database gains the new schema before invoking the APIs.
 
 For deeper implementation details (role lifecycle, APIs, data model), see `docs/domain.md`.
 
@@ -174,7 +174,7 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - GET /attempts/:id
 - GET /analytics/assessments/:id
 - POST /tenants/:id/admins (Super Admin only; creates tenant admins while impersonating the tenant)
-- POST /users (Tenant Admin contexts; invites Content Authors, Learners, or Raters)
+- POST /users (Tenant Admin contexts; invites Content Authors, Learners, or Raters via a non-empty `roles[]` payload)
 - GET /users/roles (lists tenant-manageable roles: `CONTENT_AUTHOR`, `LEARNER`, `RATER`)
 
 Headers required: `x-api-key`, `x-tenant-id`.

@@ -33,7 +33,7 @@ export function createInMemoryUserRepository(): UserRepository {
     },
     listByRole(tenantId, role) {
       return Array.from(store.values())
-        .filter(user => user.tenantId === tenantId && (!role || user.role === role))
+        .filter(user => user.tenantId === tenantId && (!role || user.roles.includes(role)))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
   };

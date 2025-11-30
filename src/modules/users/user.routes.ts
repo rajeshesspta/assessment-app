@@ -9,14 +9,32 @@ import { TENANT_USER_ROLES, type TenantUserRole } from '../../common/types.js';
 const allowedStatuses = ['active', 'invited', 'disabled'] as const;
 type AllowedStatus = (typeof allowedStatuses)[number];
 
-const createSchema = z.object({
+const createBodySchema = z.object({
+  email: z.string().email(),
+  displayName: z.string().min(1).max(120).optional(),
+  roles: z.array(z.enum(TENANT_USER_ROLES)).nonempty(),
+  status: z.enum(allowedStatuses).optional(),
+});
+
+const legacyBodySchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(1).max(120).optional(),
   role: z.enum(TENANT_USER_ROLES),
   status: z.enum(allowedStatuses).optional(),
 });
 
-const createUserBodySchema = toJsonSchema(createSchema, 'CreateUserRequest');
+const createSchema = z.union([createBodySchema, legacyBodySchema]);
+
+type CreateUserPayload = z.infer<typeof createSchema>;
+
+function extractRoles(payload: CreateUserPayload): TenantUserRole[] {
+  if ('roles' in payload) {
+    return payload.roles;
+  }
+  return [payload.role];
+}
+
+const createUserBodySchema = toJsonSchema(createBodySchema, 'CreateUserRequest');
 const listRolesResponseSchema = toJsonSchema(
   z.object({
     roles: z.array(z.enum(TENANT_USER_ROLES)),
@@ -81,6 +99,7 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     }
     const tenantId = (req as any).tenantId as string;
     const parsed = createSchema.parse(req.body);
+    const roles = extractRoles(parsed);
     const existing = repository.getByEmail(tenantId, parsed.email);
     if (existing) {
       reply.code(409);
@@ -88,7 +107,7 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     }
     const user = createUser({
       tenantId,
-      role: parsed.role as TenantUserRole,
+      roles,
       email: parsed.email,
       displayName: parsed.displayName,
       status: (parsed.status as AllowedStatus | undefined) ?? 'invited',
