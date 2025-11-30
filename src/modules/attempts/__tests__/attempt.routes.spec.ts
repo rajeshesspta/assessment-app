@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+const superAdminState = { current: false };
+
 vi.mock('../../../common/event-bus.js', () => ({
   eventBus: {
     publish: mocks.publishMock,
@@ -48,6 +50,7 @@ async function buildApp() {
   const app = Fastify();
   app.addHook('onRequest', async request => {
     (request as any).tenantId = 'tenant-1';
+    (request as any).isSuperAdmin = superAdminState.current;
   });
   await app.register(attemptRoutes, {
     prefix: '/attempts',
@@ -83,8 +86,8 @@ async function buildApp() {
 
 describe('attemptRoutes', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
-
   beforeEach(async () => {
+    superAdminState.current = false;
     mocks.attemptStore.clear();
     vi.clearAllMocks();
     const now = new Date().toISOString();
@@ -264,6 +267,19 @@ describe('attemptRoutes', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({ error: 'Attempt limit reached' });
+  });
+
+  it('rejects Super Admin callers on attempt start', async () => {
+    superAdminState.current = true;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'user-1' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
   });
 
   it('updates responses on patch', async () => {

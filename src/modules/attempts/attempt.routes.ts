@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { createAttempt } from './attempt.model.js';
@@ -48,6 +48,15 @@ const responseSchema = z.object({
 const responsesSchema = z.object({ responses: z.array(responseSchema) });
 const startBodySchema = toJsonSchema(startSchema);
 const responsesBodySchema = toJsonSchema(responsesSchema);
+
+function ensureAttemptAccess(request: any, reply: FastifyReply): boolean {
+  if (request.isSuperAdmin) {
+    reply.code(403);
+    reply.send({ error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
 
 export interface AttemptRoutesOptions {
   attemptRepository: AttemptRepository;
@@ -106,6 +115,7 @@ function isPointInPolygon(point: HotspotPoint, polygon: HotspotPoint[]): boolean
 export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
   const { attemptRepository, assessmentRepository, itemRepository, cohortRepository, userRepository } = options;
   app.post('/', { schema: { body: startBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
+    if (!ensureAttemptAccess(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const parsed = startSchema.parse(req.body);
     const assessment = assessmentRepository.getById(tenantId, parsed.assessmentId);
@@ -140,6 +150,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
   });
 
   app.patch('/:id/responses', { schema: { body: responsesBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
+    if (!ensureAttemptAccess(req, reply)) return;
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
     const attempt = attemptRepository.getById(tenantId, id);
@@ -267,6 +278,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
   });
 
   app.post('/:id/submit', async (req, reply) => {
+    if (!ensureAttemptAccess(req, reply)) return;
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
     const attempt = attemptRepository.getById(tenantId, id);
@@ -637,6 +649,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
   });
 
   app.get('/:id', async (req, reply) => {
+    if (!ensureAttemptAccess(req, reply)) return;
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
     const attempt = attemptRepository.getById(tenantId, id);

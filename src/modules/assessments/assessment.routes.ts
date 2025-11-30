@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { createAssessment } from './assessment.model.js';
@@ -6,6 +6,24 @@ import type { AssessmentRepository } from './assessment.repository.js';
 import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
+import type { UserRole } from '../../common/types.js';
+
+const ASSESSMENT_MANAGER_ROLES: UserRole[] = ['CONTENT_AUTHOR', 'TENANT_ADMIN'];
+
+function ensureAssessmentManager(request: any, reply: FastifyReply): boolean {
+  if (request.isSuperAdmin) {
+    reply.code(403);
+    reply.send({ error: 'Forbidden' });
+    return false;
+  }
+  const roles: UserRole[] = (request.actorRoles as UserRole[] | undefined) ?? [];
+  if (ASSESSMENT_MANAGER_ROLES.some(role => roles.includes(role))) {
+    return true;
+  }
+  reply.code(403);
+  reply.send({ error: 'Forbidden' });
+  return false;
+}
 
 const createSchema = z.object({
   title: z.string().min(1),
@@ -30,6 +48,7 @@ export async function assessmentRoutes(app: FastifyInstance, options: Assessment
     attachValidation: true,
     validatorCompiler: passThroughValidator,
   }, async (req, reply) => {
+    if (!ensureAssessmentManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const parsed = createSchema.parse(req.body);
     const id = uuid();
@@ -41,6 +60,7 @@ export async function assessmentRoutes(app: FastifyInstance, options: Assessment
   });
 
   app.get('/:id', async (req, reply) => {
+    if (!ensureAssessmentManager(req, reply)) return;
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
     const a = repository.getById(tenantId, id);

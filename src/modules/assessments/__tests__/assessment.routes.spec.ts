@@ -20,10 +20,15 @@ vi.mock('uuid', () => ({
 
 import { assessmentRoutes } from '../assessment.routes.js';
 
+let currentActorRoles: string[] = ['TENANT_ADMIN'];
+let currentIsSuperAdmin = false;
+
 async function buildTestApp() {
   const app = Fastify();
   app.addHook('onRequest', async request => {
     (request as any).tenantId = 'tenant-1';
+    (request as any).actorRoles = currentActorRoles;
+    (request as any).isSuperAdmin = currentIsSuperAdmin;
   });
   await app.register(assessmentRoutes, {
     prefix: '/assessments',
@@ -40,6 +45,8 @@ describe('assessmentRoutes', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    currentActorRoles = ['TENANT_ADMIN'];
+    currentIsSuperAdmin = false;
     saveMock.mockImplementation(entity => entity);
     app = await buildTestApp();
   });
@@ -122,5 +129,17 @@ describe('assessmentRoutes', () => {
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'Not found' });
     expect(getByIdMock).toHaveBeenCalledWith('tenant-1', 'missing');
+  });
+
+  it('rejects super admin callers', async () => {
+    currentIsSuperAdmin = true;
+    const response = await app.inject({
+      method: 'POST',
+      url: '/assessments',
+      payload: { title: 'Blocked', itemIds: ['item-1'] },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
   });
 });

@@ -16,10 +16,15 @@ const { attemptStore, listByAssessmentMock, listByLearnerMock, saveMock, getMock
 
 import { analyticsRoutes } from '../analytics.routes.js';
 
+let currentActorRoles: string[] = ['TENANT_ADMIN'];
+let currentIsSuperAdmin = false;
+
 async function buildApp() {
   const app = Fastify();
   app.addHook('onRequest', async request => {
     (request as any).tenantId = 'tenant-1';
+    (request as any).actorRoles = currentActorRoles;
+    (request as any).isSuperAdmin = currentIsSuperAdmin;
   });
   await app.register(analyticsRoutes, {
     prefix: '/analytics',
@@ -39,6 +44,8 @@ describe('analyticsRoutes', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     attemptStore.length = 0;
+    currentActorRoles = ['TENANT_ADMIN'];
+    currentIsSuperAdmin = false;
     app = await buildApp();
   });
 
@@ -104,5 +111,19 @@ describe('analyticsRoutes', () => {
       attemptCount: 0,
       averageScore: 0,
     });
+  });
+
+  it('rejects super admin callers', async () => {
+    currentIsSuperAdmin = true;
+    const response = await app.inject({ method: 'GET', url: '/analytics/assessments/assessment-1' });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+  });
+
+  it('requires analytics roles', async () => {
+    currentActorRoles = ['LEARNER'];
+    const response = await app.inject({ method: 'GET', url: '/analytics/assessments/assessment-1' });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
   });
 });
