@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { TenantRepository } from './tenant.repository.js';
 import { createTenant, updateTenant } from './tenant.model.js';
@@ -24,8 +24,8 @@ const userStatusSchema = z.enum(['active', 'invited', 'disabled']);
 const createSchema = z.object({
   name: z.string().min(1),
   slug: z.string().regex(/^[a-z0-9-]+$/).min(1).max(60).optional(),
-  contactEmail: z.string().email().optional(),
-  apiKey: z.string().min(8),
+  contactEmail: z.string().email(),
+  apiKey: z.string().min(8).optional(),
   rateLimit: rateLimitSchema.optional(),
   persistence: persistenceSchema.optional(),
   metadata: z.record(z.string()).optional(),
@@ -41,6 +41,14 @@ const createTenantAdminSchema = z.object({
   displayName: z.string().min(1).max(120),
   status: userStatusSchema.optional(),
 });
+
+function validationError(error: z.ZodError, reply: FastifyReply) {
+  reply.code(400);
+  return {
+    error: 'Validation error',
+    details: error.errors.map(issue => `${issue.path.join('.') || 'root'}: ${issue.message}`),
+  };
+}
 
 function isAdmin(request: any): boolean {
   return Boolean(request.isSuperAdmin);
@@ -79,20 +87,23 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
 
   app.post('/', async (req, reply) => {
     if (!ensureAdmin(req, reply)) return;
-    const parsed = createSchema.parse(req.body);
-    if (parsed.slug && repository.getBySlug(parsed.slug)) {
+    const parsed = createSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return validationError(parsed.error, reply);
+    }
+    if (parsed.data.slug && repository.getBySlug(parsed.data.slug)) {
       reply.code(409);
       return { error: 'Slug already exists' };
     }
     const tenant = createTenant({
-      name: parsed.name,
-      slug: parsed.slug,
-      contactEmail: parsed.contactEmail,
-      apiKey: parsed.apiKey,
-      rateLimit: parsed.rateLimit,
-      persistence: parsed.persistence,
-      metadata: parsed.metadata,
-      status: parsed.status,
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      contactEmail: parsed.data.contactEmail,
+      apiKey: parsed.data.apiKey,
+      rateLimit: parsed.data.rateLimit,
+      persistence: parsed.data.persistence,
+      metadata: parsed.data.metadata,
+      status: parsed.data.status,
     });
     repository.save(tenant);
     reply.code(201);
@@ -122,23 +133,26 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
       reply.code(404);
       return { error: 'Tenant not found' };
     }
-    const parsed = updateSchema.parse(req.body);
-    if (parsed.slug) {
-      const conflict = repository.getBySlug(parsed.slug);
+    const parsed = updateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return validationError(parsed.error, reply);
+    }
+    if (parsed.data.slug) {
+      const conflict = repository.getBySlug(parsed.data.slug);
       if (conflict && conflict.id !== existing.id) {
         reply.code(409);
         return { error: 'Slug already exists' };
       }
     }
     const updated = updateTenant(existing, {
-      name: parsed.name,
-      slug: parsed.slug,
-      contactEmail: parsed.contactEmail,
-      apiKey: parsed.apiKey,
-      rateLimit: parsed.rateLimit,
-      persistence: parsed.persistence,
-      metadata: parsed.metadata,
-      status: parsed.status,
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      contactEmail: parsed.data.contactEmail,
+      apiKey: parsed.data.apiKey,
+      rateLimit: parsed.data.rateLimit,
+      persistence: parsed.data.persistence,
+      metadata: parsed.data.metadata,
+      status: parsed.data.status,
     });
     repository.save(updated);
     return updated;
@@ -169,8 +183,11 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
       reply.code(400);
       return { error: 'x-tenant-id must match target tenant' };
     }
-    const parsed = createTenantAdminSchema.parse(req.body);
-    const existing = userRepository.getByEmail(tenant.id, parsed.email);
+    const parsed = createTenantAdminSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return validationError(parsed.error, reply);
+    }
+    const existing = userRepository.getByEmail(tenant.id, parsed.data.email);
     if (existing) {
       reply.code(409);
       return { error: 'User with email already exists' };
@@ -178,9 +195,9 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
     const adminUser = createUser({
       tenantId: tenant.id,
       role: 'TENANT_ADMIN',
-      email: parsed.email,
-      displayName: parsed.displayName,
-      status: parsed.status ?? 'invited',
+      email: parsed.data.email,
+      displayName: parsed.data.displayName,
+      status: parsed.data.status ?? 'invited',
       createdBy: 'super-admin',
     });
     userRepository.save(adminUser);

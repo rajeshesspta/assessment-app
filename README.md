@@ -44,7 +44,7 @@ Headless assessment platform MVP in TypeScript + Fastify.
 
 - Use `POST /tenants` with headers `x-tenant-id: <SUPER_ADMIN_TENANT_ID>` (default `sys-tenant`) and `x-api-key: <SUPER_ADMIN_API_KEY>` to create a new tenant record.
 - When managing an existing tenant’s admins, the Super Admin can keep using the same API key while setting `x-tenant-id` to that tenant’s id—authorization succeeds because the Super Admin identity (rooted in `sys-tenant`) is allowed to impersonate any tenant scope.
-- Request body mirrors the schema defined in `src/modules/tenants/tenant.routes.ts` (`name`, optional `slug`, `contactEmail`, `apiKey`, rate-limit overrides, etc.).
+- Request body mirrors the schema defined in `src/modules/tenants/tenant.routes.ts` (`name`, `contactEmail`, optional `slug`, optional `apiKey`, rate-limit overrides, etc.).
 - Successful responses return the persisted tenant plus the bootstrap API key to hand off to the first Tenant Admin.
 
 Once a tenant exists, the Super Admin keeps using the same platform API key but must set `x-tenant-id` to the target tenant when calling `POST /tenants/:id/admins`. This header requirement ensures impersonation stays scoped to the intended tenant when creating tenant admins.

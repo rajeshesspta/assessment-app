@@ -70,6 +70,7 @@ describe('tenantRoutes', () => {
       url: '/tenants',
       payload: {
         name: 'Acme Corp',
+        contactEmail: 'ops@acme.example',
         apiKey: 'secret-api-key',
       },
     });
@@ -80,10 +81,43 @@ describe('tenantRoutes', () => {
       name: 'Acme Corp',
       slug: 'acme-corp',
       status: 'active',
+      contactEmail: 'ops@acme.example',
       apiKey: 'secret-api-key',
     });
     expect(body.createdAt).toBe(body.updatedAt);
     expect(repository.getById(body.id)).toEqual(body);
+  });
+
+  it('rejects tenant creation without contact email', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tenants',
+      payload: {
+        name: 'Email-less Corp',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: 'Validation error',
+      details: expect.arrayContaining([expect.stringContaining('contactEmail')]),
+    });
+  });
+
+  it('generates an API key if not provided', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tenants',
+      payload: {
+        name: 'No Key Corp',
+        contactEmail: 'ops@nokey.example',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body.name).toBe('No Key Corp');
+    expect(body.apiKey).toMatch(/^[a-f0-9]{48}$/);
   });
 
   it('rejects duplicate slugs with 409', async () => {
@@ -93,6 +127,7 @@ describe('tenantRoutes', () => {
       payload: {
         name: 'Acme Corp',
         slug: 'acme',
+        contactEmail: 'ops@acme.example',
         apiKey: 'secret-api-key',
       },
     });
@@ -103,6 +138,7 @@ describe('tenantRoutes', () => {
       payload: {
         name: 'Another Co',
         slug: 'acme',
+        contactEmail: 'ops@another.example',
         apiKey: 'another-secret',
       },
     });
@@ -126,6 +162,7 @@ describe('tenantRoutes', () => {
       payload: {
         name: 'Umbrella',
         slug: 'umbrella',
+        contactEmail: 'contact@umbrella.test',
         apiKey: 'umbrella-key',
       },
     });
@@ -153,6 +190,7 @@ describe('tenantRoutes', () => {
       payload: {
         name: 'Stark Industries',
         slug: 'stark',
+        contactEmail: 'contact@stark.test',
         apiKey: 'stark-key',
       },
     });
@@ -179,6 +217,7 @@ describe('tenantRoutes', () => {
       payload: {
         name: 'Wayne Enterprises',
         slug: 'wayne',
+        contactEmail: 'contact@wayne.test',
         apiKey: 'wayne-key',
       },
     });

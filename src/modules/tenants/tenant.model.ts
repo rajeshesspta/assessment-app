@@ -1,12 +1,13 @@
 import { v4 as uuid } from 'uuid';
+import crypto from 'node:crypto';
 import type { Tenant } from '../../common/types.js';
 
 export interface TenantInput {
   id?: string;
   name: string;
   slug?: string;
-  contactEmail?: string;
-  apiKey: string;
+  contactEmail: string;
+  apiKey?: string;
   rateLimit?: Partial<Tenant['rateLimit']>;
   persistence?: Partial<Tenant['persistence']>;
   metadata?: Tenant['metadata'];
@@ -22,6 +23,10 @@ function slugify(value: string): string {
     .slice(0, 60);
 }
 
+function generateApiKey(): string {
+  return crypto.randomBytes(24).toString('hex');
+}
+
 export function createTenant(input: TenantInput): Tenant {
   const now = new Date().toISOString();
   const id = input.id ?? uuid();
@@ -32,7 +37,7 @@ export function createTenant(input: TenantInput): Tenant {
     slug,
     status: input.status ?? 'active',
     contactEmail: input.contactEmail,
-    apiKey: input.apiKey,
+    apiKey: input.apiKey ?? generateApiKey(),
     rateLimit: {
       requestsPerMinute: input.rateLimit?.requestsPerMinute ?? 600,
       burst: input.rateLimit?.burst ?? 120,
