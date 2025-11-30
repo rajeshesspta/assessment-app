@@ -101,19 +101,24 @@ describe('userRoutes', () => {
     expect(response.json()).toEqual({ error: 'User with email already exists' });
   });
 
-  it('blocks super admin contexts', async () => {
+  it('allows super admin to create users', async () => {
     setSuperAdminTenant('sys-tenant');
     const response = await app.inject({
       method: 'POST',
       url: '/users',
       payload: {
-        email: 'blocked@example.com',
-        displayName: 'Blocked',
+        email: 'admin-created@example.com',
+        displayName: 'Admin Created',
         role: 'CONTENT_AUTHOR',
       },
     });
 
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toEqual({ error: 'Super Admin must manage admins via /tenants/:id/admins' });
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body).toMatchObject({
+      email: 'admin-created@example.com',
+      role: 'CONTENT_AUTHOR',
+      tenantId: 'sys-tenant',
+    });
   });
 });

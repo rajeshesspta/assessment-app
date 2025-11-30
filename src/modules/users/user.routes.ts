@@ -46,9 +46,6 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     attachValidation: true,
     validatorCompiler: passThroughValidator,
   }, async (req, reply) => {
-    if (forbidSuperAdmin(req, reply)) {
-      return;
-    }
     const tenantId = (req as any).tenantId as string;
     const parsed = createSchema.parse(req.body);
     const existing = repository.getByEmail(tenantId, parsed.email);
