@@ -248,6 +248,13 @@ export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | Sh
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; }
 
+export interface Cohort extends BaseEntity {
+	name: string;
+	description?: string;
+	learnerIds: string[];
+	assessmentIds: string[];
+}
+
 export interface AttemptResponse {
 	itemId: string;
 	answerIndexes?: number[];

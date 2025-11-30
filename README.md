@@ -11,6 +11,7 @@ Headless assessment platform MVP in TypeScript + Fastify.
 - Item Bank (MCQ single/multi, TRUE_FALSE, fill-in-the-blank, matching, ordering/ranking, short-answer, essay/long-form, numeric entry, hotspot, drag-and-drop, scenario/coding tasks)
 - Assessment Authoring (static list of item IDs)
 - Attempt & Response Capture
+- Cohort Management (tenant-managed learner groups + assessment assignments)
 - User Management (tenant-scoped Content Authors, Learners, Raters; Super Admin-managed Tenant Admins)
 - Scoring (auto for MCQ + structured types; short-answer, essay, and scenario tasks route events for manual/AI rubric or automation review)
 - Analytics (attempt count + average score)
@@ -63,9 +64,11 @@ Once a tenant exists, the Super Admin keeps using the same platform API key but 
 
 - Every authenticated request should declare the caller’s tenant-scoped roles via `x-actor-roles`. Provide a comma-separated list (e.g., `CONTENT_AUTHOR,LEARNER`); the auth middleware normalizes case, dedupes, and exposes the result on `request.actorRoles`.
 - When omitted, tenant-bound API keys default to `['TENANT_ADMIN']` and the Super Admin key defaults to `['SUPER_ADMIN']`, but portals should always send explicit roles so downstream route guards can enforce permissions for learners vs. authors vs. raters.
-- Item endpoints (`/items`, `/items/:id`) now require either the `CONTENT_AUTHOR` or `TENANT_ADMIN` role, and Super Admin identities are explicitly blocked. If a Super Admin needs to curate content, they must invite a Tenant Admin or Content Author within that tenant instead of calling the routes directly.
+- Item endpoints (`/items`, `/items/:id`) and cohort endpoints (`/cohorts`, `/cohorts/:id/*`) require either the `CONTENT_AUTHOR` or `TENANT_ADMIN` role, and Super Admin identities are explicitly blocked. If a Super Admin needs to curate content or manage cohorts, they must invite a Tenant Admin or Content Author within that tenant instead of calling the routes directly.
 
 Both endpoints rely on the `users` table (`migrations/sqlite/013_users_table.sql`) plus the follow-up `014_users_roles_json.sql` migration that stores multi-role assignments. After pulling these changes, run `npm run db:migrate -- --all-tenants` (or target individual tenants) so every tenant database gains the new schema before invoking the APIs.
+
+Cohort APIs rely on the `cohorts` table introduced in `migrations/sqlite/015_cohorts_table.sql`. Run the same migration command (all tenants or one-by-one) after upgrading so cohort routes have the required schema.
 
 For deeper implementation details (role lifecycle, APIs, data model), see `docs/domain.md`.
 
@@ -73,6 +76,9 @@ For deeper implementation details (role lifecycle, APIs, data model), see `docs/
 
 - Cohort: a logical group of learners (class, onboarding batch, pilot program) used for assessment assignments, accommodations, and analytics rollups.
 - Cohort assignments let Super Admins or Tenant Admins (often partnering with Authors) schedule assessments once and deliver them to every learner in that cohort, while analytics surfaces completion/performance per cohort. Content Authors can also target specific cohorts when scheduling an assessment.
+- Tenant Admins or Content Authors create cohorts via `POST /cohorts`, providing a name, optional description, and at least one learner id (only users with the `LEARNER` role are accepted). Optional assessment ids can be included at creation time.
+- Use `POST /cohorts/:id/assessments` to add additional assessments later. The service validates that every referenced assessment exists before persisting the assignment.
+- `GET /cohorts` returns the tenant’s cohorts so portals can display membership and assignment data. Super Admin callers are blocked from these routes to reinforce tenant-managed ownership.
 
 ## Running
 
@@ -172,6 +178,9 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - Ordering responses submit `orderingAnswer` (array of option ids) and support either binary (`mode: all`) or partial pairwise credit (`mode: partial_pairs`).
 - Short-answer responses submit `textAnswer` or `textAnswers[0]`; essay responses submit `essayAnswer`. Both emit `FreeResponseEvaluationRequested` events so reviewers or AI rubric services can assign up to the configured `maxScore`. Scenario tasks submit `scenarioAnswer` (repository/artifact links, submission notes, supporting files) and emit `ScenarioEvaluationRequested` events so automation pipelines or reviewers can perform evaluation before the attempt is scored. Numeric entry responses submit `numericAnswer.value` (with optional `unit`) and are auto-scored using either exact-with-tolerance or range validation.
 - GET /items/:id (requires `CONTENT_AUTHOR` or `TENANT_ADMIN`; Super Admin callers receive HTTP 403)
+- POST /cohorts (creates a tenant-managed cohort with one or more learners and optional assessments; requires `CONTENT_AUTHOR` or `TENANT_ADMIN` and rejects Super Admin callers)
+- GET /cohorts (lists cohorts for the tenant; same role requirements)
+- POST /cohorts/:id/assessments (assigns additional assessments to an existing cohort; same role requirements)
 - POST /assessments
 - GET /assessments/:id
 - POST /attempts (start)

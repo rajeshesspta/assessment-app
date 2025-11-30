@@ -7,6 +7,7 @@ import { assessmentRoutes } from './modules/assessments/assessment.routes.js';
 import { attemptRoutes } from './modules/attempts/attempt.routes.js';
 import { analyticsRoutes } from './modules/analytics/analytics.routes.js';
 import { userRoutes } from './modules/users/user.routes.js';
+import { cohortRoutes } from './modules/cohorts/cohort.routes.js';
 import {
   createInMemoryRepositoryBundle,
   type RepositoryBundle,
@@ -96,6 +97,12 @@ export function buildApp(deps: AppDependencies = {}) {
   });
   app.register(analyticsRoutes, { prefix: '/analytics', attemptRepository: repositories.attempt });
   app.register(userRoutes, { prefix: '/users', repository: repositories.user });
+  app.register(cohortRoutes, {
+    prefix: '/cohorts',
+    repository: repositories.cohort,
+    userRepository: repositories.user,
+    assessmentRepository: repositories.assessment,
+  });
   app.register(tenantRoutes, {
     prefix: '/tenants',
     repository: tenantRepository,

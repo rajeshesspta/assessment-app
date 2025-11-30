@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   analyticsRoutes: vi.fn(async (app: FastifyInstance, _opts?: unknown) => {
     app.get('/mock', async () => ({ ok: true }));
   }),
+  cohortRoutes: vi.fn(async (app: FastifyInstance, _opts?: unknown) => {
+    app.get('/mock', async () => ({ ok: true }));
+  }),
 }));
 
 vi.mock('../modules/auth/auth.middleware.js', () => ({
@@ -36,6 +39,10 @@ vi.mock('../modules/attempts/attempt.routes.js', () => ({
 
 vi.mock('../modules/analytics/analytics.routes.js', () => ({
   analyticsRoutes: (app: FastifyInstance, opts: unknown) => mocks.analyticsRoutes(app, opts),
+}));
+
+vi.mock('../modules/cohorts/cohort.routes.js', () => ({
+  cohortRoutes: (app: FastifyInstance, opts: unknown) => mocks.cohortRoutes(app, opts),
 }));
 
 import { buildApp } from '../app.js';
@@ -74,6 +81,7 @@ describe('buildApp', () => {
     expect(mocks.assessmentRoutes).toHaveBeenCalled();
     expect(mocks.attemptRoutes).toHaveBeenCalled();
     expect(mocks.analyticsRoutes).toHaveBeenCalled();
+    expect(mocks.cohortRoutes).toHaveBeenCalled();
 
     const [, itemOptions] = mocks.itemRoutes.mock.calls[0];
     expect(itemOptions).toMatchObject({ repository: expect.any(Object) });
@@ -90,5 +98,8 @@ describe('buildApp', () => {
 
     const [, analyticsOptions] = mocks.analyticsRoutes.mock.calls[0];
     expect(analyticsOptions).toMatchObject({ attemptRepository: expect.any(Object) });
+
+    const [, cohortOptions] = mocks.cohortRoutes.mock.calls[0];
+    expect(cohortOptions).toMatchObject({ repository: expect.any(Object), userRepository: expect.any(Object), assessmentRepository: expect.any(Object) });
   });
 });
