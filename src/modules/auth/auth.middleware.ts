@@ -2,8 +2,27 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { AuthError, TenantError } from '../../common/errors.js';
 import { apiKeyStore } from './api-key.store.js';
 import { loadConfig } from '../../config/index.js';
+import { USER_ROLES, type UserRole } from '../../common/types.js';
 
 const { auth: { superAdminTenantId } } = loadConfig();
+
+function parseActorRoles(value: string | string[] | undefined): UserRole[] {
+  if (!value) {
+    return [];
+  }
+  const raw = Array.isArray(value) ? value : value.split(',');
+  const normalized: UserRole[] = [];
+  for (const entry of raw) {
+    const candidate = entry.trim().toUpperCase();
+    if (!candidate) {
+      continue;
+    }
+    if (USER_ROLES.includes(candidate as UserRole) && !normalized.includes(candidate as UserRole)) {
+      normalized.push(candidate as UserRole);
+    }
+  }
+  return normalized;
+}
 
 export async function registerAuth(req: FastifyRequest, reply: FastifyReply) {
   const apiKey = req.headers['x-api-key'];
@@ -33,7 +52,10 @@ export async function registerAuth(req: FastifyRequest, reply: FastifyReply) {
     reply.code(403);
     throw new TenantError('Tenant mismatch for API key');
   }
+  const actorRolesHeader = req.headers['x-actor-roles'];
+  const actorRoles = parseActorRoles(actorRolesHeader);
   (req as any).tenantId = tenantId;
   (req as any).actorTenantId = record.tenantId;
   (req as any).isSuperAdmin = isSuperAdmin;
+  (req as any).actorRoles = actorRoles.length > 0 ? actorRoles : [isSuperAdmin ? 'SUPER_ADMIN' : 'TENANT_ADMIN'];
 }

@@ -94,6 +94,7 @@ describe('registerAuth middleware', () => {
     expect((req as any).tenantId).toBe('tenant-1');
     expect((req as any).actorTenantId).toBe('tenant-1');
     expect((req as any).isSuperAdmin).toBe(false);
+    expect((req as any).actorRoles).toEqual(['TENANT_ADMIN']);
   });
 
   it('allows super admin to impersonate any tenant', async () => {
@@ -106,5 +107,19 @@ describe('registerAuth middleware', () => {
     expect((req as any).tenantId).toBe('tenant-123');
     expect((req as any).actorTenantId).toBe('sys-tenant');
     expect((req as any).isSuperAdmin).toBe(true);
+     expect((req as any).actorRoles).toEqual(['SUPER_ADMIN']);
+  });
+
+  it('derives actor roles from header when provided', async () => {
+    getMock.mockResolvedValueOnce({ key: 'good', tenantId: 'tenant-1' });
+    const req = createRequest({
+      'x-api-key': 'good',
+      'x-tenant-id': 'tenant-1',
+      'x-actor-roles': 'learner, content_author , content_author,unknown',
+    });
+    const reply = createReply();
+
+    await expect(registerAuth(req, reply)).resolves.toBeUndefined();
+    expect((req as any).actorRoles).toEqual(['LEARNER', 'CONTENT_AUTHOR']);
   });
 });

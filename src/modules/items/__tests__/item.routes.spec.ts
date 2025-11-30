@@ -21,10 +21,15 @@ vi.mock('uuid', () => ({
 
 import { itemRoutes } from '../item.routes.js';
 
+let currentActorRoles: string[] = ['TENANT_ADMIN'];
+let currentIsSuperAdmin = false;
+
 async function buildTestApp() {
   const app = Fastify();
   app.addHook('onRequest', async request => {
     (request as any).tenantId = 'tenant-1';
+    (request as any).actorRoles = currentActorRoles;
+    (request as any).isSuperAdmin = currentIsSuperAdmin;
   });
   await app.register(itemRoutes, {
     prefix: '/items',
@@ -42,6 +47,8 @@ describe('itemRoutes', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    currentActorRoles = ['TENANT_ADMIN'];
+    currentIsSuperAdmin = false;
     saveMock.mockImplementation(entity => entity);
     listMock.mockReturnValue([]);
     app = await buildTestApp();
@@ -84,7 +91,29 @@ describe('itemRoutes', () => {
     expect(listMock).toHaveBeenCalledWith('tenant-1', { search: undefined, kind: 'TRUE_FALSE', limit: 10, offset: 0 });
   });
 
+  it('rejects callers without author or admin roles', async () => {
+    currentActorRoles = ['LEARNER'];
+
+    const response = await app.inject({ method: 'GET', url: '/items' });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(listMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects super admins even if they supply tenant-scoped roles', async () => {
+    currentActorRoles = ['TENANT_ADMIN'];
+    currentIsSuperAdmin = true;
+
+    const response = await app.inject({ method: 'GET', url: '/items' });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(listMock).not.toHaveBeenCalled();
+  });
+
   it('creates an item when payload is valid', async () => {
+    currentActorRoles = ['CONTENT_AUTHOR'];
     uuidMock.mockReturnValueOnce('item-id-1').mockReturnValueOnce('event-id-1');
 
     const response = await app.inject({

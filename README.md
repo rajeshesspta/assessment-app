@@ -59,6 +59,12 @@ Once a tenant exists, the Super Admin keeps using the same platform API key but 
 - `POST /users`: Tenant-level route (Tenant Admin contexts); creates Content Authors, Learners, or Raters. Provide a non-empty `roles` array (values drawn from `GET /users/roles`); duplicates are deduped server-side. Duplicate emails per tenant return `409`.
 - `GET /users/roles`: Tenant-level route for any authenticated caller; returns the canonical list of tenant-manageable roles so portals and SDKs stay in sync with backend enums.
 
+### Actor Role Header
+
+- Every authenticated request should declare the caller’s tenant-scoped roles via `x-actor-roles`. Provide a comma-separated list (e.g., `CONTENT_AUTHOR,LEARNER`); the auth middleware normalizes case, dedupes, and exposes the result on `request.actorRoles`.
+- When omitted, tenant-bound API keys default to `['TENANT_ADMIN']` and the Super Admin key defaults to `['SUPER_ADMIN']`, but portals should always send explicit roles so downstream route guards can enforce permissions for learners vs. authors vs. raters.
+- Item endpoints (`/items`, `/items/:id`) now require either the `CONTENT_AUTHOR` or `TENANT_ADMIN` role, and Super Admin identities are explicitly blocked. If a Super Admin needs to curate content, they must invite a Tenant Admin or Content Author within that tenant instead of calling the routes directly.
+
 Both endpoints rely on the `users` table (`migrations/sqlite/013_users_table.sql`) plus the follow-up `014_users_roles_json.sql` migration that stores multi-role assignments. After pulling these changes, run `npm run db:migrate -- --all-tenants` (or target individual tenants) so every tenant database gains the new schema before invoking the APIs.
 
 For deeper implementation details (role lifecycle, APIs, data model), see `docs/domain.md`.
@@ -161,11 +167,11 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 
 ## API (Summary)
 
-- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering, short-answer, essay, numeric entry, hotspot, drag-and-drop, scenario tasks)
-- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING|SHORT_ANSWER|ESSAY|NUMERIC_ENTRY|HOTSPOT|DRAG_AND_DROP|SCENARIO_TASK` filter)
+- POST /items (supports MCQ, TRUE_FALSE, fill-in-the-blank, matching, ordering, short-answer, essay, numeric entry, hotspot, drag-and-drop, scenario tasks; requires `CONTENT_AUTHOR` or `TENANT_ADMIN` via `x-actor-roles` and rejects Super Admin callers)
+- GET /items (search + optional `kind=MCQ|TRUE_FALSE|FILL_IN_THE_BLANK|MATCHING|ORDERING|SHORT_ANSWER|ESSAY|NUMERIC_ENTRY|HOTSPOT|DRAG_AND_DROP|SCENARIO_TASK` filter; same role requirements and Super Admin callers are rejected)
 - Ordering responses submit `orderingAnswer` (array of option ids) and support either binary (`mode: all`) or partial pairwise credit (`mode: partial_pairs`).
 - Short-answer responses submit `textAnswer` or `textAnswers[0]`; essay responses submit `essayAnswer`. Both emit `FreeResponseEvaluationRequested` events so reviewers or AI rubric services can assign up to the configured `maxScore`. Scenario tasks submit `scenarioAnswer` (repository/artifact links, submission notes, supporting files) and emit `ScenarioEvaluationRequested` events so automation pipelines or reviewers can perform evaluation before the attempt is scored. Numeric entry responses submit `numericAnswer.value` (with optional `unit`) and are auto-scored using either exact-with-tolerance or range validation.
-- GET /items/:id
+- GET /items/:id (requires `CONTENT_AUTHOR` or `TENANT_ADMIN`; Super Admin callers receive HTTP 403)
 - POST /assessments
 - GET /assessments/:id
 - POST /attempts (start)
@@ -177,7 +183,7 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - POST /users (Tenant Admin contexts; invites Content Authors, Learners, or Raters via a non-empty `roles[]` payload)
 - GET /users/roles (lists tenant-manageable roles: `CONTENT_AUTHOR`, `LEARNER`, `RATER`)
 
-Headers required: `x-api-key`, `x-tenant-id`.
+Headers required: `x-api-key`, `x-tenant-id`, and `x-actor-roles` (comma-separated roles) for any route that enforces role-specific permissions (e.g., `/items`).
 
 ## Tenant-Scoped Content
 

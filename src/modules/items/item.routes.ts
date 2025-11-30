@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { createItem } from './item.model.js';
@@ -15,9 +15,31 @@ import type {
   ScenarioTaskItem,
   ShortAnswerItem,
 } from '../../common/types.js';
+import type { UserRole } from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
+
+const ITEM_MANAGER_ROLES: UserRole[] = ['CONTENT_AUTHOR', 'TENANT_ADMIN'];
+
+function hasItemManagerRole(request: any): boolean {
+  const roles: UserRole[] = (request.actorRoles as UserRole[] | undefined) ?? [];
+  return ITEM_MANAGER_ROLES.some(role => roles.includes(role));
+}
+
+function ensureItemManager(request: any, reply: FastifyReply): boolean {
+  if (request.isSuperAdmin) {
+    reply.code(403);
+    reply.send({ error: 'Forbidden' });
+    return false;
+  }
+  if (hasItemManagerRole(request)) {
+    return true;
+  }
+  reply.code(403);
+  reply.send({ error: 'Forbidden' });
+  return false;
+}
 
 const mcqSchema = z.object({
   kind: z.literal('MCQ'),
@@ -315,7 +337,8 @@ export interface ItemRoutesOptions {
 
 export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOptions) {
   const { repository } = options;
-  app.get('/', async req => {
+  app.get('/', async (req, reply) => {
+    if (!ensureItemManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const { search, limit, offset, kind } = listQuerySchema.parse(req.query ?? {});
     return repository.list(tenantId, { search, kind, limit: limit ?? 10, offset: offset ?? 0 });
@@ -329,6 +352,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
     attachValidation: true,
     validatorCompiler: passThroughValidator,
   }, async (req, reply) => {
+    if (!ensureItemManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     if ((req as any).validationError) {
       req.log.debug({ err: (req as any).validationError }, 'Ignoring Fastify validation error; using Zod');
@@ -795,6 +819,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
   });
 
   app.get('/:id', async (req, reply) => {
+    if (!ensureItemManager(req, reply)) return;
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
     const item = repository.getById(tenantId, id);
