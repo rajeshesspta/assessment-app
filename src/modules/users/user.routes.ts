@@ -67,6 +67,7 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     schema: {
       tags: ['Users'],
       summary: 'Invite a Content Author, Learner, or Rater',
+      description: `Available roles: ${TENANT_USER_ROLES.join(', ')}. Call GET /users/roles for the authoritative list.`,
       body: createUserBodySchema,
     },
     attachValidation: true,
