@@ -16,9 +16,11 @@ import type {
   ShortAnswerItem,
 } from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
+import { toJsonSchema } from '../../common/zod-json-schema.js';
+import { passThroughValidator } from '../../common/fastify-schema.js';
 
 const mcqSchema = z.object({
-  kind: z.literal('MCQ').default('MCQ'),
+  kind: z.literal('MCQ'),
   prompt: z.string().min(1),
   choices: z.array(z.object({ text: z.string().min(1) })).min(2),
   answerMode: z.enum(['single', 'multiple']).default('single'),
@@ -284,6 +286,8 @@ const createSchema = z.discriminatedUnion('kind', [
   scenarioTaskSchema,
 ]);
 
+const createItemBodySchema = toJsonSchema(createSchema, 'CreateItemRequest');
+
 const listQuerySchema = z.object({
   search: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
@@ -316,8 +320,19 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
     const { search, limit, offset, kind } = listQuerySchema.parse(req.query ?? {});
     return repository.list(tenantId, { search, kind, limit: limit ?? 10, offset: offset ?? 0 });
   });
-  app.post('/', async (req, reply) => {
+  app.post('/', {
+    schema: {
+      tags: ['Items'],
+      summary: 'Create an item',
+      body: createItemBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
+    if ((req as any).validationError) {
+      req.log.debug({ err: (req as any).validationError }, 'Ignoring Fastify validation error; using Zod');
+    }
     let parsed: z.infer<typeof createSchema>;
     try {
       parsed = createSchema.parse(req.body ?? {});

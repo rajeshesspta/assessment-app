@@ -4,6 +4,8 @@ import type { TenantRepository } from './tenant.repository.js';
 import { createTenant, updateTenant } from './tenant.model.js';
 import type { UserRepository } from '../users/user.repository.js';
 import { createUser } from '../users/user.model.js';
+import { toJsonSchema } from '../../common/zod-json-schema.js';
+import { passThroughValidator } from '../../common/fastify-schema.js';
 
 export interface TenantRoutesOptions {
   repository: TenantRepository;
@@ -41,6 +43,10 @@ const createTenantAdminSchema = z.object({
   displayName: z.string().min(1).max(120),
   status: userStatusSchema.optional(),
 });
+
+const createTenantBodySchema = toJsonSchema(createSchema, 'CreateTenantRequest');
+const updateTenantBodySchema = toJsonSchema(updateSchema, 'UpdateTenantRequest');
+const createTenantAdminBodySchema = toJsonSchema(createTenantAdminSchema, 'CreateTenantAdminRequest');
 
 function validationError(error: z.ZodError, reply: FastifyReply) {
   reply.code(400);
@@ -85,7 +91,15 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
     return repository.list();
   });
 
-  app.post('/', async (req, reply) => {
+  app.post('/', {
+    schema: {
+      tags: ['Tenants'],
+      summary: 'Create a tenant (Super Admin only)',
+      body: createTenantBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
     if (!ensureAdmin(req, reply)) return;
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -125,7 +139,20 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
     return tenant;
   });
 
-  app.patch('/:id', async (req, reply) => {
+  app.patch('/:id', {
+    schema: {
+      tags: ['Tenants'],
+      summary: 'Update tenant metadata',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      body: updateTenantBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
     if (!ensureAdmin(req, reply)) return;
     const id = (req.params as any).id as string;
     const existing = repository.getById(id) ?? repository.getBySlug(id);
@@ -170,7 +197,20 @@ export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOp
     reply.code(204);
   });
 
-  app.post('/:id/admins', async (req, reply) => {
+  app.post('/:id/admins', {
+    schema: {
+      tags: ['Tenants'],
+      summary: 'Create tenant admin while impersonating the target tenant',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      body: createTenantAdminBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
     if (!ensureAdmin(req, reply)) return;
     const paramId = (req.params as any).id as string;
     const tenant = repository.getById(paramId) ?? repository.getBySlug(paramId);

@@ -5,7 +5,8 @@
     "types": ["vite/client"],
     "strict": true,
     "esModuleInterop": true,
-    "moduleResolution": "Bundler"
+    "moduleResolution": "Bundler",
+    "lib": ["DOM", "DOM.Iterable", "ES2020"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

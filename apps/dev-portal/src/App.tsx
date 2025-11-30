@@ -1,6 +1,8 @@
 import type { OpenAPIV3 } from 'openapi-types';
 import { useMemo } from 'react';
 import { useOpenApiSpec } from './hooks/useOpenApiSpec';
+import { PostPlayground } from './components/PostPlayground';
+import { generateExampleFromSchema, resolveRequestBody, resolveSchemaObject } from './utils/openapi';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 const swaggerUiUrl = `${apiBaseUrl}/docs`;
@@ -20,14 +22,18 @@ const resourceLinks = [
   { label: 'Repository README', href: 'https://github.com/rajeshesspta/assessment-app' },
 ];
 
-const methods: Array<keyof OpenAPIV3.PathItemObject> = ['get', 'post', 'put', 'patch', 'delete'];
+type AllowedMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
+const methods: AllowedMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
 
 export default function App() {
   const { spec, loading, error } = useOpenApiSpec(openApiJsonUrl);
 
-  const endpoints = useMemo(() => {
-    if (!spec?.paths) return [];
-    return Object.entries(spec.paths)
+  const { endpoints, postOperations } = useMemo(() => {
+    if (!spec?.paths) {
+      return { endpoints: [], postOperations: [] };
+    }
+
+    const entries = Object.entries(spec.paths)
       .flatMap(([path, item]) => {
         if (!item) return [];
         return methods
@@ -44,6 +50,31 @@ export default function App() {
           .filter(Boolean) as { method: string; path: string; summary: string }[];
       })
       .slice(0, 10);
+
+    const posts = Object.entries(spec.paths)
+      .flatMap(([path, item]) => {
+        const operation = item?.post as OpenAPIV3.OperationObject | undefined;
+        if (!operation) return [];
+        const requestBody = resolveRequestBody(operation.requestBody as OpenAPIV3.RequestBodyObject | undefined, spec.components);
+        const schema = requestBody?.content?.['application/json']?.schema;
+        const resolvedSchema = resolveSchemaObject(schema, spec.components);
+        const example = schema ? generateExampleFromSchema(schema, spec.components) : {};
+        const prettyExample = JSON.stringify(example ?? {}, null, 2) ?? '{\n  \n}';
+        const schemaString = resolvedSchema ? JSON.stringify(resolvedSchema, null, 2) : null;
+        return [
+          {
+            id: `${path}-post`,
+            path,
+            summary: operation.summary ?? `POST ${path}`,
+            description: operation.description,
+            exampleBody: prettyExample,
+            schema: schemaString,
+          },
+        ];
+      })
+      .slice(0, 3);
+
+    return { endpoints: entries, postOperations: posts };
   }, [spec]);
 
   return (
@@ -104,6 +135,16 @@ export default function App() {
             <iframe title="Swagger UI" src={swaggerUiUrl} loading="lazy" />
           </div>
         </section>
+
+        {postOperations.length > 0 && (
+          <section className="card">
+            <div className="section-header">
+              <h2>Try POST Endpoints</h2>
+              <span className="muted">Send real POST requests without leaving the portal.</span>
+            </div>
+            <PostPlayground baseUrl={apiBaseUrl} operations={postOperations} />
+          </section>
+        )}
 
         <section className="card">
           <div className="section-header">

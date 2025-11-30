@@ -15,6 +15,8 @@ import type {
   ScenarioWorkspaceTemplate,
 } from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
+import { toJsonSchema } from '../../common/zod-json-schema.js';
+import { passThroughValidator } from '../../common/fastify-schema.js';
 
 const startSchema = z.object({ assessmentId: z.string(), userId: z.string() });
 const responseSchema = z.object({
@@ -42,6 +44,8 @@ const responseSchema = z.object({
 });
 
 const responsesSchema = z.object({ responses: z.array(responseSchema) });
+const startBodySchema = toJsonSchema(startSchema);
+const responsesBodySchema = toJsonSchema(responsesSchema);
 
 export interface AttemptRoutesOptions {
   attemptRepository: AttemptRepository;
@@ -97,7 +101,7 @@ function isPointInPolygon(point: HotspotPoint, polygon: HotspotPoint[]): boolean
 
 export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
   const { attemptRepository, assessmentRepository, itemRepository } = options;
-  app.post('/', async (req, reply) => {
+  app.post('/', { schema: { body: startBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
     const parsed = startSchema.parse(req.body);
     const assessment = assessmentRepository.getById(tenantId, parsed.assessmentId);
@@ -110,7 +114,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     return attempt;
   });
 
-  app.patch('/:id/responses', async (req, reply) => {
+  app.patch('/:id/responses', { schema: { body: responsesBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
     const attempt = attemptRepository.getById(tenantId, id);

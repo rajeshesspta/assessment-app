@@ -72,6 +72,10 @@ export function buildApp(deps: AppDependencies = {}) {
     staticCSP: true,
   });
 
+  app.setValidatorCompiler(() => {
+    return data => ({ value: data });
+  });
+
   // Register auth & tenant enforcement
   app.addHook('onRequest', async (request, reply) => {
     const url = request.raw.url ?? '';

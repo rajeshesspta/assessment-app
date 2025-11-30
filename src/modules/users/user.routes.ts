@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { UserRepository } from './user.repository.js';
 import { createUser } from './user.model.js';
+import { toJsonSchema } from '../../common/zod-json-schema.js';
+import { passThroughValidator } from '../../common/fastify-schema.js';
 
 const allowedRoles = ['CONTENT_AUTHOR', 'LEARNER'] as const;
 const allowedStatuses = ['active', 'invited', 'disabled'] as const;
@@ -16,6 +18,8 @@ const createSchema = z.object({
   role: z.enum(allowedRoles),
   status: z.enum(allowedStatuses).optional(),
 });
+
+const createUserBodySchema = toJsonSchema(createSchema, 'CreateUserRequest');
 
 function forbidSuperAdmin(request: any, reply: any): boolean {
   if (request.isSuperAdmin) {
@@ -33,7 +37,15 @@ export interface UserRoutesOptions {
 export async function userRoutes(app: FastifyInstance, options: UserRoutesOptions) {
   const { repository } = options;
 
-  app.post('/', async (req, reply) => {
+  app.post('/', {
+    schema: {
+      tags: ['Users'],
+      summary: 'Invite a Content Author or Learner',
+      body: createUserBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
     if (forbidSuperAdmin(req, reply)) {
       return;
     }

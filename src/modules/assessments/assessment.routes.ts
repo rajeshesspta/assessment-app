@@ -4,11 +4,15 @@ import { v4 as uuid } from 'uuid';
 import { createAssessment } from './assessment.model.js';
 import type { AssessmentRepository } from './assessment.repository.js';
 import { eventBus } from '../../common/event-bus.js';
+import { toJsonSchema } from '../../common/zod-json-schema.js';
+import { passThroughValidator } from '../../common/fastify-schema.js';
 
 const createSchema = z.object({
   title: z.string().min(1),
   itemIds: z.array(z.string()).min(1),
 });
+
+const createAssessmentBodySchema = toJsonSchema(createSchema, 'CreateAssessmentRequest');
 
 export interface AssessmentRoutesOptions {
   repository: AssessmentRepository;
@@ -16,7 +20,15 @@ export interface AssessmentRoutesOptions {
 
 export async function assessmentRoutes(app: FastifyInstance, options: AssessmentRoutesOptions) {
   const { repository } = options;
-  app.post('/', async (req, reply) => {
+  app.post('/', {
+    schema: {
+      tags: ['Assessments'],
+      summary: 'Create an assessment',
+      body: createAssessmentBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
     const tenantId = (req as any).tenantId as string;
     const parsed = createSchema.parse(req.body);
     const id = uuid();
