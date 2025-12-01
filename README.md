@@ -126,7 +126,8 @@ The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by defaul
 
 ### Consumer Portal (Tenant Learner App)
 
-- `npm run dev:consumer:bff` starts the local BFF at `http://127.0.0.1:4000`; `npm run dev:consumer` launches the Vite portal at `http://127.0.0.1:6000` (override via `VITE_PORT`).
+- `npm run dev:consumer:bff` starts the local BFF at `http://127.0.0.1:4000`; `npm run dev:consumer` launches the Vite portal at `http://127.0.0.1:5173` (override via `VITE_PORT`).
+- Learners can sign in via Google, Microsoft, or custom credentials before entering the dashboard; the in-app navigation surfaces My Assessments, Analytics, and resource links.
 - The portal session banner now only asks for the BFF base URL (defaults to `/api`), learner id, and optional actor roles—the BFF keeps the tenant API key + id inside its `.env` file.
 - All learner calls (`GET /analytics/assessments/:id`, `POST /attempts`, `GET /attempts/:id`) flow through the BFF, which injects tenant headers before calling the headless API.
 - `/api/*` requests are proxied to the BFF during dev (override with `VITE_PROXY_API` or edit `apps/consumer-portal/.env.local`).
