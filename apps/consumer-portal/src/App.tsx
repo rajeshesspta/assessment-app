@@ -10,8 +10,8 @@ import { usePortalAuth } from './hooks/usePortalAuth';
 import { LoginPage } from './components/LoginPage';
 
 const NAV_ITEMS = [
-  { id: 'overview', label: 'Overview' },
   { id: 'my-assessments', label: 'My Assessments' },
+  { id: 'overview', label: 'Overview' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'resources', label: 'Resources' },
 ];
@@ -25,6 +25,7 @@ export default function App() {
   const [busyState, setBusyState] = useState<'idle' | 'loading' | 'submitting'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState<string>('my-assessments');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const ensureApi = useCallback(() => {
     if (!api) {
@@ -91,47 +92,93 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white/95 shadow-sm ring-1 ring-slate-100">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-500">Assessment Platform</p>
-            <h1 className="text-2xl font-bold text-slate-900">Welcome back, {user.name}</h1>
-            <p className="text-sm text-slate-500">Signed in via {user.provider === 'custom' ? 'custom credentials' : user.provider === 'google' ? 'Google Workspace' : 'Microsoft Entra ID'} · {user.email}</p>
+    <div className="flex min-h-screen bg-midnight-900 text-slate-100">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col gap-6 border-r border-white/5 bg-midnight-800/90 p-6 backdrop-blur-xl transition-transform duration-200 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-200">Portal</p>
+            <p className="text-lg font-semibold text-white">Assessment App</p>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-100/70 p-3">
-            <div className="hidden text-right text-sm md:block">
-              <p className="font-semibold text-slate-700">{user.name}</p>
-              <p className="text-xs text-slate-500">Learner</p>
-            </div>
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-lg font-semibold text-white">{user.name[0]?.toUpperCase() ?? 'U'}</span>
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300"
-              onClick={() => {
-                logout();
-                setAnalytics(null);
-                setAttempts([]);
-              }}
-            >
-              Logout
-            </button>
-          </div>
+          <button
+            type="button"
+            className="rounded-xl border border-white/10 p-2 text-white transition hover:border-white/40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          >
+            ✕
+          </button>
         </div>
-        <nav className="mx-auto flex w-full max-w-5xl gap-2 overflow-x-auto px-4 pb-4">
-          {NAV_ITEMS.map(item => (
+        <div className="space-y-2">
+          {NAV_ITEMS.map(item => {
+            const isActive = item.id === activeNav;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setActiveNav(item.id);
+                  setSidebarOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                  isActive ? 'bg-white/90 text-midnight-700 shadow-glow' : 'bg-white/5 text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                {item.label}
+                {isActive && <span className="h-2 w-2 rounded-full bg-brand-500" />}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-xs uppercase tracking-[0.3em] text-brand-200">Profile</p>
+          <p className="mt-2 font-semibold text-white">{user.name}</p>
+          <p className="text-sm text-slate-300">{user.email}</p>
+          <button
+            type="button"
+            className="mt-4 w-full rounded-xl border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-white/40"
+            onClick={() => {
+              logout();
+              setAnalytics(null);
+              setAttempts([]);
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      </aside>
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <div className="flex flex-1 flex-col md:pl-72">
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-midnight-800/70 px-6 py-4 backdrop-blur">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-200">Dashboard</p>
+            <h1 className="text-2xl font-bold text-white">Welcome back, {user.name}</h1>
+            <p className="text-sm text-slate-300">Signed in via {user.provider === 'custom' ? 'custom credentials' : user.provider === 'google' ? 'Google Workspace' : 'Microsoft Entra ID'} · {user.email}</p>
+          </div>
+          <div className="flex items-center gap-3">
             <button
-              key={item.id}
               type="button"
-              onClick={() => setActiveNav(item.id)}
-              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${activeNav === item.id ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:text-slate-900'}`}
+              className="rounded-2xl border border-white/10 p-3 text-white transition hover:border-white/40 md:hidden"
+              aria-label="Toggle navigation"
+              onClick={() => setSidebarOpen(prev => !prev)}
             >
-              {item.label}
+              <span className="block h-0.5 w-6 bg-white" />
+              <span className="mt-1 block h-0.5 w-6 bg-white" />
+              <span className="mt-1 block h-0.5 w-6 bg-white" />
             </button>
-          ))}
-        </nav>
-      </header>
-      <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
+            <span className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg font-semibold text-white md:flex">{user.name[0]?.toUpperCase() ?? 'U'}</span>
+          </div>
+        </header>
+        <main className="flex flex-1 flex-col gap-6 bg-gradient-to-b from-midnight-900 via-midnight-900 to-midnight-800 px-6 py-8">
         {activeNav === 'my-assessments' && (
           <>
             <TenantSessionForm
@@ -144,13 +191,13 @@ export default function App() {
               }}
             />
             {busyState !== 'idle' && (
-              <div className="flex flex-col gap-2 rounded-2xl bg-white/90 p-4 text-sm text-slate-500 shadow-sm ring-1 ring-slate-100 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200 shadow-glow md:flex-row md:items-center md:justify-between">
                 <LoadingState label={busyState === 'loading' ? 'Syncing data' : 'Starting attempt'} />
-                <p className="text-right">Requests fan out to the headless API through the BFF with tenant headers.</p>
+                <p className="text-right text-slate-300">Requests fan out to the headless API through the BFF with tenant headers.</p>
               </div>
             )}
             {error && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 text-rose-900">
+              <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-rose-100">
                 <strong className="text-sm font-semibold">Request failed</strong>
                 <p className="text-sm">{error}</p>
               </div>
@@ -167,30 +214,31 @@ export default function App() {
         {activeNav === 'overview' && (
           <section className="grid gap-4 md:grid-cols-3">
             {overviewCards.map(card => (
-              <article key={card.title} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                <p className="text-sm font-semibold text-slate-500">{card.title}</p>
-                <p className="mt-2 text-base text-slate-900">{card.body}</p>
+              <article key={card.title} className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-glow">
+                <p className="text-sm font-semibold text-brand-200">{card.title}</p>
+                <p className="mt-2 text-base text-slate-100">{card.body}</p>
               </article>
             ))}
           </section>
         )}
         {activeNav === 'analytics' && (
-          <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
-            <p className="mt-2 text-sm text-slate-500">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
+          <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-glow">
+            <h2 className="text-lg font-semibold text-white">Analytics</h2>
+            <p className="mt-2 text-sm text-slate-300">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
           </section>
         )}
         {activeNav === 'resources' && (
-          <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Resources</h2>
-            <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-glow">
+            <h2 className="text-lg font-semibold text-white">Resources</h2>
+            <ul className="list-disc space-y-2 pl-5 text-sm text-slate-300">
               <li>Assessment guidebook and best practices.</li>
               <li>Contact support to unlock cohorts or request accommodations.</li>
               <li>Explore self-paced practice banks curated by content authors.</li>
             </ul>
           </section>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
