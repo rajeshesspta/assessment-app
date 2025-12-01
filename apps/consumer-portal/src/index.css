@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply min-h-screen text-slate-100 antialiased;
-    background-color: theme('colors.midnight.900');
+    @apply min-h-screen bg-sunrise-50 text-slate-900 antialiased;
+    background-color: theme('colors.sunrise.50');
   }
 }

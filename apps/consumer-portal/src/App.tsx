@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pin, PinOff } from 'lucide-react';
 import { TenantSessionForm } from './components/TenantSessionForm';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import { AttemptList } from './components/AttemptList';
@@ -9,12 +10,29 @@ import type { AssessmentAnalytics, AttemptResponse } from './utils/api';
 import { usePortalAuth } from './hooks/usePortalAuth';
 import { LoginPage } from './components/LoginPage';
 
-const NAV_ITEMS = [
+type NavItem = {
+  id: string;
+  label: string;
+  requiresTenantAdmin?: boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { id: 'my-assessments', label: 'My Assessments' },
   { id: 'overview', label: 'Overview' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'manage-learners', label: 'Manage Learners', requiresTenantAdmin: true },
   { id: 'resources', label: 'Resources' },
 ];
+
+type LearnerStatus = 'Active' | 'Invited';
+
+interface LearnerRosterEntry {
+  id: string;
+  name: string;
+  email: string;
+  cohort: string;
+  status: LearnerStatus;
+}
 
 export default function App() {
   const { user, loginWithProvider, loginCustom, logout } = usePortalAuth();
@@ -26,6 +44,52 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState<string>('my-assessments');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarPinned, setSidebarPinned] = useState(false);
+  const [learnerRoster, setLearnerRoster] = useState<LearnerRosterEntry[]>(() => ([
+    {
+      id: 'learner-101',
+      name: 'Mia Chen',
+      email: 'mia.chen@example.com',
+      cohort: 'Northwind Analytics',
+      status: 'Active',
+    },
+    {
+      id: 'learner-203',
+      name: 'Evan Patel',
+      email: 'evan.patel@example.com',
+      cohort: 'Retail Ops',
+      status: 'Invited',
+    },
+    {
+      id: 'learner-305',
+      name: 'Priya Rao',
+      email: 'priya.rao@example.com',
+      cohort: 'Healthcare Pilot',
+      status: 'Active',
+    },
+  ]));
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', cohort: '' });
+
+  const isTenantAdmin = useMemo(() => {
+    const sessionHas = session?.actorRoles?.some(role => role.toUpperCase() === 'TENANT_ADMIN');
+    const userHas = user?.roles?.some(role => role.toUpperCase() === 'TENANT_ADMIN');
+    return Boolean(sessionHas || userHas);
+  }, [session, user]);
+
+  const visibleNavItems = useMemo(
+    () => NAV_ITEMS.filter(item => !item.requiresTenantAdmin || isTenantAdmin),
+    [isTenantAdmin],
+  );
+
+  useEffect(() => {
+    if (!isTenantAdmin && activeNav === 'manage-learners') {
+      setActiveNav('my-assessments');
+    }
+  }, [isTenantAdmin, activeNav]);
+
+  const canSendInvite = inviteForm.name.trim().length > 0
+    && inviteForm.email.trim().length > 0
+    && inviteForm.email.includes('@');
 
   const ensureApi = useCallback(() => {
     if (!api) {
@@ -33,6 +97,16 @@ export default function App() {
     }
     return api;
   }, [api]);
+
+  const toggleSidebarPinned = useCallback(() => {
+    setSidebarPinned(prev => {
+      const next = !prev;
+      if (next) {
+        setSidebarOpen(false);
+      }
+      return next;
+    });
+  }, []);
 
   async function lookupAssessment(assessmentId: string) {
     const client = ensureApi();
@@ -86,33 +160,61 @@ export default function App() {
     return (
       <LoginPage
         onProviderLogin={loginWithProvider}
-        onCustomLogin={({ name, email }) => loginCustom(name, email)}
+        onCustomLogin={({ name, email, roles }) => loginCustom(name, email, roles)}
       />
     );
   }
 
+  const isSidebarVisible = sidebarPinned || sidebarOpen;
+
   return (
-    <div className="flex min-h-screen bg-midnight-900 text-slate-100">
+    <div className="flex min-h-screen bg-gradient-to-br from-sunrise-50 via-white to-sunrise-100 text-slate-900">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col gap-6 border-r border-white/5 bg-midnight-800/90 p-6 backdrop-blur-xl transition-transform duration-200 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        id="portal-sidebar"
+        aria-hidden={!isSidebarVisible}
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col gap-6 border border-brand-50/60 bg-white/95 p-6 backdrop-blur-xl transition-transform duration-200 ${
+          isSidebarVisible ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-200">Portal</p>
-            <p className="text-lg font-semibold text-white">Assessment App</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-500">Portal</p>
+            <p className="text-lg font-semibold text-slate-900">Assessment App</p>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-white/10 p-2 text-white transition hover:border-white/40 md:hidden"
-            onClick={() => setSidebarOpen(false)}
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`rounded-xl border p-2 transition ${
+                sidebarPinned
+                  ? 'border-brand-200 text-brand-600 hover:border-brand-300'
+                  : 'border-slate-200 text-slate-500 hover:border-brand-200 hover:text-brand-600'
+              }`}
+              aria-pressed={sidebarPinned}
+              aria-label={sidebarPinned ? 'Unpin sidebar navigation' : 'Pin sidebar navigation'}
+              title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'}
+              onClick={toggleSidebarPinned}
+            >
+              {sidebarPinned ? (
+                <PinOff className="h-5 w-5 transition duration-200" strokeWidth={1.5} />
+              ) : (
+                <Pin className="h-5 w-5 transition duration-200" strokeWidth={1.5} />
+              )}
+              <span className="sr-only">{sidebarPinned ? 'Unpin sidebar navigation' : 'Pin sidebar navigation'}</span>
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-slate-200 p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+              onClick={() => {
+                setSidebarPinned(false);
+                setSidebarOpen(false);
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
         <div className="space-y-2">
-          {NAV_ITEMS.map(item => {
+          {visibleNavItems.map(item => {
             const isActive = item.id === activeNav;
             return (
               <button
@@ -120,10 +222,14 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setActiveNav(item.id);
-                  setSidebarOpen(false);
+                  if (!sidebarPinned) {
+                    setSidebarOpen(false);
+                  }
                 }}
-                className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                  isActive ? 'bg-white/90 text-midnight-700 shadow-glow' : 'bg-white/5 text-slate-200 hover:bg-white/10'
+                className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                  isActive
+                    ? 'border-brand-100 bg-brand-50 text-brand-700'
+                    : 'border-transparent bg-white text-slate-500 hover:border-brand-100 hover:text-slate-900'
                 }`}
               >
                 {item.label}
@@ -132,13 +238,13 @@ export default function App() {
             );
           })}
         </div>
-        <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-[0.3em] text-brand-200">Profile</p>
-          <p className="mt-2 font-semibold text-white">{user.name}</p>
-          <p className="text-sm text-slate-300">{user.email}</p>
+        <div className="mt-auto rounded-2xl border border-brand-50 bg-sunrise-50 p-4">
+          <p className="text-xs uppercase tracking-[0.3em] text-brand-500">Profile</p>
+          <p className="mt-2 font-semibold text-slate-900">{user.name}</p>
+          <p className="text-sm text-slate-500">{user.email}</p>
           <button
             type="button"
-            className="mt-4 w-full rounded-xl border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-white/40"
+            className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700"
             onClick={() => {
               logout();
               setAnalytics(null);
@@ -149,94 +255,248 @@ export default function App() {
           </button>
         </div>
       </aside>
-      {sidebarOpen && (
+      {sidebarOpen && !sidebarPinned && (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          className="fixed inset-0 z-30 bg-slate-900/10"
           aria-label="Close sidebar"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <div className="flex flex-1 flex-col md:pl-72">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-midnight-800/70 px-6 py-4 backdrop-blur">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-200">Dashboard</p>
-            <h1 className="text-2xl font-bold text-white">Welcome back, {user.name}</h1>
-            <p className="text-sm text-slate-300">Signed in via {user.provider === 'custom' ? 'custom credentials' : user.provider === 'google' ? 'Google Workspace' : 'Microsoft Entra ID'} · {user.email}</p>
-          </div>
-          <div className="flex items-center gap-3">
+      <div className={`flex flex-1 flex-col ${sidebarPinned ? 'md:pl-72' : ''}`}>
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-brand-50/80 bg-white/80 px-6 py-4 backdrop-blur-xl">
+          <div className="flex flex-1 items-center gap-4">
             <button
               type="button"
-              className="rounded-2xl border border-white/10 p-3 text-white transition hover:border-white/40 md:hidden"
+              className="rounded-2xl border border-slate-200 p-3 text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
               aria-label="Toggle navigation"
-              onClick={() => setSidebarOpen(prev => !prev)}
-            >
-              <span className="block h-0.5 w-6 bg-white" />
-              <span className="mt-1 block h-0.5 w-6 bg-white" />
-              <span className="mt-1 block h-0.5 w-6 bg-white" />
-            </button>
-            <span className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg font-semibold text-white md:flex">{user.name[0]?.toUpperCase() ?? 'U'}</span>
-          </div>
-        </header>
-        <main className="flex flex-1 flex-col gap-6 bg-gradient-to-b from-midnight-900 via-midnight-900 to-midnight-800 px-6 py-8">
-        {activeNav === 'my-assessments' && (
-          <>
-            <TenantSessionForm
-              value={session}
-              onSave={saveSession}
-              onClear={() => {
-                clearSession();
-                setAnalytics(null);
-                setAttempts([]);
+              aria-expanded={isSidebarVisible}
+              aria-controls="portal-sidebar"
+              onClick={() => {
+                if (sidebarPinned) {
+                  setSidebarPinned(false);
+                  setSidebarOpen(false);
+                } else {
+                  setSidebarOpen(prev => !prev);
+                }
               }}
-            />
-            {busyState !== 'idle' && (
-              <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200 shadow-glow md:flex-row md:items-center md:justify-between">
-                <LoadingState label={busyState === 'loading' ? 'Syncing data' : 'Starting attempt'} />
-                <p className="text-right text-slate-300">Requests fan out to the headless API through the BFF with tenant headers.</p>
-              </div>
-            )}
-            {error && (
-              <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-rose-100">
-                <strong className="text-sm font-semibold">Request failed</strong>
-                <p className="text-sm">{error}</p>
-              </div>
-            )}
-            <AssessmentPanel
-              analytics={analytics}
-              onLookup={lookupAssessment}
-              onStartAttempt={startAttempt}
-              disabled={!session || !api}
-            />
-            <AttemptList attempts={attempts} onRefresh={refreshAttempt} />
-          </>
-        )}
-        {activeNav === 'overview' && (
-          <section className="grid gap-4 md:grid-cols-3">
-            {overviewCards.map(card => (
-              <article key={card.title} className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-glow">
-                <p className="text-sm font-semibold text-brand-200">{card.title}</p>
-                <p className="mt-2 text-base text-slate-100">{card.body}</p>
-              </article>
-            ))}
-          </section>
-        )}
-        {activeNav === 'analytics' && (
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-glow">
-            <h2 className="text-lg font-semibold text-white">Analytics</h2>
-            <p className="mt-2 text-sm text-slate-300">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
-          </section>
-        )}
-        {activeNav === 'resources' && (
-          <section className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-glow">
-            <h2 className="text-lg font-semibold text-white">Resources</h2>
-            <ul className="list-disc space-y-2 pl-5 text-sm text-slate-300">
-              <li>Assessment guidebook and best practices.</li>
-              <li>Contact support to unlock cohorts or request accommodations.</li>
-              <li>Explore self-paced practice banks curated by content authors.</li>
-            </ul>
-          </section>
-        )}
+            >
+              <span className="block h-0.5 w-6 bg-slate-700" />
+              <span className="mt-1 block h-0.5 w-6 bg-slate-700" />
+              <span className="mt-1 block h-0.5 w-6 bg-slate-700" />
+            </button>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-500">Dashboard</p>
+              <h1 className="text-2xl font-bold text-slate-900">Welcome back, {user.name}</h1>
+              <p className="text-sm text-slate-600">
+                Signed in via {user.provider === 'custom' ? 'custom credentials' : user.provider === 'google' ? 'Google Workspace' : 'Microsoft Entra ID'} · {user.email}
+              </p>
+            </div>
+          </div>
+          <span className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-lg font-semibold text-brand-600 md:flex">
+            {user.name[0]?.toUpperCase() ?? 'U'}
+          </span>
+        </header>
+        <main className="flex flex-1 flex-col gap-6 bg-gradient-to-b from-white via-sunrise-50 to-sunrise-100 px-6 py-8">
+          {activeNav === 'my-assessments' && (
+            <>
+              <TenantSessionForm
+                value={session}
+                onSave={saveSession}
+                onClear={() => {
+                  clearSession();
+                  setAnalytics(null);
+                  setAttempts([]);
+                }}
+              />
+              {busyState !== 'idle' && (
+                <div className="flex flex-col gap-2 rounded-2xl border border-brand-50 bg-white p-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+                  <LoadingState label={busyState === 'loading' ? 'Syncing data' : 'Starting attempt'} />
+                  <p className="text-right text-slate-500">Requests fan out to the headless API through the BFF with tenant headers.</p>
+                </div>
+              )}
+              {error && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+                  <strong className="text-sm font-semibold">Request failed</strong>
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
+              <AssessmentPanel
+                analytics={analytics}
+                onLookup={lookupAssessment}
+                onStartAttempt={startAttempt}
+                disabled={!session || !api}
+              />
+              <AttemptList attempts={attempts} onRefresh={refreshAttempt} />
+            </>
+          )}
+          {activeNav === 'overview' && (
+            <section className="grid gap-4 md:grid-cols-3">
+              {overviewCards.map(card => (
+                <article key={card.title} className="rounded-2xl border border-brand-50 bg-white p-5">
+                  <p className="text-sm font-semibold text-brand-600">{card.title}</p>
+                  <p className="mt-2 text-base text-slate-600">{card.body}</p>
+                </article>
+              ))}
+            </section>
+          )}
+          {activeNav === 'analytics' && (
+            <section className="rounded-2xl border border-brand-50 bg-white p-6">
+              <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
+              <p className="mt-2 text-sm text-slate-600">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
+            </section>
+          )}
+          {activeNav === 'manage-learners' && (
+            <section className="space-y-6">
+              {!isTenantAdmin ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-800">
+                  <h2 className="text-lg font-semibold">Restricted</h2>
+                  <p className="text-sm">Only tenant administrators can manage learners. Update the tenant session roles to continue.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-3xl border border-brand-50 bg-white p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Tenant Admin</p>
+                        <h2 className="text-2xl font-semibold text-slate-900">Invite learners</h2>
+                        <p className="text-sm text-slate-600">Provision cohorts in the BFF and fan out invites via the tenant API.</p>
+                      </div>
+                    </div>
+                    <form
+                      className="mt-6 grid gap-4 md:grid-cols-3"
+                      onSubmit={event => {
+                        event.preventDefault();
+                        if (!canSendInvite) {
+                          return;
+                        }
+                        setLearnerRoster(prev => [
+                          {
+                            id: `learner-${Date.now()}`,
+                            name: inviteForm.name.trim(),
+                            email: inviteForm.email.trim(),
+                            cohort: inviteForm.cohort.trim() || 'Unassigned Cohort',
+                            status: 'Invited',
+                          },
+                          ...prev,
+                        ]);
+                        setInviteForm({ name: '', email: '', cohort: '' });
+                      }}
+                    >
+                      <label className="text-sm font-medium text-slate-700">
+                        Full name
+                        <input
+                          className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+                          type="text"
+                          placeholder="Ada Lovelace"
+                          value={inviteForm.name}
+                          onChange={event => setInviteForm(prev => ({ ...prev, name: event.target.value }))}
+                        />
+                      </label>
+                      <label className="text-sm font-medium text-slate-700">
+                        Email
+                        <input
+                          className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+                          type="email"
+                          placeholder="ada@example.com"
+                          value={inviteForm.email}
+                          onChange={event => setInviteForm(prev => ({ ...prev, email: event.target.value }))}
+                        />
+                      </label>
+                      <label className="text-sm font-medium text-slate-700">
+                        Cohort tag
+                        <input
+                          className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+                          type="text"
+                          placeholder="APAC Growth Sprint"
+                          value={inviteForm.cohort}
+                          onChange={event => setInviteForm(prev => ({ ...prev, cohort: event.target.value }))}
+                        />
+                      </label>
+                      <div className="md:col-span-3 flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={!canSendInvite}
+                          className="inline-flex items-center rounded-full bg-brand-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Send invite
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                  <div className="rounded-3xl border border-brand-50 bg-white p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Roster</p>
+                        <h3 className="text-xl font-semibold text-slate-900">Learner directory</h3>
+                        <p className="text-sm text-slate-600">Keep cohorts synchronized with the headless API before releasing new assessments.</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 overflow-x-auto">
+                      <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                        <thead className="text-slate-500">
+                          <tr>
+                            <th className="py-2 pr-4 font-medium">Name</th>
+                            <th className="py-2 pr-4 font-medium">Email</th>
+                            <th className="py-2 pr-4 font-medium">Cohort</th>
+                            <th className="py-2 pr-4 font-medium">Status</th>
+                            <th className="py-2 pr-4" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {learnerRoster.map(entry => (
+                            <tr key={entry.id} className="text-slate-900">
+                              <td className="py-3 pr-4 font-medium">{entry.name}</td>
+                              <td className="py-3 pr-4 text-slate-500">{entry.email}</td>
+                              <td className="py-3 pr-4 text-slate-500">{entry.cohort}</td>
+                              <td className="py-3 pr-4">
+                                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                  entry.status === 'Active'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-amber-50 text-amber-700'
+                                }`}
+                                >
+                                  {entry.status}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-4 text-right text-xs font-semibold">
+                                {entry.status === 'Invited' && (
+                                  <button
+                                    type="button"
+                                    className="mr-2 rounded-full border border-emerald-200 px-3 py-1 text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-900"
+                                    onClick={() => setLearnerRoster(prev => prev.map(item => (item.id === entry.id ? { ...item, status: 'Active' } : item)))}
+                                  >
+                                    Mark active
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-rose-200 hover:text-rose-600"
+                                  onClick={() => setLearnerRoster(prev => prev.filter(item => item.id !== entry.id))}
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+          {activeNav === 'resources' && (
+            <section className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6">
+              <h2 className="text-lg font-semibold text-slate-900">Resources</h2>
+              <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
+                <li>Assessment guidebook and best practices.</li>
+                <li>Contact support to unlock cohorts or request accommodations.</li>
+                <li>Explore self-paced practice banks curated by content authors.</li>
+              </ul>
+            </section>
+          )}
         </main>
       </div>
     </div>

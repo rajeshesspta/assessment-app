@@ -46,39 +46,39 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
 
   return (
     <form
-      className="rounded-3xl border border-white/10 bg-white/5 p-6 text-slate-100 shadow-glow backdrop-blur"
+      className="rounded-3xl border border-brand-50 bg-white p-6 text-slate-900"
       onSubmit={handleSubmit}
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-white">Tenant session</h2>
-          <p className="text-sm text-slate-300">Point the portal at your BFF endpoint and identify the learner who is launching attempts.</p>
+          <h2 className="text-xl font-semibold text-slate-900">Tenant session</h2>
+          <p className="text-sm text-slate-600">Point the portal at your BFF endpoint and identify the learner who is launching attempts.</p>
         </div>
         {value && (
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex items-center rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-white/40 hover:text-white"
+            className="inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
           >
             Clear session
           </button>
         )}
       </div>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <label className="text-sm font-medium text-slate-200">
+        <label className="text-sm font-medium text-slate-700">
           BFF API Base URL
           <input
-            className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 text-slate-100 placeholder:text-slate-400 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+            className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
             type="text"
             placeholder="http://127.0.0.1:4000"
             value={formState.apiBaseUrl}
             onChange={event => handleInputChange('apiBaseUrl', event.target.value)}
           />
         </label>
-        <label className="text-sm font-medium text-slate-200">
+        <label className="text-sm font-medium text-slate-700">
           Learner Id
           <input
-            className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 text-slate-100 placeholder:text-slate-400 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+            className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
             type="text"
             placeholder="learner-123"
             value={formState.userId}
@@ -87,7 +87,7 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
         </label>
       </div>
       <div className="mt-6">
-        <span className="text-sm font-semibold text-slate-200">Actor roles</span>
+        <span className="text-sm font-semibold text-slate-700">Actor roles</span>
         <div className="mt-3 flex flex-wrap gap-3">
           {ROLE_PRESETS.map(role => {
             const isActive = formState.actorRoles.includes(role);
@@ -97,8 +97,8 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
                 key={role}
                 className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${
                   isActive
-                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/40 hover:bg-brand-700'
-                    : 'border border-white/20 text-slate-300 hover:border-white/40 hover:text-white'
+                    ? 'bg-brand-600 text-white hover:bg-brand-700'
+                    : 'border border-slate-200 text-slate-500 hover:border-brand-200 hover:text-brand-600'
                 }`}
                 onClick={() => handleRoleToggle(role)}
               >
@@ -112,7 +112,7 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex items-center rounded-full bg-brand-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-500/40 transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center rounded-full bg-brand-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Save session
         </button>

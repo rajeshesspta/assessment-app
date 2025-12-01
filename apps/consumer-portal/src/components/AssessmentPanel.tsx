@@ -27,7 +27,7 @@ export function AssessmentPanel({ analytics, onLookup, onStartAttempt, disabled 
   }
 
   return (
-    <section className="rounded-2xl bg-white/90 p-6 shadow-xl shadow-slate-200 ring-1 ring-slate-100 backdrop-blur">
+    <section className="rounded-2xl bg-white/90 p-6 ring-1 ring-slate-100 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Assessment lookup</h2>
@@ -37,7 +37,7 @@ export function AssessmentPanel({ analytics, onLookup, onStartAttempt, disabled 
           <input
             type="text"
             placeholder="assessment-id"
-            className="w-48 flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="w-48 flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             value={assessmentId}
             onChange={event => setAssessmentId(event.target.value)}
           />
@@ -52,7 +52,7 @@ export function AssessmentPanel({ analytics, onLookup, onStartAttempt, disabled 
             type="button"
             disabled={disabled || !assessmentId}
             onClick={handleStartAttempt}
-            className="inline-flex items-center rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-200 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Start attempt
           </button>
