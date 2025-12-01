@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Pin, PinOff } from 'lucide-react';
 import { TenantSessionForm } from './components/TenantSessionForm';
 import { AssessmentPanel } from './components/AssessmentPanel';
@@ -13,16 +14,20 @@ import { LoginPage } from './components/LoginPage';
 type NavItem = {
   id: string;
   label: string;
+  path: string;
   requiresTenantAdmin?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'my-assessments', label: 'My Assessments' },
-  { id: 'overview', label: 'Overview' },
-  { id: 'analytics', label: 'Analytics' },
-  { id: 'manage-learners', label: 'Manage Learners', requiresTenantAdmin: true },
-  { id: 'resources', label: 'Resources' },
+  { id: 'my-assessments', label: 'My Assessments', path: '/my-assessments' },
+  { id: 'overview', label: 'Overview', path: '/overview' },
+  { id: 'analytics', label: 'Analytics', path: '/analytics' },
+  { id: 'manage-learners', label: 'Manage Learners', path: '/manage-learners', requiresTenantAdmin: true },
+  { id: 'resources', label: 'Resources', path: '/resources' },
 ];
+
+const LANDING_NAV_ID = 'overview';
+const LANDING_PATH = NAV_ITEMS.find(item => item.id === LANDING_NAV_ID)?.path ?? '/my-assessments';
 
 type LearnerStatus = 'Active' | 'Invited';
 
@@ -35,14 +40,15 @@ interface LearnerRosterEntry {
 }
 
 export default function App() {
-  const { user, loginWithProvider, loginCustom, logout } = usePortalAuth();
+  const { user, loginWithProvider, loginCustom, logout, checkingSession } = usePortalAuth();
   const { session, saveSession, clearSession } = useTenantSession();
   const api = useApiClient(session);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [analytics, setAnalytics] = useState<AssessmentAnalytics | null>(null);
   const [attempts, setAttempts] = useState<AttemptResponse[]>([]);
   const [busyState, setBusyState] = useState<'idle' | 'loading' | 'submitting'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [activeNav, setActiveNav] = useState<string>('my-assessments');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(false);
   const [learnerRoster, setLearnerRoster] = useState<LearnerRosterEntry[]>(() => ([
@@ -76,16 +82,28 @@ export default function App() {
     return Boolean(sessionHas || userHas);
   }, [session, user]);
 
+  const normalizedPath = location.pathname.length > 1 && location.pathname.endsWith('/')
+    ? location.pathname.replace(/\/+/g, '/').replace(/\/+$/, '')
+    : location.pathname;
+  const currentNav = useMemo(
+    () => NAV_ITEMS.find(item => item.path === normalizedPath) ?? null,
+    [normalizedPath],
+  );
+  const activeNav = currentNav?.id ?? LANDING_NAV_ID;
+
   const visibleNavItems = useMemo(
     () => NAV_ITEMS.filter(item => !item.requiresTenantAdmin || isTenantAdmin),
     [isTenantAdmin],
   );
 
   useEffect(() => {
-    if (!isTenantAdmin && activeNav === 'manage-learners') {
-      setActiveNav('my-assessments');
+    if (!user) {
+      return;
     }
-  }, [isTenantAdmin, activeNav]);
+    if (location.pathname === '/') {
+      navigate(LANDING_PATH, { replace: true });
+    }
+  }, [user, location.pathname, navigate]);
 
   const canSendInvite = inviteForm.name.trim().length > 0
     && inviteForm.email.trim().length > 0
@@ -156,6 +174,209 @@ export default function App() {
     { title: 'Assessment library', body: 'Explore practice sets curated by authors.' },
   ]), []);
 
+  const MyAssessmentsPage = () => (
+    <>
+      <TenantSessionForm
+        value={session}
+        onSave={saveSession}
+        onClear={() => {
+          clearSession();
+          setAnalytics(null);
+          setAttempts([]);
+        }}
+      />
+      {busyState !== 'idle' && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-brand-50 bg-white p-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+          <LoadingState label={busyState === 'loading' ? 'Syncing data' : 'Starting attempt'} />
+          <p className="text-right text-slate-500">Requests fan out to the headless API through the BFF with tenant headers.</p>
+        </div>
+      )}
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+          <strong className="text-sm font-semibold">Request failed</strong>
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
+      <AssessmentPanel
+        analytics={analytics}
+        onLookup={lookupAssessment}
+        onStartAttempt={startAttempt}
+        disabled={!session || !api}
+      />
+      <AttemptList attempts={attempts} onRefresh={refreshAttempt} />
+    </>
+  );
+
+  const OverviewPage = () => (
+    <section className="grid gap-4 md:grid-cols-3">
+      {overviewCards.map(card => (
+        <article key={card.title} className="rounded-2xl border border-brand-50 bg-white p-5">
+          <p className="text-sm font-semibold text-brand-600">{card.title}</p>
+          <p className="mt-2 text-base text-slate-600">{card.body}</p>
+        </article>
+      ))}
+    </section>
+  );
+
+  const AnalyticsPage = () => (
+    <section className="rounded-2xl border border-brand-50 bg-white p-6">
+      <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
+      <p className="mt-2 text-sm text-slate-600">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
+    </section>
+  );
+
+  const ManageLearnersPage = () => (
+    <section className="space-y-6">
+      <div className="rounded-3xl border border-brand-50 bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Tenant Admin</p>
+            <h2 className="text-2xl font-semibold text-slate-900">Invite learners</h2>
+            <p className="text-sm text-slate-600">Provision cohorts in the BFF and fan out invites via the tenant API.</p>
+          </div>
+        </div>
+        <form
+          className="mt-6 grid gap-4 md:grid-cols-3"
+          onSubmit={event => {
+            event.preventDefault();
+            if (!canSendInvite) {
+              return;
+            }
+            setLearnerRoster(prev => [
+              {
+                id: `learner-${Date.now()}`,
+                name: inviteForm.name.trim(),
+                email: inviteForm.email.trim(),
+                cohort: inviteForm.cohort.trim() || 'Unassigned Cohort',
+                status: 'Invited',
+              },
+              ...prev,
+            ]);
+            setInviteForm({ name: '', email: '', cohort: '' });
+          }}
+        >
+          <label className="text-sm font-medium text-slate-700">
+            Full name
+            <input
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+              type="text"
+              placeholder="Ada Lovelace"
+              value={inviteForm.name}
+              onChange={event => setInviteForm(prev => ({ ...prev, name: event.target.value }))}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Email
+            <input
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+              type="email"
+              placeholder="ada@example.com"
+              value={inviteForm.email}
+              onChange={event => setInviteForm(prev => ({ ...prev, email: event.target.value }))}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Cohort tag
+            <input
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+              type="text"
+              placeholder="APAC Growth Sprint"
+              value={inviteForm.cohort}
+              onChange={event => setInviteForm(prev => ({ ...prev, cohort: event.target.value }))}
+            />
+          </label>
+          <div className="md:col-span-3 flex justify-end">
+            <button
+              type="submit"
+              disabled={!canSendInvite}
+              className="inline-flex items-center rounded-full bg-brand-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Send invite
+            </button>
+          </div>
+        </form>
+      </div>
+      <div className="rounded-3xl border border-brand-50 bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Roster</p>
+            <h3 className="text-xl font-semibold text-slate-900">Learner directory</h3>
+            <p className="text-sm text-slate-600">Keep cohorts synchronized with the headless API before releasing new assessments.</p>
+          </div>
+        </div>
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="py-2 pr-4 font-medium">Name</th>
+                <th className="py-2 pr-4 font-medium">Email</th>
+                <th className="py-2 pr-4 font-medium">Cohort</th>
+                <th className="py-2 pr-4 font-medium">Status</th>
+                <th className="py-2 pr-4" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {learnerRoster.map(entry => (
+                <tr key={entry.id} className="text-slate-900">
+                  <td className="py-3 pr-4 font-medium">{entry.name}</td>
+                  <td className="py-3 pr-4 text-slate-500">{entry.email}</td>
+                  <td className="py-3 pr-4 text-slate-500">{entry.cohort}</td>
+                  <td className="py-3 pr-4">
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      entry.status === 'Active'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-amber-50 text-amber-700'
+                    }`}
+                    >
+                      {entry.status}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4 text-right text-xs font-semibold">
+                    {entry.status === 'Invited' && (
+                      <button
+                        type="button"
+                        className="mr-2 rounded-full border border-emerald-200 px-3 py-1 text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-900"
+                        onClick={() => setLearnerRoster(prev => prev.map(item => (item.id === entry.id ? { ...item, status: 'Active' } : item)))}
+                      >
+                        Mark active
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-rose-200 hover:text-rose-600"
+                      onClick={() => setLearnerRoster(prev => prev.filter(item => item.id !== entry.id))}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+
+  const ResourcesPage = () => (
+    <section className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6">
+      <h2 className="text-lg font-semibold text-slate-900">Resources</h2>
+      <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
+        <li>Assessment guidebook and best practices.</li>
+        <li>Contact support to unlock cohorts or request accommodations.</li>
+        <li>Explore self-paced practice banks curated by content authors.</li>
+      </ul>
+    </section>
+  );
+
+  if (checkingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-sunrise-50 text-slate-700">
+        <LoadingState label="Restoring session" />
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <LoginPage
@@ -221,7 +442,9 @@ export default function App() {
                 key={item.id}
                 type="button"
                 onClick={() => {
-                  setActiveNav(item.id);
+                  if (location.pathname !== item.path) {
+                    navigate(item.path);
+                  }
                   if (!sidebarPinned) {
                     setSidebarOpen(false);
                   }
@@ -289,214 +512,39 @@ export default function App() {
               <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-500">Dashboard</p>
               <h1 className="text-2xl font-bold text-slate-900">Welcome back, {user.name}</h1>
               <p className="text-sm text-slate-600">
-                Signed in via {user.provider === 'custom' ? 'custom credentials' : user.provider === 'google' ? 'Google Workspace' : 'Microsoft Entra ID'} · {user.email}
+                Signed in via {
+                  user.provider === 'custom'
+                    ? 'custom credentials'
+                    : user.provider === 'google'
+                      ? 'Google Workspace'
+                      : user.provider === 'microsoft'
+                        ? 'Microsoft Entra ID'
+                        : 'Enterprise SSO'
+                } · {user.email}
               </p>
             </div>
           </div>
-          <span className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-lg font-semibold text-brand-600 md:flex">
-            {user.name[0]?.toUpperCase() ?? 'U'}
+          <span className="hidden h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-brand-50 text-lg font-semibold text-brand-600 md:flex">
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+            ) : (
+              user.name[0]?.toUpperCase() ?? 'U'
+            )}
           </span>
         </header>
         <main className="flex flex-1 flex-col gap-6 bg-gradient-to-b from-white via-sunrise-50 to-sunrise-100 px-6 py-8">
-          {activeNav === 'my-assessments' && (
-            <>
-              <TenantSessionForm
-                value={session}
-                onSave={saveSession}
-                onClear={() => {
-                  clearSession();
-                  setAnalytics(null);
-                  setAttempts([]);
-                }}
-              />
-              {busyState !== 'idle' && (
-                <div className="flex flex-col gap-2 rounded-2xl border border-brand-50 bg-white p-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                  <LoadingState label={busyState === 'loading' ? 'Syncing data' : 'Starting attempt'} />
-                  <p className="text-right text-slate-500">Requests fan out to the headless API through the BFF with tenant headers.</p>
-                </div>
-              )}
-              {error && (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
-                  <strong className="text-sm font-semibold">Request failed</strong>
-                  <p className="text-sm">{error}</p>
-                </div>
-              )}
-              <AssessmentPanel
-                analytics={analytics}
-                onLookup={lookupAssessment}
-                onStartAttempt={startAttempt}
-                disabled={!session || !api}
-              />
-              <AttemptList attempts={attempts} onRefresh={refreshAttempt} />
-            </>
-          )}
-          {activeNav === 'overview' && (
-            <section className="grid gap-4 md:grid-cols-3">
-              {overviewCards.map(card => (
-                <article key={card.title} className="rounded-2xl border border-brand-50 bg-white p-5">
-                  <p className="text-sm font-semibold text-brand-600">{card.title}</p>
-                  <p className="mt-2 text-base text-slate-600">{card.body}</p>
-                </article>
-              ))}
-            </section>
-          )}
-          {activeNav === 'analytics' && (
-            <section className="rounded-2xl border border-brand-50 bg-white p-6">
-              <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
-              <p className="mt-2 text-sm text-slate-600">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
-            </section>
-          )}
-          {activeNav === 'manage-learners' && (
-            <section className="space-y-6">
-              {!isTenantAdmin ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-800">
-                  <h2 className="text-lg font-semibold">Restricted</h2>
-                  <p className="text-sm">Only tenant administrators can manage learners. Update the tenant session roles to continue.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="rounded-3xl border border-brand-50 bg-white p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Tenant Admin</p>
-                        <h2 className="text-2xl font-semibold text-slate-900">Invite learners</h2>
-                        <p className="text-sm text-slate-600">Provision cohorts in the BFF and fan out invites via the tenant API.</p>
-                      </div>
-                    </div>
-                    <form
-                      className="mt-6 grid gap-4 md:grid-cols-3"
-                      onSubmit={event => {
-                        event.preventDefault();
-                        if (!canSendInvite) {
-                          return;
-                        }
-                        setLearnerRoster(prev => [
-                          {
-                            id: `learner-${Date.now()}`,
-                            name: inviteForm.name.trim(),
-                            email: inviteForm.email.trim(),
-                            cohort: inviteForm.cohort.trim() || 'Unassigned Cohort',
-                            status: 'Invited',
-                          },
-                          ...prev,
-                        ]);
-                        setInviteForm({ name: '', email: '', cohort: '' });
-                      }}
-                    >
-                      <label className="text-sm font-medium text-slate-700">
-                        Full name
-                        <input
-                          className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
-                          type="text"
-                          placeholder="Ada Lovelace"
-                          value={inviteForm.name}
-                          onChange={event => setInviteForm(prev => ({ ...prev, name: event.target.value }))}
-                        />
-                      </label>
-                      <label className="text-sm font-medium text-slate-700">
-                        Email
-                        <input
-                          className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
-                          type="email"
-                          placeholder="ada@example.com"
-                          value={inviteForm.email}
-                          onChange={event => setInviteForm(prev => ({ ...prev, email: event.target.value }))}
-                        />
-                      </label>
-                      <label className="text-sm font-medium text-slate-700">
-                        Cohort tag
-                        <input
-                          className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
-                          type="text"
-                          placeholder="APAC Growth Sprint"
-                          value={inviteForm.cohort}
-                          onChange={event => setInviteForm(prev => ({ ...prev, cohort: event.target.value }))}
-                        />
-                      </label>
-                      <div className="md:col-span-3 flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={!canSendInvite}
-                          className="inline-flex items-center rounded-full bg-brand-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Send invite
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                  <div className="rounded-3xl border border-brand-50 bg-white p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Roster</p>
-                        <h3 className="text-xl font-semibold text-slate-900">Learner directory</h3>
-                        <p className="text-sm text-slate-600">Keep cohorts synchronized with the headless API before releasing new assessments.</p>
-                      </div>
-                    </div>
-                    <div className="mt-6 overflow-x-auto">
-                      <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                        <thead className="text-slate-500">
-                          <tr>
-                            <th className="py-2 pr-4 font-medium">Name</th>
-                            <th className="py-2 pr-4 font-medium">Email</th>
-                            <th className="py-2 pr-4 font-medium">Cohort</th>
-                            <th className="py-2 pr-4 font-medium">Status</th>
-                            <th className="py-2 pr-4" />
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {learnerRoster.map(entry => (
-                            <tr key={entry.id} className="text-slate-900">
-                              <td className="py-3 pr-4 font-medium">{entry.name}</td>
-                              <td className="py-3 pr-4 text-slate-500">{entry.email}</td>
-                              <td className="py-3 pr-4 text-slate-500">{entry.cohort}</td>
-                              <td className="py-3 pr-4">
-                                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                  entry.status === 'Active'
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : 'bg-amber-50 text-amber-700'
-                                }`}
-                                >
-                                  {entry.status}
-                                </span>
-                              </td>
-                              <td className="py-3 pr-4 text-right text-xs font-semibold">
-                                {entry.status === 'Invited' && (
-                                  <button
-                                    type="button"
-                                    className="mr-2 rounded-full border border-emerald-200 px-3 py-1 text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-900"
-                                    onClick={() => setLearnerRoster(prev => prev.map(item => (item.id === entry.id ? { ...item, status: 'Active' } : item)))}
-                                  >
-                                    Mark active
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-rose-200 hover:text-rose-600"
-                                  onClick={() => setLearnerRoster(prev => prev.filter(item => item.id !== entry.id))}
-                                >
-                                  Remove
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </>
-              )}
-            </section>
-          )}
-          {activeNav === 'resources' && (
-            <section className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6">
-              <h2 className="text-lg font-semibold text-slate-900">Resources</h2>
-              <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
-                <li>Assessment guidebook and best practices.</li>
-                <li>Contact support to unlock cohorts or request accommodations.</li>
-                <li>Explore self-paced practice banks curated by content authors.</li>
-              </ul>
-            </section>
-          )}
+          <Routes>
+            <Route path="/" element={<Navigate to={LANDING_PATH} replace />} />
+            <Route path={LANDING_PATH} element={<MyAssessmentsPage />} />
+            <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route
+              path="/manage-learners"
+              element={isTenantAdmin ? <ManageLearnersPage /> : <Navigate to={LANDING_PATH} replace />}
+            />
+            <Route path="/resources" element={<ResourcesPage />} />
+            <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
+          </Routes>
         </main>
       </div>
     </div>

@@ -2,11 +2,13 @@ import { useState } from 'react';
 import type { PortalAuthProvider } from '../hooks/usePortalAuth';
 
 interface LoginPageProps {
-  onProviderLogin(provider: PortalAuthProvider, roles: string[]): void;
+  onProviderLogin(provider: PortalAuthProvider, roles: string[], profile?: { name?: string; email?: string }): void;
   onCustomLogin(details: { name: string; email: string; roles: string[] }): void;
 }
 
 const ROLE_OPTIONS = ['LEARNER', 'CONTENT_AUTHOR', 'TENANT_ADMIN'];
+
+type SsoProvider = 'google' | 'microsoft' | 'enterprise';
 
 const GoogleIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
@@ -23,10 +25,20 @@ const MicrosoftIcon = () => (
   </svg>
 );
 
+const EnterpriseIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 text-brand-600">
+    <path
+      fill="currentColor"
+      d="M4 20h16v-2h-1V7l-5-3-5 3v11H9v-5H7v5H5v-3H4v4zm9-2h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V8h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V8h2v2z"
+    />
+  </svg>
+);
+
 export function LoginPage({ onProviderLogin, onCustomLogin }: LoginPageProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['LEARNER']);
+  const [enterpriseIdentity, setEnterpriseIdentity] = useState('');
 
   function toggleRole(role: string) {
     setSelectedRoles(prev => {
@@ -38,6 +50,34 @@ export function LoginPage({ onProviderLogin, onCustomLogin }: LoginPageProps) {
     });
   }
 
+  function deriveNameFromEmail(address: string) {
+    const localPart = address.split('@')[0] ?? '';
+    if (!localPart) {
+      return undefined;
+    }
+    return localPart
+      .split(/[._-]/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  function handleProviderLogin(provider: SsoProvider) {
+    if (provider === 'enterprise') {
+      const normalizedEmail = enterpriseIdentity.trim();
+      const profile = normalizedEmail
+        ? {
+            email: normalizedEmail,
+            name: deriveNameFromEmail(normalizedEmail),
+          }
+        : undefined;
+      onProviderLogin(provider, selectedRoles, profile);
+      return;
+    }
+
+    onProviderLogin(provider, selectedRoles);
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sunrise-50 via-white to-sunrise-100 px-4 py-12 text-slate-900">
       <div className="w-full max-w-4xl rounded-3xl border-2 border-brand-100 bg-white/95 p-8 backdrop-blur">
@@ -47,24 +87,49 @@ export function LoginPage({ onProviderLogin, onCustomLogin }: LoginPageProps) {
           <p className="text-sm text-slate-600">Use a federated login or enter your learner credentials to access cohort assignments.</p>
         </div>
         <div className="mt-8 grid gap-6 md:grid-cols-2">
-          <div className="space-y-3 rounded-2xl border border-brand-50 bg-white p-6">
+          <div className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6">
             <p className="text-sm font-semibold text-slate-700">Single sign-on</p>
-            <button
-              type="button"
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
-              onClick={() => onProviderLogin('google', selectedRoles)}
-            >
-              <GoogleIcon />
-              Continue with Google
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
-              onClick={() => onProviderLogin('microsoft', selectedRoles)}
-            >
-              <MicrosoftIcon />
-              Continue with Microsoft
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
+                onClick={() => handleProviderLogin('google')}
+              >
+                <GoogleIcon />
+                Continue with Google
+              </button>
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
+                onClick={() => handleProviderLogin('microsoft')}
+              >
+                <MicrosoftIcon />
+                Continue with Microsoft
+              </button>
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
+                onClick={() => handleProviderLogin('enterprise')}
+              >
+                <EnterpriseIcon />
+                Continue with Enterprise SSO
+              </button>
+              <label className="text-xs font-medium text-slate-500">
+                Enterprise identity (optional)
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                  type="email"
+                  inputMode="email"
+                  placeholder="you@enterprise.com"
+                  value={enterpriseIdentity}
+                  onChange={event => setEnterpriseIdentity(event.target.value)}
+                />
+              </label>
+            </div>
           </div>
           <form
             className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6"
