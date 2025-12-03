@@ -14,10 +14,10 @@ const envSchema = z.object({
   CONSUMER_TENANT_ID: z.string().min(1),
   CONSUMER_ACTOR_ROLES: z.string().min(1).default('LEARNER'),
   PORT: z.coerce.number().default(4000),
-  HOST: z.string().default('127.0.0.1'),
+  HOST: z.string().default('localhost'),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
-  GOOGLE_REDIRECT_URI: z.string().min(1).default('http://localhost:4000/auth/google/callback,http://127.0.0.1:4000/auth/google/callback'),
+  GOOGLE_REDIRECT_URI: z.string().min(1).default('http://localhost:4000/auth/google/callback'),
   CLIENT_APP_URL: z.string().min(1).default('http://localhost:5173'),
   CLIENT_APP_LANDING_PATH: z.string().default('/overview'),
   SESSION_SECRET: z.string().min(32),
@@ -274,7 +274,7 @@ app.get('/auth/google/callback', async (request, reply) => {
     picture: profile.picture,
     provider: 'google',
   });
-
+console.log('sessionToken:', sessionToken);
   reply
     .setCookie(SESSION_COOKIE, sessionToken, {
       httpOnly: true,

@@ -70,7 +70,7 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
           <input
             className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
             type="text"
-            placeholder="http://127.0.0.1:4000"
+            placeholder="http://localhost:4000"
             value={formState.apiBaseUrl}
             onChange={event => handleInputChange('apiBaseUrl', event.target.value)}
           />
