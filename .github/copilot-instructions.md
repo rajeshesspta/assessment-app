@@ -3,6 +3,7 @@
 ## Architecture & Patterns
 
 - Fastify + TypeScript (native ESM) app rooted in `src/`; `buildApp` wires auth, tenant routing, and per-module routes (`src/modules/**`). Each module exposes `*.routes.ts`, repositories, and tests in `__tests__`. The new `users` module follows the same pattern—inject its repository and register routes alongside items/assessments/attempts/tenants.
+- `apps/control-plane-api` hosts the Super Admin registry service (Fastify + ESM). It authenticates via `x-control-plane-key`, stores tenant metadata in SQLite by default (`CONTROL_PLANE_DB_PROVIDER=sqlite`), and can point at Cosmos DB when `CONTROL_PLANE_DB_PROVIDER=cosmos` plus the `CONTROL_PLANE_COSMOS_*` variables are set. Always keep repository adapters (SQLite/Cosmos) injected through the `TenantRegistryRepository` factory.
 - Cohort management lives under `src/modules/cohorts/` and follows the same plugin/repository structure. Repositories persist `learnerIds`/`assessmentIds` as JSON, and routes validate learner membership (must exist with the `LEARNER` role) plus assessment existence before saving.
 - Attempt creation (`POST /attempts`) now checks the learner record, enforces that they hold the `LEARNER` role, ensures they belong to a cohort with the requested assessment, and blocks new attempts once `assessment.allowedAttempts` (default `1`) is exhausted.
 - Persistence is abstracted behind repository bundles. Default provider is SQLite via `sql.js` (see `src/infrastructure/sqlite/**`), but memory and Cosmos implementations exist; do not instantiate databases directly—inject the appropriate repository through options.
@@ -22,6 +23,7 @@
 ## Database & Tooling
 
 - SQLite schema lives under `migrations/sqlite/`. Run `npm run db:migrate -- --tenant=<id>` (or `--all-tenants`) whenever migrations change—`013_users_table.sql` adds the `users` table required by the new user routes, `014_users_roles_json.sql` adds multi-role storage, `015_cohorts_table.sql` introduces cohort storage, and `016_assessment_attempt_limits.sql` adds the `allowed_attempts` column plus an index on `(tenant_id, assessment_id, user_id)` for attempt lookups. Local files are stored under `data/sqlite/{tenantId}.db`.
+- Control plane migrations live inline in `apps/control-plane-api/src/db/migrations.ts`. Copy `.env.example` to `.env`, set a unique `CONTROL_PLANE_API_KEY`, optionally override `CONTROL_PLANE_DB_PATH`, then run `npm run dev` within that workspace to test registry endpoints locally.
 - Seeding utilities are in `scripts/sqlite/`. Use `npm run db:reset -- --tenant=<id>` for deterministic sample data or `npm run db:seed:random-data -- --tenant=<id> --items=12 --assessments=4 --attempts=10 [--append]` for randomized math drills across items/assessments/attempts.
 - Repository helpers (`insertItem`, etc.) encapsulate SQL statements; reuse them from scripts to avoid drift.
 
@@ -49,3 +51,5 @@
 5. **Branding + feature delivery** – Serve `/config` (or extend `/auth/session`) so the portal can retrieve design tokens, logo URLs, copy, and feature flags per tenant. Cache assets in CDN but source of truth stays in the tenant registry.
 6. **Portal boot flow** – On load, fetch session + config, apply branding (CSS variables, assets) and feature toggles, and expose a tenant switcher when applicable.
 7. **Isolation + observability** – Ensure repositories filter by `tenantId`, tag logs/metrics with the tenant, and keep per-tenant limits/alerts to catch noisy neighbors. Premium deployments remain isolated stacks with their own configs/secrets but still follow the same contract.
+
+When running the consumer BFF against the control plane, set `CONTROL_PLANE_BASE_URL`, `CONTROL_PLANE_API_KEY`, optional `CONTROL_PLANE_BUNDLE_PATH`, and `TENANT_CONFIG_REFRESH_MS`. Leaving those unset reverts to the JSON/`TENANT_CONFIG_PATH` workflow for premium single-tenant stacks.

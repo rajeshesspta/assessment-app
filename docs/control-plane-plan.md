@@ -21,6 +21,14 @@ apps/
 - **Storage**: Start with SQLite (same `data/sqlite` pattern) using a `tenant_registry` table; abstraction allows swapping to Cosmos DB later. Secrets stored as Key Vault references or env placeholders; raw secrets never returned to the console.
 - **Bundle export**: `/control/tenant-bundle` returns a `TenantConfigBundle` for the BFF; responses include `etag/updatedAt` for caching.
 
+## Current Implementation Snapshot
+
+- `apps/control-plane-api` now exposes the Super Admin REST surface described below. The service boots with SQLite (`CONTROL_PLANE_DB_PROVIDER=sqlite`) by default and can target Cosmos DB by setting the `CONTROL_PLANE_COSMOS_*` variables.
+- Repository logic follows the same pattern as our primary API: dependency-injected store adapters, `zod` validation, and Vitest coverage (`src/__tests__/tenant-registry-repository.spec.ts`).
+- `GET /control/tenant-bundle` feeds the Consumer BFF. When `CONTROL_PLANE_BASE_URL` / `CONTROL_PLANE_API_KEY` are present, `apps/consumer-bff` polls the control plane and hot-reloads tenants on the interval defined by `TENANT_CONFIG_REFRESH_MS` (default 60s).
+- Local setup: copy `.env.example` into `.env`, set a strong `CONTROL_PLANE_API_KEY`, run `npm install && npm run dev` inside `apps/control-plane-api`, and hit the endpoints with the header `x-control-plane-key: <your key>`.
+- Health coverage: `GET /control/health` reports the tenant count so portal ops can confirm registry state before wiring the console.
+
 ## API Surface (v1)
 
 | Method  | Path                           | Description                                                                                     |
@@ -71,16 +79,10 @@ Audit entries (`tenant_audit_log`) capture CRUD operations, rotations, and refre
 
 ## Integration / Work Breakdown
 
-1. **Design control-plane API + schema** _(this doc)_
-   - Finalize REST paths, request/response contracts, and DB schema.
-2. **Implement Super Admin tenant registry service**
-   - Scaffold `apps/control-plane-api` (Fastify, zod validation, SQLite repo, audit log).
-   - Wire API key auth + endpoints listed above.
-3. **Build control-plane web console UI**
-   - Scaffold `apps/control-plane-console` (Vite React) with secure auth flow, tenant list/detail pages, and forms bound to the API.
-4. **Add BFF tenant bundle hot-reload**
-   - Extend `tenant-config-loader` to poll/control-plane API with `If-None-Match`; emit events to reload runtime bundle on change.
-5. **Wire BFF to control-plane source**
-   - Introduce provider interface so shared deployments call `/control/tenant-bundle`; premium mode continues to read local JSON.
+- [x] **Design control-plane API + schema** _(this doc)_ – REST paths, schema, and migrations are locked in and reflected in the Fastify implementation.
+- [x] **Implement Super Admin tenant registry service** – `apps/control-plane-api` ships with SQLite + Cosmos adapters, API-key auth, migrations, and repository tests.
+- [ ] **Build control-plane web console UI** – still pending; once scaffolded, point it to the running API using the same `x-control-plane-key` guard.
+- [x] **Add BFF tenant bundle hot-reload** – `apps/consumer-bff` polls `/control/tenant-bundle` and refreshes the runtime maps when `updatedAt` changes.
+- [x] **Wire BFF to control-plane source** – Set `CONTROL_PLANE_BASE_URL`, `CONTROL_PLANE_API_KEY`, optional `CONTROL_PLANE_BUNDLE_PATH`, and `TENANT_CONFIG_REFRESH_MS` to switch the BFF from static JSON to the registry; fall back to `TENANT_CONFIG_PATH`/`TENANT_CONFIG_JSON` for premium single-tenant stacks.
 
 This plan keeps the control plane isolated while giving Ops the tooling they need to manage tenants safely.

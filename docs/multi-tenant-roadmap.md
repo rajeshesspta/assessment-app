@@ -8,20 +8,12 @@ Reference plan that guides the shared vs premium deployment workstreams for the 
 - Keep premium (single-tenant) deployments aligned with the shared stack while allowing isolated overrides.
 - Provide a consistent developer experience so routing, auth, and theming work the same locally and in prod.
 
-## Phase 1 – Baseline runtime (current sprint)
+## Phase 1 – Baseline runtime ✅
 
-1. **Tenant config bundle**
-   - Define schema (`src/tenant-config.ts`) with tenant ids, hostnames, headless API credentials, Google OAuth info, branding tokens, support email, and feature flags.
-   - Load bundle at BFF startup, validate, and cache. Allow JSON file or env payloads.
-2. **Tenant-aware request flow**
-   - Resolve tenant per HTTP request via `Host` header (with premium escape hatch).
-   - Inject `tenantId`, API key, actor roles, and headless base URL into proxy calls.
-   - Issue session cookies containing `{ tenantId, user }` and keep redirect URIs/landing paths per tenant.
-3. **Config endpoint + portal bootstrap**
-   - BFF exposes `/config` with branding tokens, support email, landing paths, feature flags, and tenant display name.
-   - Portal fetches `/config` before rendering, applies CSS variables/logos/favicons, and caches `tenantId`.
-4. **Logging + observability**
-   - Tag Fastify logs and metrics with `tenantId` + host; surface warnings when optional metadata (logo, supportEmail) is missing.
+1. **Tenant config bundle** – Schema + runtime bundle builder live in `apps/consumer-bff/src/tenant-config.ts` & `tenant-config-loader.ts`.
+2. **Tenant-aware request flow** – Host-based resolution, session cookies, and headless proxy headers ship today.
+3. **Config endpoint + portal bootstrap** – `/config` & `/auth/session` return branding + feature flags; portals already rely on them.
+4. **Logging + observability** – Fastify logger tags each request with `tenantId`/host; missing metadata warnings go to logs.
 
 ## Phase 2 – Auth & session hardening
 
@@ -35,21 +27,21 @@ Reference plan that guides the shared vs premium deployment workstreams for the 
    - Implement silent refresh / proactive logout when JWT nearing expiration.
    - Include support email + guidance in error boundaries when auth fails.
 
-## Phase 3 – Control plane integration
+## Phase 3 – Control plane integration (in flight)
 
-1. **Dynamic config sourcing**
-   - Replace static JSON with pull from the tenant registry (REST or event-driven updates).
-   - Support hot reload / cache invalidation hooks.
-2. **Secrets management**
-   - Move tenant API keys/OAuth secrets into managed vault references; inject via environment or secret store clients.
-3. **Operational tooling**
-   - Add health endpoints that enumerate loaded tenants (sans secrets) and flag stale configs.
-   - Emit metrics for tenant resolution failures and headless call latency per tenant.
-4. **Control plane web console**
-   - Ship a Super-Admin-only web UI (separate from the learner portal) that authenticates with `SUPER_ADMIN` keys and talks to the control-plane API.
-   - Core views: tenant list (status, last refresh, hostnames), tenant detail (branding/support metadata, OAuth + headless references), rotation actions (API key + Google secret), and activity log.
-   - Provide guided flows for creating tenants (collect hosts, branding, feature flags, secret references) and exporting bundles for premium deployments.
-   - Include health widgets (loader status, hot-reload history) plus buttons to trigger config refresh or download diagnostics bundles.
+1. **Dynamic config sourcing** – ✅ `apps/control-plane-api` exposes `/control/tenant-bundle`; the BFF now polls it whenever `CONTROL_PLANE_BASE_URL` / `CONTROL_PLANE_API_KEY` are set and hot-reloads based on `updatedAt`.
+2. **Secrets management** – 🔄 Track secret references in the `tenant_registry` JSON blobs (still backed by env placeholders). Next step: plug in Key Vault / secret store clients before shipping console rotations.
+3. **Operational tooling** – 🆕 `/control/health` surfaces tenant counts; add metrics & alerts once we deploy the registry to staging.
+4. **Control plane web console** – 🟥 Not started. Needs a Vite/React app that authenticates via the Super Admin key (initially) and drives the CRUD/audit flows on top of the API.
+
+### BFF environment knobs
+
+Set the following when you want the consumer BFF to follow the registry instead of static JSON:
+
+- `CONTROL_PLANE_BASE_URL` – e.g., `http://localhost:4500`.
+- `CONTROL_PLANE_API_KEY` – must match the control plane’s `.env`.
+- `CONTROL_PLANE_BUNDLE_PATH` (optional) – override when exposing the bundle behind another path or gateway.
+- `TENANT_CONFIG_REFRESH_MS` – poll interval for hot reloads (defaults to 60s). Premium single-tenant deployments can omit these variables and continue using `TENANT_CONFIG_PATH`/`TENANT_CONFIG_JSON`.
 
 ## Future enhancements
 

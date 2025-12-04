@@ -68,47 +68,101 @@ Add Vitest coverage around new APIs (tenant provisioning, cohort assignments, at
 
 
 multi-tenant - execution plan
+==============================
+Assessment Content Types
+==============================
 
-Multi-Tenant BFF + Portal Plan
+- [ ] Matching — represent as two lists with correct pairings. Need serialization (`{ prompt, targetId }[]`) plus scoring modes (full vs partial credit).
+- [ ] Ordering / Ranking — capture ordered lists; evaluate if Kendall tau / partial credit is required.
+- [ ] Short Answer / Free Response — persist prompt + rubric keywords; wire scoring to manual or AI-assisted flows.
+- [ ] Essay / Long Form — extend short-answer schema with length expectations and rubric metadata; ensure attempts store large text payloads.
+- [ ] Numeric Entry — support exact answers and tolerance ranges; include optional units metadata.
+- [ ] Hotspot / Image Region — store base image + polygons, define answer serialization for coordinates.
+- [ ] Drag-and-Drop — model token + zone schemas (classification, sequencing) and scoring logic.
+- [ ] Scenario-Based / Coding Tasks — dedicate module for workspace templates, attachments, evaluation scripts.
 
-Tenant Registry (control plane)
+Each content rollout must include:
+- types.ts updates
+- Validation + route changes
+- Persistence/migrations
+- Scoring logic (+ deferred scoring when needed)
+- Seeds/tests (unit + route)
+- Docs/README updates
 
-Define a tenant config schema: { tenantId, name, apiKey, branding, authProvider, featureFlags }.
-Expose admin APIs/storage where ops can create/update tenants, upload branding assets, and rotate secrets.
-Store per-tenant secrets (API key, B2C client ID/secret) in your secure vault; surface a readonly view to the runtime.
-Runtime Config Loader
+==============================
+Platform Implementation Checklist
+==============================
 
-On BFF startup, fetch tenant configs (e.g., from /tenants/config or a config service) into an in-memory map keyed by tenantId.
-Add a background refresher or webhook to keep the cache up-to-date without restarts.
-Tenant-aware Auth
+**Role Hierarchy & Permissions**
+- [ ] Document Super Admin → Tenant Admin → Content Author flows inside `docs/domain.md`.
+- [ ] Ensure user provisioning APIs persist explicit role arrays; add audits for role promotion/demotion.
 
-Update /auth/login endpoints to require a tenant slug/id (/auth/:tenantId/b2c/login).
-Look up the tenant’s auth settings, run the OAuth flow, then mint a session cookie containing { tenantId, userId, roles, brandingVersion }.
-For users with access to multiple tenants, add /auth/switch-tenant that validates membership and rewrites the session.
-Per-tenant API Proxying
+**Tenant & User Provisioning**
+- [ ] CLI / API endpoint for Super Admins to create tenants and seed tenant admins (control plane will own the metadata; primary API still needs admin records).
+- [ ] Tenant-admin API or CLI for inviting content authors + learners, persisting cohort memberships.
 
-Everywhere the BFF calls headless APIs, pull tenantId from the session and inject the matching x-tenant-id, API key, and role headers.
-Reject requests if the session doesn’t have a tenant or if the tenant is disabled/expired.
-Branding & Feature Delivery
+**Item & Assessment Management**
+- [ ] Confirm item ownership metadata requirements (shared bank but track authorship when auditing changes).
+- [ ] Keep `assessments.allowedAttempts` + assignment targets (cohort IDs or learner IDs) in sync with repositories + migrations.
 
-Create /config (or extend /auth/session) to return { tenant, branding, featureFlags } so the portal can theme itself.
-Cache branding assets (logos, palettes) in CDN; deliver URLs + design tokens.
-Portal Boot Flow
+**Cohorts & Assignment Flow**
+- [ ] Create/manage cohort APIs (name, description, learner IDs, tenantId).
+- [ ] Assignment endpoints that attach assessments to cohorts or individuals and hydrate learner attempt quotas.
 
-On load, call /config + /auth/session; apply returned branding (CSS variables, logos) and feature flags (conditional components).
-Support tenant switcher UI if a user can belong to multiple tenants within the shared deployment.
-Data Isolation
+**Attempts & Learner Scope**
+- [x] Attempt creation enforces learner role + cohort membership + allowedAttempts (landed in attempts module).
+- [ ] Add regression tests that cover “assigned but exhausted attempts” and “not assigned” scenarios per cohort.
 
-Ensure all BFF repositories and headless proxy calls continue filtering by tenantId.
-Add logging/metrics tags for tenantId to monitor per-tenant usage and detect noisy neighbors.
-Premium Isolation Path
+**Documentation & Tests**
+- [ ] Update READMEs/docs after each capability ships.
+- [x] Maintain Vitest coverage for new APIs (current suite covers tenant registry + BFF loader).
 
-Document how to carve out a premium tenant: clone the same BFF/portal code, deploy with only that tenant’s config.
-Keep the control-plane registry authoritative so you can migrate tenants between shared and dedicated deployments smoothly.
-Testing & Rollout
+==============================
+Control Plane & BFF Integration
+==============================
 
-Add unit/integration tests for multi-tenant session handling and branding overrides.
-Stage environment with at least two tenants to verify tenant switching and isolation.
-Roll out gradually: enable multi-tenancy behind a feature flag, then onboard low-tier tenants into the shared instance.
-This algorithm keeps headless agnostic, lets the shared BFF/portal serve many tenants safely, and still supports separate deployments for premium customers when needed.
+- [x] Control plane API (`apps/control-plane-api`) with SQLite/Cosmos stores, migrations, and `/control/tenant-bundle`.
+- [ ] Control plane console (Vite/React) for CRUD + audit UI.
+- [ ] Secret rotation workflow that updates Key Vault references and writes audit entries.
+- [x] Consumer BFF polling hook (`CONTROL_PLANE_BASE_URL`, `CONTROL_PLANE_API_KEY`, `TENANT_CONFIG_REFRESH_MS`).
+- [ ] Alerting/metrics for bundle staleness (`/control/health` + telemetry shipping to dashboards).
+- [ ] Webhook/websocket push for tenant bundle updates (reduce polling latency).
+
+==============================
+Multi-tenant BFF + Portal Plan
+==============================
+
+**Tenant Registry (control plane)**
+- [x] Define tenant config schema + REST endpoints.
+- [ ] Expose secret management + branding asset upload pathways.
+
+**Runtime Config Loader**
+- [x] BFF startup loads bundle + refreshes in background.
+- [ ] Consider ETag support to reduce payloads once control plane emits them.
+
+**Tenant-aware Auth**
+- [ ] `/auth/switch-tenant` flow for multi-membership users.
+- [ ] Enforce actor-role overrides against the tenant’s allowed roles (log + block unauthorized overrides).
+
+**Per-tenant API Proxying**
+- [x] Inject `x-tenant-id`, `x-api-key`, and role headers on headless calls.
+- [ ] Prevent Super Admin headers from leaking into tenant-scoped requests (double-check middleware once switch-tenant lands).
+
+**Branding & Feature Delivery**
+- [x] `/config` returns branding + feature flags.
+- [ ] CDN-backed asset pipeline for logos/favicons/backgrounds.
+
+**Portal Boot Flow**
+- [x] Boot flow fetches `/config` + `/auth/session` and themes accordingly.
+- [ ] Tenant switcher UI for multi-membership accounts.
+
+**Data Isolation & Premium Path**
+- [x] Repositories filter by tenantId + logging tags requests.
+- [ ] Document premium deployment flow leveraging control-plane bundle export.
+
+**Testing & Rollout**
+- [ ] Stage env with multiple tenants hitting control-plane-powered BFF.
+- [ ] Feature flag gating for gradual rollout (shared stack first, then premium).
+
+This checklist keeps headless agnostic, lets the shared BFF/portal serve many tenants safely, and still supports separate deployments for premium customers when needed.
 
