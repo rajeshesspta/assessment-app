@@ -98,6 +98,7 @@ function selectGoogleRedirectUrl(tenant: TenantRuntime, hostHeader?: string) {
 
 const allowedOriginsSet = runtimeBundle.allowedOrigins;
 const isProduction = process.env.NODE_ENV === 'production';
+const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const SESSION_COOKIE = 'consumer_portal_session';
 const STATE_TTL_MS = 5 * 60 * 1000;
 const stateStore = new Map<string, { createdAt: number; tenantId: string }>();
@@ -186,7 +187,7 @@ async function callHeadless<T>(tenant: TenantRuntime, path: string, init?: Reque
   return payload as T;
 }
 
-const app = Fastify({
+export const app = Fastify({
   logger: true,
 });
 
@@ -443,11 +444,14 @@ app.get('/api/attempts/:id', async (request, reply) => {
   }
 });
 
-app.listen({ port: env.PORT, host: env.HOST })
-  .then(() => {
-    app.log.info(`Consumer BFF listening on http://${env.HOST}:${env.PORT}`);
-  })
-  .catch((error) => {
-    app.log.error(error, 'Failed to start BFF');
-    process.exit(1);
-  });
+if (!isTestEnv) {
+  app
+    .listen({ port: env.PORT, host: env.HOST })
+    .then(() => {
+      app.log.info(`Consumer BFF listening on http://${env.HOST}:${env.PORT}`);
+    })
+    .catch(error => {
+      app.log.error(error, 'Failed to start BFF');
+      process.exit(1);
+    });
+}
