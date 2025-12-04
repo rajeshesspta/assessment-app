@@ -39,3 +39,13 @@
 - When extending API surface, update both route tests, type definitions, and seed scripts to keep tooling (CLI + default data) aligned. User management endpoints (`/tenants/:id/admins`, `/users`) must also update `src/common/types.ts`, repository bundles, and seeding/CLI utilities when fields change.
 - When extending API surface, update both route tests, type definitions, and seed scripts to keep tooling (CLI + default data) aligned. User management endpoints (`/tenants/:id/admins`, `/users`, `GET /users/roles`) must also update `src/common/types.ts`, repository bundles, and seeding/CLI utilities when fields change. Fetch the authoritative tenant-manageable roles from `TENANT_USER_ROLES` rather than duplicating literals, and remember that the SQLite schema now persists multi-role assignments via `roles_json`.
 - Any new tenant-scoped functionality should accept `{ tenantId, ... }` and be tested with mock tenant headers just like existing modules.
+
+## Multi-tenant BFF & Portal Plan
+
+1. **Tenant registry (control plane)** – Maintain authoritative records for each tenant: ids, subdomains/custom domains, branding tokens, API keys, auth provider details, and feature flags. Expose admin tooling plus automation that writes these configs and secrets into the vault consumed by deployments.
+2. **Runtime config loader** – On BFF startup, load tenant configs from the registry/vault into memory and refresh periodically or via push notifications. Premium (single-tenant) deployments only load their tenant; the shared deployment caches many.
+3. **Tenant-aware auth** – Require a tenant hint (subdomain or query) on login, select that tenant’s OAuth/OpenID client, run the flow, and mint sessions that embed `{ tenantId, userId, roles }`. Support `/auth/switch-tenant` for users with multiple memberships.
+4. **Per-tenant API proxying** – Every call from the BFF to the headless API must pull the session’s `tenantId`, inject the matching `x-tenant-id`, API key, and role headers, and block requests if the tenant is disabled.
+5. **Branding + feature delivery** – Serve `/config` (or extend `/auth/session`) so the portal can retrieve design tokens, logo URLs, copy, and feature flags per tenant. Cache assets in CDN but source of truth stays in the tenant registry.
+6. **Portal boot flow** – On load, fetch session + config, apply branding (CSS variables, assets) and feature toggles, and expose a tenant switcher when applicable.
+7. **Isolation + observability** – Ensure repositories filter by `tenantId`, tag logs/metrics with the tenant, and keep per-tenant limits/alerts to catch noisy neighbors. Premium deployments remain isolated stacks with their own configs/secrets but still follow the same contract.

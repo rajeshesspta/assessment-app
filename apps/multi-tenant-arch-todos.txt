@@ -1,0 +1,114 @@
+Matching
+
+Represent as two lists with correct pairings. Define serialization (e.g., list of {prompt, targetId}) and scoring (full vs. partial credit).
+Ordering/Ranking
+
+Capture list of items with required order. Decide if scoring is binary or allows partial credit (Kendall tau, etc.).
+Short Answer / Free Response
+
+Store prompt + optional rubric keywords, link scoring to manual review or AI-assisted rubric evaluation.
+Essay / Long Form
+
+Similar to short answer but with length expectation and rubric metadata. Ensure attempts capture text blob and workflow for manual scoring.
+
+Numeric Entry
+
+Support exact value or range tolerance; include units metadata if needed.
+Hotspot / Image Region
+
+Store background image plus one or more correct polygons/regions. Define how attempts submit coordinates.
+Drag-and-Drop
+
+Schema for draggable tokens and drop zones (classification, labeling, sequencing). Determine scoring logic.
+Scenario-Based / Coding Tasks
+
+Likely separate module with attachments, evaluation scripts, or test harness metadata.
+Each phase should include:
+
+types.ts update
+Validation + route changes
+Persistence/migration updates
+Scoring logic (where applicable)
+Seeds/tests (unit + route)
+Docs/readme entry
+
+
+
+Implementation Plan
+
+Role Hierarchy & Permissions
+
+Add Super Admin → Tenant Admin → Content Author user flow docs (README + maybe docs/domain.md).
+Model APIs/DB fields to associate users with roles (tenant admin, content author, learner) if not already tracked; ensure Super Admin can create tenants + delegate admins.
+Tenant & User Provisioning
+
+Extend provisioning CLI or routes so Super Admin can create tenants and seed a tenant admin record.
+Expose tenant-admin API/CLI to invite content authors and learners; persist their role and cohort memberships.
+Item & Assessment Management
+
+Confirm items remain tenant-scoped but shared among that tenant’s content authors.
+Adjust item repository/services if we need to record author ownership metadata while keeping shared visibility.
+Ensure assessments store allowedAttempts (default 1), item references, and assignment targets (cohort IDs or individual learner IDs).
+Cohorts & Assignment Flow
+
+Create cohort entity (name, description, learner IDs, tenantId).
+Add APIs for tenant admins/content authors to create/manage cohorts, add learners, and assign assessments to cohorts or specific learners.
+When assigning, generate learner-specific assessment entries (or references) with attempt limit metadata.
+Attempts & Learner Scope
+
+Update attempt creation to enforce per-learner scoping and respect allowedAttempts.
+Ensure responses remain tied to {tenantId, assessmentId, learnerId} and that learners can’t exceed the configured attempt count.
+Add validation/tests for cohort-based assignments so only assigned learners can start attempts.
+Documentation & Tests
+
+Update README/module docs to reflect the clarified workflow (Super Admin creation, tenant admin responsibilities, cohort usage, attempt limits).
+Add Vitest coverage around new APIs (tenant provisioning, cohort assignments, attempt limit enforcement).
+
+
+
+
+multi-tenant - execution plan
+
+Multi-Tenant BFF + Portal Plan
+
+Tenant Registry (control plane)
+
+Define a tenant config schema: { tenantId, name, apiKey, branding, authProvider, featureFlags }.
+Expose admin APIs/storage where ops can create/update tenants, upload branding assets, and rotate secrets.
+Store per-tenant secrets (API key, B2C client ID/secret) in your secure vault; surface a readonly view to the runtime.
+Runtime Config Loader
+
+On BFF startup, fetch tenant configs (e.g., from /tenants/config or a config service) into an in-memory map keyed by tenantId.
+Add a background refresher or webhook to keep the cache up-to-date without restarts.
+Tenant-aware Auth
+
+Update /auth/login endpoints to require a tenant slug/id (/auth/:tenantId/b2c/login).
+Look up the tenant’s auth settings, run the OAuth flow, then mint a session cookie containing { tenantId, userId, roles, brandingVersion }.
+For users with access to multiple tenants, add /auth/switch-tenant that validates membership and rewrites the session.
+Per-tenant API Proxying
+
+Everywhere the BFF calls headless APIs, pull tenantId from the session and inject the matching x-tenant-id, API key, and role headers.
+Reject requests if the session doesn’t have a tenant or if the tenant is disabled/expired.
+Branding & Feature Delivery
+
+Create /config (or extend /auth/session) to return { tenant, branding, featureFlags } so the portal can theme itself.
+Cache branding assets (logos, palettes) in CDN; deliver URLs + design tokens.
+Portal Boot Flow
+
+On load, call /config + /auth/session; apply returned branding (CSS variables, logos) and feature flags (conditional components).
+Support tenant switcher UI if a user can belong to multiple tenants within the shared deployment.
+Data Isolation
+
+Ensure all BFF repositories and headless proxy calls continue filtering by tenantId.
+Add logging/metrics tags for tenantId to monitor per-tenant usage and detect noisy neighbors.
+Premium Isolation Path
+
+Document how to carve out a premium tenant: clone the same BFF/portal code, deploy with only that tenant’s config.
+Keep the control-plane registry authoritative so you can migrate tenants between shared and dedicated deployments smoothly.
+Testing & Rollout
+
+Add unit/integration tests for multi-tenant session handling and branding overrides.
+Stage environment with at least two tenants to verify tenant switching and isolation.
+Roll out gradually: enable multi-tenancy behind a feature flag, then onboard low-tier tenants into the shared instance.
+This algorithm keeps headless agnostic, lets the shared BFF/portal serve many tenants safely, and still supports separate deployments for premium customers when needed.
+
