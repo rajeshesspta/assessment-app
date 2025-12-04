@@ -274,7 +274,6 @@ app.get('/auth/google/callback', async (request, reply) => {
     picture: profile.picture,
     provider: 'google',
   });
-console.log('sessionToken:', sessionToken);
   reply
     .setCookie(SESSION_COOKIE, sessionToken, {
       httpOnly: true,
