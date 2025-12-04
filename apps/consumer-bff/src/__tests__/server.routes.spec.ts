@@ -14,6 +14,10 @@ async function setupServer(tenants = [createTenantConfig()], extraEnv: Record<st
     process.env[key] = value;
   }
   delete process.env.TENANT_CONFIG_PATH;
+  delete process.env.CONTROL_PLANE_BASE_URL;
+  delete process.env.CONTROL_PLANE_API_KEY;
+  delete process.env.CONTROL_PLANE_BUNDLE_PATH;
+  delete process.env.TENANT_CONFIG_REFRESH_MS;
   process.env.DEFAULT_TENANT_ID = '';
   process.env.TENANT_CONFIG_JSON = JSON.stringify({ version: 'test', tenants });
   Object.assign(process.env, extraEnv);
@@ -30,6 +34,8 @@ async function teardownServer(app?: FastifyInstance) {
   await app.close();
   delete process.env.TENANT_CONFIG_JSON;
   delete process.env.DEFAULT_TENANT_ID;
+  delete process.env.CONTROL_PLANE_BASE_URL;
+  delete process.env.CONTROL_PLANE_API_KEY;
 }
 
 describe('server routes', () => {

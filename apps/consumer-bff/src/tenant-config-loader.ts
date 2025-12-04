@@ -23,9 +23,17 @@ export type TenantRuntimeBundle = {
   allowedOrigins: Set<string>;
 };
 
+export type TenantConfigControlPlaneSource = {
+  baseUrl: string;
+  apiKey: string;
+  path?: string;
+  fetchImpl?: typeof fetch;
+};
+
 export type TenantConfigSourceOptions = {
   path?: string;
   json?: string;
+  controlPlane?: TenantConfigControlPlaneSource;
 };
 
 function parseBundleFromString(payload: string): TenantConfigBundle {
@@ -40,7 +48,26 @@ function parseBundleFromString(payload: string): TenantConfigBundle {
   }
 }
 
-export function loadTenantConfigBundleFromSource(options: TenantConfigSourceOptions): TenantConfigBundle {
+async function fetchTenantBundleFromControlPlane(source: TenantConfigControlPlaneSource): Promise<TenantConfigBundle> {
+  const target = new URL(source.path ?? 'control/tenant-bundle', source.baseUrl);
+  const fetchImpl = source.fetchImpl ?? fetch;
+  const response = await fetchImpl(target, {
+    headers: {
+      'x-control-plane-key': source.apiKey,
+      accept: 'application/json',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Control Plane request failed with status ${response.status}`);
+  }
+  const payload = await response.json();
+  return parseTenantBundle(payload);
+}
+
+export async function loadTenantConfigBundleFromSource(options: TenantConfigSourceOptions): Promise<TenantConfigBundle> {
+  if (options.controlPlane) {
+    return fetchTenantBundleFromControlPlane(options.controlPlane);
+  }
   if (options.json) {
     return parseBundleFromString(options.json);
   }
@@ -51,7 +78,7 @@ export function loadTenantConfigBundleFromSource(options: TenantConfigSourceOpti
     const fileContents = readFileSync(resolvedPath, 'utf-8');
     return parseBundleFromString(fileContents);
   }
-  throw new Error('TENANT_CONFIG_PATH or TENANT_CONFIG_JSON must be provided');
+  throw new Error('TENANT_CONFIG source not provided (path, json, or control plane)');
 }
 
 export function buildTenantRuntimeBundle(bundle: TenantConfigBundle): TenantRuntimeBundle {

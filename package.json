@@ -6,7 +6,8 @@
   "workspaces": [
     "apps/dev-portal",
     "apps/consumer-portal",
-    "apps/consumer-bff"
+    "apps/consumer-bff",
+    "apps/control-plane-api"
   ],
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server.ts",

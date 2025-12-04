@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
-import { buildTenantRuntimeBundle, loadTenantConfigBundleFromSource, TenantRuntime } from './tenant-config-loader';
+import { buildTenantRuntimeBundle, loadTenantConfigBundleFromSource, TenantRuntime, TenantRuntimeBundle } from './tenant-config-loader';
 import { normalizeHost, TenantResolutionError } from './tenant-config';
 
 loadEnv();
@@ -16,15 +16,35 @@ declare module 'fastify' {
   }
 }
 
-const envSchema = z.object({
-  PORT: z.coerce.number().default(4000),
-  HOST: z.string().default('localhost'),
-  SESSION_SECRET: z.string().min(32),
-  SESSION_TTL_SECONDS: z.coerce.number().default(60 * 60 * 4),
-  TENANT_CONFIG_PATH: z.string().optional(),
-  TENANT_CONFIG_JSON: z.string().optional(),
-  DEFAULT_TENANT_ID: z.string().optional(),
-});
+const envSchema = z
+  .object({
+    PORT: z.coerce.number().default(4000),
+    HOST: z.string().default('localhost'),
+    SESSION_SECRET: z.string().min(32),
+    SESSION_TTL_SECONDS: z.coerce.number().default(60 * 60 * 4),
+    TENANT_CONFIG_PATH: z.string().optional(),
+    TENANT_CONFIG_JSON: z.string().optional(),
+    DEFAULT_TENANT_ID: z.string().optional(),
+    CONTROL_PLANE_BASE_URL: z.string().url().optional(),
+    CONTROL_PLANE_API_KEY: z.string().min(32).optional(),
+    CONTROL_PLANE_BUNDLE_PATH: z.string().optional().default('control/tenant-bundle'),
+    TENANT_CONFIG_REFRESH_MS: z.coerce.number().min(5000).default(60000),
+  })
+  .superRefine((value, ctx) => {
+    const usesControlPlane = Boolean(value.CONTROL_PLANE_BASE_URL || value.CONTROL_PLANE_API_KEY);
+    if (usesControlPlane) {
+      if (!value.CONTROL_PLANE_BASE_URL) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'CONTROL_PLANE_BASE_URL is required when enabling control plane sync' });
+      }
+      if (!value.CONTROL_PLANE_API_KEY) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'CONTROL_PLANE_API_KEY is required when enabling control plane sync' });
+      }
+      return;
+    }
+    if (!value.TENANT_CONFIG_PATH && !value.TENANT_CONFIG_JSON) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Provide TENANT_CONFIG_PATH or TENANT_CONFIG_JSON when control plane sync is disabled' });
+    }
+  });
 
 const env = envSchema.parse({
   PORT: process.env.PORT,
@@ -34,27 +54,44 @@ const env = envSchema.parse({
   TENANT_CONFIG_PATH: process.env.TENANT_CONFIG_PATH,
   TENANT_CONFIG_JSON: process.env.TENANT_CONFIG_JSON,
   DEFAULT_TENANT_ID: process.env.DEFAULT_TENANT_ID,
+  CONTROL_PLANE_BASE_URL: process.env.CONTROL_PLANE_BASE_URL,
+  CONTROL_PLANE_API_KEY: process.env.CONTROL_PLANE_API_KEY,
+  CONTROL_PLANE_BUNDLE_PATH: process.env.CONTROL_PLANE_BUNDLE_PATH,
+  TENANT_CONFIG_REFRESH_MS: process.env.TENANT_CONFIG_REFRESH_MS,
 });
 
-const tenantBundle = loadTenantConfigBundleFromSource({
+const controlPlaneSource = env.CONTROL_PLANE_BASE_URL
+  ? {
+      baseUrl: env.CONTROL_PLANE_BASE_URL,
+      apiKey: env.CONTROL_PLANE_API_KEY as string,
+      path: env.CONTROL_PLANE_BUNDLE_PATH,
+    }
+  : undefined;
+
+const tenantConfigSource = {
   path: env.TENANT_CONFIG_PATH,
   json: env.TENANT_CONFIG_JSON,
-});
-const runtimeBundle = buildTenantRuntimeBundle(tenantBundle);
+  controlPlane: controlPlaneSource,
+};
 
-const fallbackTenant: TenantRuntime | undefined = (() => {
+const tenantBundle = await loadTenantConfigBundleFromSource(tenantConfigSource);
+let runtimeBundle: TenantRuntimeBundle = buildTenantRuntimeBundle(tenantBundle);
+
+function computeFallbackTenant(bundle: TenantRuntimeBundle): TenantRuntime | undefined {
   if (env.DEFAULT_TENANT_ID) {
-    const defaultTenant = runtimeBundle.tenantsById.get(env.DEFAULT_TENANT_ID);
+    const defaultTenant = bundle.tenantsById.get(env.DEFAULT_TENANT_ID);
     if (!defaultTenant) {
       throw new Error(`DEFAULT_TENANT_ID ${env.DEFAULT_TENANT_ID} not found in tenant config bundle`);
     }
     return defaultTenant;
   }
-  if (runtimeBundle.tenants.length === 1) {
-    return runtimeBundle.tenants[0];
+  if (bundle.tenants.length === 1) {
+    return bundle.tenants[0];
   }
   return undefined;
-})();
+}
+
+let fallbackTenant = computeFallbackTenant(runtimeBundle);
 
 function resolveTenantByHost(hostHeader?: string) {
   const normalizedHost = normalizeHost(hostHeader);
@@ -96,7 +133,6 @@ function selectGoogleRedirectUrl(tenant: TenantRuntime, hostHeader?: string) {
   return tenant.googleRedirectUrls[0];
 }
 
-const allowedOriginsSet = runtimeBundle.allowedOrigins;
 const isProduction = process.env.NODE_ENV === 'production';
 const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const SESSION_COOKIE = 'consumer_portal_session';
@@ -191,6 +227,45 @@ export const app = Fastify({
   logger: true,
 });
 
+async function refreshTenantRuntimeBundle(reason: string) {
+  const rawBundle = await loadTenantConfigBundleFromSource(tenantConfigSource);
+  if (rawBundle.updatedAt === runtimeBundle.raw.updatedAt) {
+    return;
+  }
+  const nextRuntime = buildTenantRuntimeBundle(rawBundle);
+  let nextFallback: TenantRuntime | undefined;
+  try {
+    nextFallback = computeFallbackTenant(nextRuntime);
+  } catch (error) {
+    app.log.error({ err: error, reason }, 'Failed to compute fallback tenant for refreshed bundle');
+    return;
+  }
+  runtimeBundle = nextRuntime;
+  fallbackTenant = nextFallback;
+  app.log.info({ updatedAt: runtimeBundle.raw.updatedAt, reason }, 'Tenant bundle refreshed from control plane');
+}
+
+let refreshTimer: NodeJS.Timeout | undefined;
+if (controlPlaneSource && !isTestEnv) {
+  refreshTimer = setInterval(() => {
+    refreshTenantRuntimeBundle('interval').catch(error => {
+      app.log.error({ err: error }, 'Failed to refresh tenant bundle from control plane');
+    });
+  }, env.TENANT_CONFIG_REFRESH_MS);
+  if (typeof refreshTimer.unref === 'function') {
+    refreshTimer.unref();
+  }
+}
+
+if (refreshTimer) {
+  app.addHook('onClose', async () => {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = undefined;
+    }
+  });
+}
+
 app.decorateRequest('tenant', null as unknown as TenantRuntime);
 
 app.addHook('onRequest', (request, reply, done) => {
@@ -218,7 +293,8 @@ await app.register(cors, {
       cb(null, true);
       return;
     }
-    if (allowedOriginsSet.size === 0 || allowedOriginsSet.has(origin)) {
+    const allowedOrigins = runtimeBundle.allowedOrigins;
+    if (allowedOrigins.size === 0 || allowedOrigins.has(origin)) {
       cb(null, true);
       return;
     }

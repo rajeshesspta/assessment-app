@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { buildTenantRuntimeBundle } from '../tenant-config-loader';
+import { describe, expect, it, vi } from 'vitest';
+import { buildTenantRuntimeBundle, loadTenantConfigBundleFromSource } from '../tenant-config-loader';
 import type { TenantConfigBundle } from '../tenant-config';
 import { createTenantConfig } from '../testing/test-utils';
 
@@ -90,5 +90,31 @@ describe('buildTenantRuntimeBundle', () => {
     };
 
     expect(() => buildTenantRuntimeBundle(bundle)).toThrow(/Duplicate Google redirect host mapping/i);
+  });
+
+  it('loads config bundles from the control plane source', async () => {
+    const bundle: TenantConfigBundle = {
+      version: 'cp-test',
+      updatedAt: '2024-05-05T00:00:00.000Z',
+      tenants: [createTenantConfig()],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(bundle), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const loaded = await loadTenantConfigBundleFromSource({
+      controlPlane: {
+        baseUrl: 'http://control.local/',
+        apiKey: 'control-plane-api-key-control-plane',
+        fetchImpl,
+      },
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String(fetchImpl.mock.calls[0][0])).toContain('control/tenant-bundle');
+    expect(loaded.tenants).toHaveLength(1);
   });
 });

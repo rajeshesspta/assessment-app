@@ -35,3 +35,9 @@ Planned changes to support the new multi-tenant runtime:
 7. **Monitoring hooks**
    - Tag Fastify logs with `tenantId` and `matchedHost` to help isolate issues.
    - Emit warnings when config is missing optional but recommended fields (support email, branding) so ops can fix the registry.
+
+## Control plane integration
+
+- Set `CONTROL_PLANE_BASE_URL` and `CONTROL_PLANE_API_KEY` to have the BFF fetch `control/tenant-bundle` directly from the control plane API.
+- Optional `CONTROL_PLANE_BUNDLE_PATH` overrides the relative endpoint, and `TENANT_CONFIG_REFRESH_MS` configures how often the in-memory bundle is refreshed.
+- When control plane sync is disabled the BFF falls back to `TENANT_CONFIG_PATH`/`TENANT_CONFIG_JSON` just like before.

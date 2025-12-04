@@ -45,6 +45,11 @@ Reference plan that guides the shared vs premium deployment workstreams for the 
 3. **Operational tooling**
    - Add health endpoints that enumerate loaded tenants (sans secrets) and flag stale configs.
    - Emit metrics for tenant resolution failures and headless call latency per tenant.
+4. **Control plane web console**
+   - Ship a Super-Admin-only web UI (separate from the learner portal) that authenticates with `SUPER_ADMIN` keys and talks to the control-plane API.
+   - Core views: tenant list (status, last refresh, hostnames), tenant detail (branding/support metadata, OAuth + headless references), rotation actions (API key + Google secret), and activity log.
+   - Provide guided flows for creating tenants (collect hosts, branding, feature flags, secret references) and exporting bundles for premium deployments.
+   - Include health widgets (loader status, hot-reload history) plus buttons to trigger config refresh or download diagnostics bundles.
 
 ## Future enhancements
 
