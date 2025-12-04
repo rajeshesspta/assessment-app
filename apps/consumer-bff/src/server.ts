@@ -5,88 +5,115 @@ import { randomBytes } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
+import { buildTenantRuntimeBundle, loadTenantConfigBundleFromSource, TenantRuntime } from './tenant-config-loader';
+import { normalizeHost, TenantResolutionError } from './tenant-config';
 
 loadEnv();
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    tenant: TenantRuntime;
+  }
+}
+
 const envSchema = z.object({
-  HEADLESS_API_BASE_URL: z.string().url(),
-  CONSUMER_API_KEY: z.string().min(1),
-  CONSUMER_TENANT_ID: z.string().min(1),
-  CONSUMER_ACTOR_ROLES: z.string().min(1).default('LEARNER'),
   PORT: z.coerce.number().default(4000),
   HOST: z.string().default('localhost'),
-  GOOGLE_CLIENT_ID: z.string().min(1),
-  GOOGLE_CLIENT_SECRET: z.string().min(1),
-  GOOGLE_REDIRECT_URI: z.string().min(1).default('http://localhost:4000/auth/google/callback'),
-  CLIENT_APP_URL: z.string().min(1).default('http://localhost:5173'),
-  CLIENT_APP_LANDING_PATH: z.string().default('/overview'),
   SESSION_SECRET: z.string().min(32),
   SESSION_TTL_SECONDS: z.coerce.number().default(60 * 60 * 4),
+  TENANT_CONFIG_PATH: z.string().optional(),
+  TENANT_CONFIG_JSON: z.string().optional(),
+  DEFAULT_TENANT_ID: z.string().optional(),
 });
 
 const env = envSchema.parse({
-  HEADLESS_API_BASE_URL: process.env.HEADLESS_API_BASE_URL ?? process.env.API_BASE_URL,
-  CONSUMER_API_KEY: process.env.CONSUMER_API_KEY,
-  CONSUMER_TENANT_ID: process.env.CONSUMER_TENANT_ID,
-  CONSUMER_ACTOR_ROLES: process.env.CONSUMER_ACTOR_ROLES ?? 'LEARNER',
   PORT: process.env.PORT,
   HOST: process.env.HOST,
-  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-  GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
-  CLIENT_APP_URL: process.env.CLIENT_APP_URL,
-  CLIENT_APP_LANDING_PATH: process.env.CLIENT_APP_LANDING_PATH,
   SESSION_SECRET: process.env.SESSION_SECRET,
   SESSION_TTL_SECONDS: process.env.SESSION_TTL_SECONDS,
+  TENANT_CONFIG_PATH: process.env.TENANT_CONFIG_PATH,
+  TENANT_CONFIG_JSON: process.env.TENANT_CONFIG_JSON,
+  DEFAULT_TENANT_ID: process.env.DEFAULT_TENANT_ID,
 });
 
-const clientAppEntries = env.CLIENT_APP_URL.split(',').map(entry => entry.trim()).filter(Boolean);
-if (clientAppEntries.length === 0) {
-  throw new Error('CLIENT_APP_URL must include at least one URL');
-}
-const clientAppUrls = clientAppEntries.map(entry => {
-  try {
-    return new URL(entry);
-  } catch (error) {
-    throw new Error(`CLIENT_APP_URL entry "${entry}" is not a valid URL`);
-  }
+const tenantBundle = loadTenantConfigBundleFromSource({
+  path: env.TENANT_CONFIG_PATH,
+  json: env.TENANT_CONFIG_JSON,
 });
-const googleRedirectEntries = env.GOOGLE_REDIRECT_URI.split(',').map(entry => entry.trim()).filter(Boolean);
-if (googleRedirectEntries.length === 0) {
-  throw new Error('GOOGLE_REDIRECT_URI must include at least one URL');
-}
-const googleRedirectUrls = googleRedirectEntries.map(entry => {
-  try {
-    return new URL(entry);
-  } catch (error) {
-    throw new Error(`GOOGLE_REDIRECT_URI entry "${entry}" is not a valid URL`);
+const runtimeBundle = buildTenantRuntimeBundle(tenantBundle);
+
+const fallbackTenant: TenantRuntime | undefined = (() => {
+  if (env.DEFAULT_TENANT_ID) {
+    const defaultTenant = runtimeBundle.tenantsById.get(env.DEFAULT_TENANT_ID);
+    if (!defaultTenant) {
+      throw new Error(`DEFAULT_TENANT_ID ${env.DEFAULT_TENANT_ID} not found in tenant config bundle`);
+    }
+    return defaultTenant;
   }
-});
-const googleRedirectHostMap = new Map<string, URL>();
-for (const url of googleRedirectUrls) {
-  googleRedirectHostMap.set(url.host.toLowerCase(), url);
+  if (runtimeBundle.tenants.length === 1) {
+    return runtimeBundle.tenants[0];
+  }
+  return undefined;
+})();
+
+function resolveTenantByHost(hostHeader?: string) {
+  const normalizedHost = normalizeHost(hostHeader);
+  if (!normalizedHost) {
+    return undefined;
+  }
+  return runtimeBundle.tenantsByHost.get(normalizedHost);
 }
-function selectGoogleRedirectUrl(hostHeader?: string) {
+
+function requireTenantForHost(hostHeader?: string): TenantRuntime {
+  const tenant = resolveTenantByHost(hostHeader);
+  if (tenant) {
+    return tenant;
+  }
+  if (fallbackTenant) {
+    return fallbackTenant;
+  }
+  throw new TenantResolutionError(`No tenant configured for host ${hostHeader ?? '<unknown>'}`);
+}
+
+function requireTenantById(tenantId: string): TenantRuntime {
+  const tenant = runtimeBundle.tenantsById.get(tenantId);
+  if (!tenant) {
+    throw new TenantResolutionError(`No tenant configured with id ${tenantId}`);
+  }
+  return tenant;
+}
+
+function selectGoogleRedirectUrl(tenant: TenantRuntime, hostHeader?: string) {
   if (hostHeader) {
-    const normalizedHost = hostHeader.toLowerCase();
-    const match = googleRedirectHostMap.get(normalizedHost);
-    if (match) {
-      return match;
+    const normalizedHost = normalizeHost(hostHeader);
+    if (normalizedHost) {
+      const match = tenant.googleRedirectHostMap.get(normalizedHost);
+      if (match) {
+        return match;
+      }
     }
   }
-  return googleRedirectUrls[0];
+  return tenant.googleRedirectUrls[0];
 }
+
+const allowedOriginsSet = runtimeBundle.allowedOrigins;
 const isProduction = process.env.NODE_ENV === 'production';
-const allowedOrigins = clientAppUrls.map(url => url.origin);
-const clientLandingPath = env.CLIENT_APP_LANDING_PATH.startsWith('/')
-  ? env.CLIENT_APP_LANDING_PATH
-  : `/${env.CLIENT_APP_LANDING_PATH}`;
-const primaryClientUrl = clientAppUrls[0];
-const landingRedirectUrl = new URL(clientLandingPath, primaryClientUrl).toString();
 const SESSION_COOKIE = 'consumer_portal_session';
 const STATE_TTL_MS = 5 * 60 * 1000;
-const stateStore = new Map<string, number>();
+const stateStore = new Map<string, { createdAt: number; tenantId: string }>();
 const sessionSecret = new TextEncoder().encode(env.SESSION_SECRET);
+const tenantConfigResponse = (tenant: TenantRuntime) => ({
+  tenantId: tenant.tenantId,
+  name: tenant.name,
+  supportEmail: tenant.supportEmail,
+  premiumDeployment: tenant.premiumDeployment,
+  branding: tenant.branding,
+  featureFlags: tenant.featureFlags,
+  clientApp: {
+    baseUrl: tenant.clientApp.baseUrl,
+    landingPath: tenant.clientApp.landingPath,
+  },
+});
 
 type SessionPayload = {
   sub: string;
@@ -94,24 +121,28 @@ type SessionPayload = {
   name?: string;
   picture?: string;
   provider: 'google';
+  tenantId: string;
 };
 
-function createStateToken() {
+function createStateToken(tenantId: string) {
   const value = randomBytes(16).toString('hex');
-  stateStore.set(value, Date.now());
+  stateStore.set(value, { createdAt: Date.now(), tenantId });
   return value;
 }
 
-function validateAndConsumeState(state?: string | null) {
+function consumeStateTenantId(state?: string | null) {
   if (!state) {
-    return false;
+    return undefined;
   }
-  const createdAt = stateStore.get(state);
+  const entry = stateStore.get(state);
   stateStore.delete(state);
-  if (!createdAt) {
-    return false;
+  if (!entry) {
+    return undefined;
   }
-  return Date.now() - createdAt <= STATE_TTL_MS;
+  if (Date.now() - entry.createdAt > STATE_TTL_MS) {
+    return undefined;
+  }
+  return entry.tenantId;
 }
 
 async function createSessionToken(payload: SessionPayload) {
@@ -132,13 +163,13 @@ class HeadlessRequestError extends Error {
   }
 }
 
-async function callHeadless<T>(path: string, init?: RequestInit, actorRoles?: string): Promise<T> {
-  const url = new URL(path, env.HEADLESS_API_BASE_URL);
+async function callHeadless<T>(tenant: TenantRuntime, path: string, init?: RequestInit, actorRoles?: string): Promise<T> {
+  const url = new URL(path, tenant.headless.baseUrl);
   const headers: HeadersInit = {
     'content-type': 'application/json',
-    'x-api-key': env.CONSUMER_API_KEY,
-    'x-tenant-id': env.CONSUMER_TENANT_ID,
-    'x-actor-roles': actorRoles ?? env.CONSUMER_ACTOR_ROLES,
+    'x-api-key': tenant.headless.apiKey,
+    'x-tenant-id': tenant.headless.tenantId,
+    'x-actor-roles': actorRoles ?? tenant.headless.actorRoles.join(','),
     ...(init?.headers ?? {}),
   };
   const response = await fetch(url, {
@@ -159,6 +190,22 @@ const app = Fastify({
   logger: true,
 });
 
+app.decorateRequest('tenant', null as unknown as TenantRuntime);
+
+app.addHook('onRequest', (request, reply, done) => {
+  try {
+    const tenant = requireTenantForHost(request.headers.host);
+    request.tenant = tenant;
+    done();
+  } catch (error) {
+    if (error instanceof TenantResolutionError) {
+      reply.code(404).send({ error: error.message });
+      return;
+    }
+    done(error as Error);
+  }
+});
+
 await app.register(cookie, {
   secret: env.SESSION_SECRET,
   hook: 'onRequest',
@@ -170,7 +217,7 @@ await app.register(cors, {
       cb(null, true);
       return;
     }
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    if (allowedOriginsSet.size === 0 || allowedOriginsSet.has(origin)) {
       cb(null, true);
       return;
     }
@@ -182,11 +229,12 @@ await app.register(cors, {
 app.get('/health', () => ({ status: 'ok' }));
 
 app.get('/auth/google/login', async (request, reply) => {
-  const redirectTarget = selectGoogleRedirectUrl(request.headers.host);
-  const state = createStateToken();
+  const tenant = request.tenant;
+  const redirectTarget = selectGoogleRedirectUrl(tenant, request.headers.host);
+  const state = createStateToken(tenant.tenantId);
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authUrl.search = new URLSearchParams({
-    client_id: env.GOOGLE_CLIENT_ID,
+    client_id: tenant.auth.google.clientId,
     redirect_uri: redirectTarget.toString(),
     response_type: 'code',
     scope: 'openid email profile',
@@ -214,20 +262,28 @@ app.get('/auth/google/callback', async (request, reply) => {
     reply.code(400);
     return { error };
   }
-  if (!code || !validateAndConsumeState(state)) {
+  const tenantIdFromState = consumeStateTenantId(state);
+  if (!code || !tenantIdFromState) {
     reply.code(400);
     return { error: 'Invalid OAuth state' };
   }
+  const tenantFromState = requireTenantById(tenantIdFromState);
+  const hostTenant = request.tenant;
+  if (hostTenant && hostTenant.tenantId !== tenantFromState.tenantId) {
+    reply.code(400);
+    return { error: 'Tenant mismatch detected for OAuth callback' };
+  }
+  const tenant = tenantFromState;
 
-  const redirectTarget = selectGoogleRedirectUrl(request.headers.host);
+  const redirectTarget = selectGoogleRedirectUrl(tenant, request.headers.host);
 
   const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
+      client_id: tenant.auth.google.clientId,
+      client_secret: tenant.auth.google.clientSecret,
       redirect_uri: redirectTarget.toString(),
       grant_type: 'authorization_code',
     }),
@@ -273,6 +329,7 @@ app.get('/auth/google/callback', async (request, reply) => {
     name: profile.name ?? profile.email,
     picture: profile.picture,
     provider: 'google',
+    tenantId: tenant.tenantId,
   });
   reply
     .setCookie(SESSION_COOKIE, sessionToken, {
@@ -282,7 +339,7 @@ app.get('/auth/google/callback', async (request, reply) => {
       path: '/',
       maxAge: env.SESSION_TTL_SECONDS,
     })
-    .redirect(landingRedirectUrl);
+    .redirect(tenant.landingRedirectUrl);
 });
 
 app.get('/auth/session', async (request, reply) => {
@@ -293,12 +350,30 @@ app.get('/auth/session', async (request, reply) => {
   }
   try {
     const { payload } = await verifySessionToken(token);
-    return { user: payload };
+    const tenant = runtimeBundle.tenantsById.get(payload.tenantId);
+    if (!tenant) {
+      reply.clearCookie(SESSION_COOKIE, { path: '/' });
+      reply.code(401);
+      return { error: 'Tenant configuration unavailable' };
+    }
+    return {
+      user: payload,
+      tenant: tenantConfigResponse(tenant),
+    };
   } catch {
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     reply.code(401);
     return { error: 'Invalid session' };
   }
+});
+
+app.get('/config', async (request, reply) => {
+  const tenant = request.tenant;
+  if (!tenant) {
+    reply.code(404);
+    return { error: 'Tenant not resolved' };
+  }
+  return tenantConfigResponse(tenant);
 });
 
 app.post('/auth/logout', async (_request, reply) => {
@@ -314,8 +389,9 @@ app.post('/auth/logout', async (_request, reply) => {
 app.get('/api/analytics/assessments/:id', async (request, reply) => {
   const assessmentId = (request.params as { id: string }).id;
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
   try {
-    return await callHeadless(`/analytics/assessments/${assessmentId}`, undefined, actorRoles);
+    return await callHeadless(tenant, `/analytics/assessments/${assessmentId}`, undefined, actorRoles);
   } catch (error) {
     if (error instanceof HeadlessRequestError) {
       reply.code(error.statusCode);
@@ -337,8 +413,9 @@ app.post('/api/attempts', async (request, reply) => {
     return { error: 'Invalid payload', issues: parsed.error.issues };
   }
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
   try {
-    return await callHeadless('/attempts', {
+    return await callHeadless(tenant, '/attempts', {
       method: 'POST',
       body: JSON.stringify(parsed.data),
     }, actorRoles);
@@ -354,8 +431,9 @@ app.post('/api/attempts', async (request, reply) => {
 app.get('/api/attempts/:id', async (request, reply) => {
   const attemptId = (request.params as { id: string }).id;
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
   try {
-    return await callHeadless(`/attempts/${attemptId}`, undefined, actorRoles);
+    return await callHeadless(tenant, `/attempts/${attemptId}`, undefined, actorRoles);
   } catch (error) {
     if (error instanceof HeadlessRequestError) {
       reply.code(error.statusCode);

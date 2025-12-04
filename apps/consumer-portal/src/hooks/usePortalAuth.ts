@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { buildBffUrl, getBffBaseUrl, isBffEnabled } from '../utils/bff';
 
 export type PortalAuthProvider = 'google' | 'microsoft' | 'enterprise' | 'custom';
 
@@ -13,9 +14,8 @@ export interface PortalUser {
 const DEFAULT_ROLES = ['LEARNER'];
 
 const STORAGE_KEY = 'consumer-portal::auth';
-const RAW_BFF_BASE_URL = (import.meta.env.VITE_CONSUMER_BFF_URL ?? '').trim();
-const BFF_BASE_URL = RAW_BFF_BASE_URL.endsWith('/') ? RAW_BFF_BASE_URL.slice(0, -1) : RAW_BFF_BASE_URL;
-const BFF_ENABLED = BFF_BASE_URL.length > 0;
+const BFF_BASE_URL = getBffBaseUrl();
+const BFF_ENABLED = isBffEnabled();
 
 function readStoredUser(): PortalUser | null {
   if (typeof window === 'undefined') {
@@ -68,7 +68,7 @@ export function usePortalAuth() {
     let cancelled = false;
     async function hydrateSession() {
       try {
-        const response = await fetch(`${BFF_BASE_URL}/auth/session`, {
+        const response = await fetch(buildBffUrl('/auth/session'), {
           credentials: 'include',
         });
         if (!response.ok) {
@@ -107,7 +107,7 @@ export function usePortalAuth() {
     profile?: ProviderProfile,
   ) => {
     if (provider === 'google' && BFF_ENABLED) {
-      window.location.href = `${BFF_BASE_URL}/auth/google/login`;
+      window.location.href = buildBffUrl('/auth/google/login');
       return;
     }
     const now = new Date();
@@ -142,7 +142,7 @@ export function usePortalAuth() {
   const logout = useCallback(async () => {
     if (BFF_ENABLED) {
       try {
-        await fetch(`${BFF_BASE_URL}/auth/logout`, {
+        await fetch(buildBffUrl('/auth/logout'), {
           method: 'POST',
           credentials: 'include',
         });

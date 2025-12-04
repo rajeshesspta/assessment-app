@@ -1,0 +1,39 @@
+{
+  "version": "2025-12-04",
+  "updatedAt": "2025-12-04T00:00:00.000Z",
+  "tenants": [
+    {
+      "tenantId": "tenant-demo",
+      "name": "Demo Tenant",
+      "hosts": ["localhost:4000"],
+      "supportEmail": "support@example.com",
+      "premiumDeployment": false,
+      "headless": {
+        "baseUrl": "http://localhost:3000",
+        "apiKey": "tenant_api_key",
+        "tenantId": "tenant-1",
+        "actorRoles": ["LEARNER"]
+      },
+      "auth": {
+        "google": {
+          "clientId": "your-google-client-id.apps.googleusercontent.com",
+          "clientSecret": "replace-with-google-secret",
+          "redirectUris": ["http://localhost:4000/auth/google/callback"]
+        }
+      },
+      "clientApp": {
+        "baseUrl": "http://localhost:5173",
+        "landingPath": "/overview"
+      },
+      "branding": {
+        "logoUrl": "https://placehold.co/200x64?text=Demo",
+        "primaryColor": "#1f2937",
+        "accentColor": "#059669"
+      },
+      "featureFlags": {
+        "analytics": true,
+        "attempts": true
+      }
+    }
+  ]
+}

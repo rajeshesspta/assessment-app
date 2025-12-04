@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { PortalAuthProvider } from '../hooks/usePortalAuth';
 
 interface LoginPageProps {
   onProviderLogin(provider: PortalAuthProvider, roles: string[], profile?: { name?: string; email?: string }): void;
   onCustomLogin(details: { name: string; email: string; roles: string[] }): void;
+  tenantName?: string;
+  supportEmail?: string;
+  branding?: {
+    logoUrl?: string;
+    primaryColor?: string;
+    accentColor?: string;
+  };
 }
 
 const ROLE_OPTIONS = ['LEARNER', 'CONTENT_AUTHOR', 'TENANT_ADMIN'];
@@ -34,11 +41,17 @@ const EnterpriseIcon = () => (
   </svg>
 );
 
-export function LoginPage({ onProviderLogin, onCustomLogin }: LoginPageProps) {
+export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assessment Portal', supportEmail, branding }: LoginPageProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['LEARNER']);
   const [enterpriseIdentity, setEnterpriseIdentity] = useState('');
+  const accentStyle = useMemo(() => (
+    branding?.primaryColor ? { color: branding.primaryColor } : undefined
+  ), [branding?.primaryColor]);
+  const heroBorderStyle = useMemo(() => (
+    branding?.primaryColor ? { borderColor: branding.primaryColor } : undefined
+  ), [branding?.primaryColor]);
 
   function toggleRole(role: string) {
     setSelectedRoles(prev => {
@@ -80,9 +93,12 @@ export function LoginPage({ onProviderLogin, onCustomLogin }: LoginPageProps) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sunrise-50 via-white to-sunrise-100 px-4 py-12 text-slate-900">
-      <div className="w-full max-w-4xl rounded-3xl border-2 border-brand-100 bg-white/95 p-8 backdrop-blur">
+      <div className="w-full max-w-4xl rounded-3xl border-2 border-brand-100 bg-white/95 p-8 backdrop-blur" style={heroBorderStyle}>
         <div className="flex flex-col gap-2 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-500">Assessment Portal</p>
+          {branding?.logoUrl && (
+            <img src={branding.logoUrl} alt={`${tenantName} logo`} className="mx-auto h-12 w-auto object-contain" />
+          )}
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-500" style={accentStyle}>{tenantName}</p>
           <h1 className="text-3xl font-bold text-slate-900">Sign in to continue</h1>
           <p className="text-sm text-slate-600">Use a federated login or enter your learner credentials to access cohort assignments.</p>
         </div>
@@ -193,6 +209,14 @@ export function LoginPage({ onProviderLogin, onCustomLogin }: LoginPageProps) {
           </form>
         </div>
         <p className="mt-6 text-center text-xs text-slate-500">By continuing you agree to the Acceptable Use Policy and privacy terms.</p>
+        {supportEmail && (
+          <p className="mt-2 text-center text-xs text-slate-500">
+            Need help?{' '}
+            <a className="font-semibold" style={accentStyle} href={`mailto:${supportEmail}`}>
+              {supportEmail}
+            </a>
+          </p>
+        )}
       </div>
     </div>
   );

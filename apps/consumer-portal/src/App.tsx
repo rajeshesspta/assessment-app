@@ -10,6 +10,7 @@ import { useApiClient } from './hooks/useApiClient';
 import type { AssessmentAnalytics, AttemptResponse } from './utils/api';
 import { usePortalAuth } from './hooks/usePortalAuth';
 import { LoginPage } from './components/LoginPage';
+import { useTenantConfig } from './context/TenantConfigContext';
 
 type NavItem = {
   id: string;
@@ -29,6 +30,20 @@ const NAV_ITEMS: NavItem[] = [
 const LANDING_NAV_ID = 'overview';
 const LANDING_PATH = NAV_ITEMS.find(item => item.id === LANDING_NAV_ID)?.path ?? '/my-assessments';
 
+function withAlpha(hex: string, alpha: number) {
+  const normalized = hex?.startsWith('#') ? hex.slice(1) : hex;
+  if (normalized.length !== 6) {
+    return hex;
+  }
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return hex;
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 type LearnerStatus = 'Active' | 'Invited';
 
 interface LearnerRosterEntry {
@@ -42,6 +57,7 @@ interface LearnerRosterEntry {
 export default function App() {
   const { user, loginWithProvider, loginCustom, logout, checkingSession } = usePortalAuth();
   const { session, saveSession, clearSession } = useTenantSession();
+  const { config, loading: tenantConfigLoading, error: tenantConfigError } = useTenantConfig();
   const api = useApiClient(session);
   const location = useLocation();
   const navigate = useNavigate();
@@ -75,6 +91,22 @@ export default function App() {
     },
   ]));
   const [inviteForm, setInviteForm] = useState({ name: '', email: '', cohort: '' });
+
+  const tenantName = config?.name ?? 'Assessment App';
+  const supportEmail = config?.supportEmail ?? 'support@example.com';
+  const brandPrimary = config?.branding.primaryColor ?? '#f97316';
+  const brandAccent = config?.branding.accentColor ?? '#fb923c';
+  const brandLabelStyle = useMemo(() => ({ color: brandPrimary }), [brandPrimary]);
+  const brandBadgeStyle = useMemo(() => ({
+    borderColor: withAlpha(brandPrimary, 0.24),
+    backgroundColor: withAlpha(brandPrimary, 0.08),
+    color: brandPrimary,
+  }), [brandPrimary]);
+  const brandButtonStyle = useMemo(() => ({
+    backgroundColor: brandPrimary,
+    borderColor: brandPrimary,
+  }), [brandPrimary]);
+  const shouldShowConfigWarning = Boolean(tenantConfigError);
 
   const isTenantAdmin = useMemo(() => {
     const sessionHas = session?.actorRoles?.some(role => role.toUpperCase() === 'TENANT_ADMIN');
@@ -369,10 +401,10 @@ export default function App() {
     </section>
   );
 
-  if (checkingSession) {
+  if (tenantConfigLoading || checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-sunrise-50 text-slate-700">
-        <LoadingState label="Restoring session" />
+        <LoadingState label={tenantConfigLoading ? 'Loading tenant configuration' : 'Restoring session'} />
       </div>
     );
   }
@@ -380,6 +412,9 @@ export default function App() {
   if (!user) {
     return (
       <LoginPage
+        tenantName={tenantName}
+        supportEmail={supportEmail}
+        branding={config?.branding}
         onProviderLogin={loginWithProvider}
         onCustomLogin={({ name, email, roles }) => loginCustom(name, email, roles)}
       />
@@ -399,8 +434,8 @@ export default function App() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-500">Portal</p>
-            <p className="text-lg font-semibold text-slate-900">Assessment App</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-500" style={brandLabelStyle}>Tenant</p>
+            <p className="text-lg font-semibold text-slate-900">{tenantName}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -465,6 +500,14 @@ export default function App() {
           <p className="text-xs uppercase tracking-[0.3em] text-brand-500">Profile</p>
           <p className="mt-2 font-semibold text-slate-900">{user.name}</p>
           <p className="text-sm text-slate-500">{user.email}</p>
+          {supportEmail && (
+            <p className="text-xs text-slate-500">
+              Support:{' '}
+              <a href={`mailto:${supportEmail}`} className="font-semibold" style={brandLabelStyle}>
+                {supportEmail}
+              </a>
+            </p>
+          )}
           <button
             type="button"
             className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700"
@@ -509,7 +552,7 @@ export default function App() {
               <span className="mt-1 block h-0.5 w-6 bg-slate-700" />
             </button>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-500">Dashboard</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-brand-500" style={brandLabelStyle}>{tenantName}</p>
               <h1 className="text-2xl font-bold text-slate-900">Welcome back, {user.name}</h1>
               <p className="text-sm text-slate-600">
                 Signed in via {
@@ -533,6 +576,12 @@ export default function App() {
           </span>
         </header>
         <main className="flex flex-1 flex-col gap-6 bg-gradient-to-b from-white via-sunrise-50 to-sunrise-100 px-6 py-8">
+          {shouldShowConfigWarning && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <p className="font-semibold">Using cached branding</p>
+              <p className="text-xs text-amber-700">{tenantConfigError}</p>
+            </div>
+          )}
           <Routes>
             <Route path="/" element={<Navigate to={LANDING_PATH} replace />} />
             <Route path={LANDING_PATH} element={<MyAssessmentsPage />} />

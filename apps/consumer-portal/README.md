@@ -38,4 +38,13 @@ The UI persists session details in `localStorage` to streamline demos.
 6. **Portal boot flow** – On load, the portal fetches session + config, sets theme variables, enables tenant-specific modules, and optionally renders a tenant switcher when the user belongs to more than one tenant.
 7. **Isolation & observability** – Repository calls always filter by `tenantId`; logs/metrics include tenant ids. Premium tenants run dedicated stacks (BFF + portal + headless) seeded with only their config, while the shared stack hosts many tenants safely.
 
+## Portal roadmap
+
+1. **Tenant bootstrap** – Call the BFF `/config` endpoint on load (before rendering the shell) to hydrate branding tokens, feature flags, support email, and landing routes. Persist the resolved `tenantId` so navigation stays tenant-scoped even if the portal switches to client-side routing.
+2. **Theme application** – Map branding fields to CSS variables (colors, logo URLs, favicons) and re-render when `/config` changes. Fall back to neutral styling but surface warnings in dev when tokens are missing so ops can fix the registry.
+3. **Session orchestration** – After `/config`, fetch `/auth/session` to check login state. Store `{ tenantId, userId, roles }` in React context, invalidate local state when cookies expire, and display the tenant’s support email/contact CTA whenever authentication fails.
+4. **Tenant switcher (optional)** – When `/auth/session` returns multiple memberships, render a modal/dropdown that lets the user request `POST /auth/switch-tenant` (or reload with a different hostname once implemented). Ensure the UI clears cached config/session data when a new tenant is selected.
+5. **Feature-flag plumbing** – Create a lightweight hooks/utilities module (`useFeatureFlag`, `useBranding`) that reads from the config context so components can toggle modules (analytics cards, cohort tabs, etc.) per tenant without re-fetching.
+6. **Error handling UX** – Introduce a top-level boundary/splash state that shows friendly messaging when the host is unknown, the config call fails, or required branding fields are missing. Include the tenant’s support email (when available) to guide users.
+
 ## Architecture
