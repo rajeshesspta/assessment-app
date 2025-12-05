@@ -44,6 +44,39 @@ const tenantSchema = z.object({
 const tenantListSchema = z.array(tenantSchema)
 
 export type TenantRecord = z.infer<typeof tenantSchema>
+export type CreateTenantRequest = {
+  id: string
+  name: string
+  hosts: string[]
+  supportEmail: string
+  premiumDeployment?: boolean
+  headless: {
+    baseUrl: string
+    apiKeyRef: string
+    tenantId: string
+    actorRoles: string[]
+  }
+  auth: {
+    google: {
+      clientIdRef: string
+      clientSecretRef: string
+      redirectUris: string[]
+    }
+  }
+  clientApp: {
+    baseUrl: string
+    landingPath: string
+  }
+  branding?: {
+    logoUrl?: string
+    faviconUrl?: string
+    primaryColor?: string
+    accentColor?: string
+    backgroundImageUrl?: string
+  }
+  featureFlags?: Record<string, boolean>
+  status?: 'active' | 'paused' | 'deleting'
+}
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
@@ -109,4 +142,10 @@ export async function fetchSession(): Promise<SessionInfo | null> {
     }
     throw error
   }
+}
+
+export async function createTenant(payload: CreateTenantRequest) {
+  const body = JSON.stringify(payload)
+  const record = await requestJson<TenantRecord>('/control/tenants', { method: 'POST', body })
+  return tenantSchema.parse(record)
 }
