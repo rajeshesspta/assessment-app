@@ -128,6 +128,12 @@ Control Plane & BFF Integration
 - [ ] Alerting/metrics for bundle staleness (`/control/health` + telemetry shipping to dashboards).
 - [ ] Webhook/websocket push for tenant bundle updates (reduce polling latency).
 
+**Control Plane Console Security**
+- [x] Enforce two-step login between console ↔ proxy (basic credential + OTP challenge) with session cookies guarding `/api/*`.
+- [x] Persist OTP challenge/audit events in SQLite (timestamp, actor, action, metadata) and expose log retrieval for compliance.
+- [ ] Emit audit records for login, logout, impersonation, and tenant mutations; surface in console UI. _(login + logout covered; tenant mutations still pending UI work)_
+- [x] Hash OTP secrets at rest, redact codes in logs, and enforce short-lived sessions with manual revoke support.
+
 ==============================
 Multi-tenant BFF + Portal Plan
 ==============================

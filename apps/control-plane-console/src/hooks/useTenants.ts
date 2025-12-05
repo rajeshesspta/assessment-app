@@ -10,13 +10,21 @@ interface TenantState {
   refresh: () => void
 }
 
-export function useTenants(): TenantState {
+interface Options {
+  enabled?: boolean
+}
+
+export function useTenants(options?: Options): TenantState {
   const [tenants, setTenants] = useState<TenantRecord[]>([])
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string>()
+  const enabled = options?.enabled ?? true
 
   const loadTenants = useCallback(
     async (signal?: AbortSignal) => {
+      if (!enabled) {
+        return
+      }
       setStatus('loading')
       setError(undefined)
       try {
@@ -31,18 +39,27 @@ export function useTenants(): TenantState {
         setError(err instanceof Error ? err.message : 'Unknown error')
       }
     },
-    [],
+    [enabled],
   )
 
   useEffect(() => {
+    if (!enabled) {
+      setStatus('idle')
+      setTenants([])
+      setError(undefined)
+      return
+    }
     const controller = new AbortController()
     loadTenants(controller.signal)
     return () => controller.abort()
-  }, [loadTenants])
+  }, [enabled, loadTenants])
 
   const refresh = useCallback(() => {
+    if (!enabled) {
+      return
+    }
     loadTenants()
-  }, [loadTenants])
+  }, [enabled, loadTenants])
 
   return { tenants, status, error, refresh }
 }

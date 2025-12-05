@@ -29,6 +29,29 @@
   color: #94a3b8;
 }
 
+.session-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.3);
+  font-size: 0.9rem;
+}
+
+.user-chip .dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #34d399;
+}
+
 .ghost {
   border: 1px solid rgba(148, 163, 184, 0.4);
   background: transparent;
@@ -235,6 +258,68 @@ td {
 .badge-neutral {
   background: rgba(148, 163, 184, 0.2);
   color: #e2e8f0;
+}
+
+.loading-screen,
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1rem;
+  color: #cbd5f5;
+}
+
+.auth-panel {
+  width: min(360px, 90vw);
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1.25rem;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-panel h2 {
+  margin: 0;
+}
+
+.auth-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.auth-panel input {
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.6);
+  color: inherit;
+}
+
+.auth-panel input:focus {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.primary {
+  border: none;
+  border-radius: 0.75rem;
+  background: linear-gradient(90deg, #38bdf8, #7c3aed);
+  color: white;
+  padding: 0.85rem 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.expires-label {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
 }
 
 .placeholder {

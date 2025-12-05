@@ -86,3 +86,46 @@ Audit entries (`tenant_audit_log`) capture CRUD operations, rotations, and refre
 - [x] **Wire BFF to control-plane source** – Set `CONTROL_PLANE_BASE_URL`, `CONTROL_PLANE_API_KEY`, optional `CONTROL_PLANE_BUNDLE_PATH`, and `TENANT_CONFIG_REFRESH_MS` to switch the BFF from static JSON to the registry; fall back to `TENANT_CONFIG_PATH`/`TENANT_CONFIG_JSON` for premium single-tenant stacks.
 
 This plan keeps the control plane isolated while giving Ops the tooling they need to manage tenants safely.
+
+## Console Auth & Audit Flow
+
+### Goals
+
+- Keep the Control Plane API key and OTP secrets server-side while giving Super Admins a simple 2-step login.
+- Support auditability (who logged in/out, impersonated, edited tenants) with durable storage for compliance.
+- Allow future delivery channels (email/SMS/TOTP) without rewriting the console.
+
+### Flow Summary
+
+1. **Credentials** – Console submits username/password to `POST /auth/login` on the proxy. Proxy validates against env credentials, generates a challenge ID + 6-digit OTP, hashes the OTP, stores `{challengeId, otpHash, issuedAt, expiresAt, username, attempts}` in SQLite, and returns `{challengeId, channelHint}`. OTP is delivered via pluggable provider (local dev logs to console).
+2. **OTP Verify** – Console submits `{challengeId, otp}` to `POST /auth/verify`. Proxy compares hashes, enforces expiry + attempt limits, marks the challenge consumed, and sets an HTTP-only, same-site `cpc_session` cookie (JWT or signed session id). Response includes actor metadata for the UI.
+3. **Session Guard** – All `/api/*` routes require a valid session cookie; proxy attaches `x-control-plane-key` only when the session is trusted. `POST /auth/logout` clears the cookie and records an audit log.
+
+### Data Model
+
+- **Table `proxy_sessions`**: `id (uuid)`, `user`, `issued_at`, `expires_at`, `revoked_at`, `ip`, `user_agent`.
+- **Table `proxy_audit_logs`**: `id`, `actor`, `action (LOGIN_REQUEST|OTP_VERIFIED|SESSION_REVOKED|TENANT_MODIFIED|...)`, `metadata_json`, `created_at`, `ip`.
+- **Table `proxy_otp_challenges`**: `id`, `user`, `otp_hash`, `issued_at`, `expires_at`, `consumed_at`, `attempts`, `delivery_channel`, `delivery_metadata`.
+
+All OTP hashes use `scrypt`/`bcrypt` with per-entry salt; raw codes are never stored after delivery.
+
+### Console UX
+
+1. **Step 1** – Username/password form; on success switch to OTP input with resend + countdown.
+2. **Step 2** – OTP input; errors handled inline with lockouts after N failed attempts.
+3. **Session state** – React context stores `actor`, polls `/auth/session` to rehydrate on reload, and handles automatic logout on 401.
+
+### API Endpoints (Proxy)
+
+- `POST /auth/login` – Basic auth header or JSON body, returns `challengeId`.
+- `POST /auth/verify` – `{ challengeId, otp }`, returns session + actor info, sets cookie.
+- `POST /auth/logout` – Clears cookie, marks session revoked.
+- `GET /auth/session` – Returns session metadata for console boot flow.
+- `GET /audit/logs` – Requires a console session and streams the most recent auth/audit events for compliance review.
+- Existing `/api/*` – require session cookie; unauthorized responses drive console logout.
+
+### Observability & Alerts
+
+- Log every auth phase via audit table + structured logger (PII redacted).
+- Emit metrics: active sessions count, OTP failure rate, login latency.
+- Future: webhook/email when repeated failures exceed threshold.

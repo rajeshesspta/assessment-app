@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import './App.css'
 import { controlPlaneApiBaseUrl } from './config'
 import { useTenants } from './hooks/useTenants'
+import { useSession } from './context/session-context'
+import { AuthScreens } from './components/AuthGate'
 
 type TenantStatus = 'active' | 'paused' | 'deleting'
 
@@ -30,7 +32,9 @@ function formatUpdatedAt(value: string) {
 }
 
 function App() {
-  const { tenants, status, error, refresh } = useTenants()
+  const session = useSession()
+  const authenticated = Boolean(session.actor) && !session.challengeId
+  const { tenants, status, error, refresh } = useTenants({ enabled: authenticated })
   const [search, setSearch] = useState('')
 
   const metrics = useMemo(() => {
@@ -55,6 +59,10 @@ function App() {
   const isLoading = status === 'loading' && !tenants.length
   const statusMessage = status === 'loading' ? 'Syncing…' : status === 'error' ? 'Needs attention' : 'Up to date'
 
+  if (!authenticated) {
+    return <AuthScreens />
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -63,9 +71,18 @@ function App() {
           <h1>Tenant Registry</h1>
           <p className="subtitle">Connected to {controlPlaneApiBaseUrl}</p>
         </div>
-        <button className="ghost" onClick={refresh} disabled={status === 'loading'}>
-          Refresh
-        </button>
+        <div className="session-controls">
+          <div className="user-chip">
+            <span className="dot" />
+            {session.actor?.username}
+          </div>
+          <button className="ghost" onClick={refresh} disabled={status === 'loading'}>
+            Refresh
+          </button>
+          <button className="ghost" onClick={session.signOut}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="app-main">

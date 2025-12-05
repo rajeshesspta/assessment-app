@@ -45,10 +45,13 @@ const tenantListSchema = z.array(tenantSchema)
 
 export type TenantRecord = z.infer<typeof tenantSchema>
 
-async function requestJson(path: string, init?: RequestInit) {
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   if (!headers.has('accept')) {
     headers.set('accept', 'application/json')
+  }
+  if (!headers.has('content-type') && init?.body) {
+    headers.set('content-type', 'application/json')
   }
 
   const response = await fetch(`${controlPlaneApiBaseUrl}${path}`, {
@@ -62,11 +65,48 @@ async function requestJson(path: string, init?: RequestInit) {
     throw new Error(`Request failed (${response.status}): ${details || response.statusText}`)
   }
 
-  return response.json()
+  return response.json() as Promise<T>
 }
 
 export async function listTenants(signal?: AbortSignal): Promise<TenantRecord[]> {
   const payload = await requestJson('/control/tenants', { signal })
   const tenants = tenantListSchema.parse(payload)
   return tenants.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+const sessionSchema = z.object({
+  actor: z.object({ username: z.string() }),
+  expiresAt: z.string().datetime(),
+})
+
+type SessionInfo = z.infer<typeof sessionSchema>
+
+export async function login(username: string, password: string) {
+  return requestJson<{ challengeId: string; expiresAt: string; delivery: string; devOtp?: string }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export async function verifyOtp(challengeId: string, otp: string) {
+  return requestJson<SessionInfo>('/auth/verify', {
+    method: 'POST',
+    body: JSON.stringify({ challengeId, otp }),
+  })
+}
+
+export async function logout() {
+  await requestJson('/auth/logout', { method: 'POST' })
+}
+
+export async function fetchSession(): Promise<SessionInfo | null> {
+  try {
+    const data = await requestJson<SessionInfo>('/auth/session')
+    return sessionSchema.parse(data)
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('(401)')) {
+      return null
+    }
+    throw error
+  }
 }
