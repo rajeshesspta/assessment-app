@@ -113,6 +113,7 @@ npm install
 npm test
 npm run build
 npm run dev
+npm run dev:control-plane # starts API + proxy + console
 ```
 
 The dev server uses `tsx watch` and listens on `http://127.0.0.1:3000` by default. Cosmos DB is optional; with the default `AUTH_PROVIDER=memory` no emulator or cloud dependency is required.

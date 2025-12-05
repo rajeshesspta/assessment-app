@@ -7,13 +7,19 @@
     "apps/dev-portal",
     "apps/consumer-portal",
     "apps/consumer-bff",
-    "apps/control-plane-api"
+    "apps/control-plane-api",
+    "apps/control-plane-console",
+    "apps/control-plane-console-proxy"
   ],
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "dev:control-plane:api": "npm run dev --workspace control-plane-api",
+    "dev:control-plane:proxy": "npm run dev --workspace control-plane-console-proxy",
+    "dev:control-plane:console": "npm run dev --workspace control-plane-console",
+    "dev:control-plane": "npm-run-all --parallel dev:control-plane:api dev:control-plane:proxy dev:control-plane:console",
     "dev:portal": "npm run dev --workspace dev-portal",
     "build:portal": "npm run build --workspace dev-portal",
     "dev:consumer": "npm run dev --workspace consumer-portal",
@@ -47,6 +53,7 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
     "typescript": "^5.4.0",
-    "vitest": "^2.1.3"
+    "vitest": "^2.1.3",
+    "npm-run-all": "^4.1.5"
   }
 }

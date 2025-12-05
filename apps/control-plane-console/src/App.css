@@ -1,0 +1,254 @@
+.app-shell {
+  min-height: 100vh;
+  padding: 3rem clamp(1rem, 3vw, 4rem);
+}
+
+.app-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.app-header h1 {
+  margin: 0.25rem 0 0;
+  font-size: clamp(2rem, 3vw, 2.75rem);
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.subtitle {
+  margin: 0.2rem 0 0;
+  color: #94a3b8;
+}
+
+.ghost {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: transparent;
+  color: inherit;
+  padding: 0.65rem 1.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghost:not(:disabled):hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.metrics-grid article {
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.metrics-grid p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.metrics-grid strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 1.75rem;
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.75);
+  border-radius: 1.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 1.5rem;
+  box-shadow: 0 25px 70px rgba(2, 6, 23, 0.7);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.search {
+  flex: 1 1 260px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  color: inherit;
+}
+
+.search:focus {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.toolbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #cbd5f5;
+  font-size: 0.9rem;
+}
+
+.status-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  display: inline-flex;
+  background: #22c55e;
+}
+
+.status-dot.loading {
+  background: #facc15;
+}
+
+.status-dot.error {
+  background: #f87171;
+}
+
+.status-label {
+  color: #94a3b8;
+}
+
+.callout {
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.callout.error {
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #fecaca;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+th {
+  text-align: left;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+td {
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  vertical-align: top;
+}
+
+.tenant-name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.tenant-id,
+.updated-by {
+  margin: 0.2rem 0 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.host-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.host-list li {
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.support-email {
+  color: #7dd3fc;
+}
+
+.status-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  display: inline-flex;
+  background: #94a3b8;
+}
+.status-dot.idle {
+  background: #94a3b8;
+}
+.status-dot.success {
+  background: #22c55e;
+}
+.status-dot.loading {
+  background: #facc15;
+}
+.status-dot.error {
+  background: #f87171;
+}
+.badge-warning {
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde047;
+}
+
+.badge-danger {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fecaca;
+}
+.badge-neutral {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+
+.placeholder {
+  padding: 2rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    flex-direction: column;
+  }
+
+  .ghost {
+    width: 100%;
+  }
+}

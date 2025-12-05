@@ -81,7 +81,7 @@ Audit entries (`tenant_audit_log`) capture CRUD operations, rotations, and refre
 
 - [x] **Design control-plane API + schema** _(this doc)_ – REST paths, schema, and migrations are locked in and reflected in the Fastify implementation.
 - [x] **Implement Super Admin tenant registry service** – `apps/control-plane-api` ships with SQLite + Cosmos adapters, API-key auth, migrations, and repository tests.
-- [ ] **Build control-plane web console UI** – still pending; once scaffolded, point it to the running API using the same `x-control-plane-key` guard.
+- [x] **Build control-plane web console UI** – Vite dashboard reads `/control/tenants` through the proxy and surfaces status/metrics for Super Admins.
 - [x] **Add BFF tenant bundle hot-reload** – `apps/consumer-bff` polls `/control/tenant-bundle` and refreshes the runtime maps when `updatedAt` changes.
 - [x] **Wire BFF to control-plane source** – Set `CONTROL_PLANE_BASE_URL`, `CONTROL_PLANE_API_KEY`, optional `CONTROL_PLANE_BUNDLE_PATH`, and `TENANT_CONFIG_REFRESH_MS` to switch the BFF from static JSON to the registry; fall back to `TENANT_CONFIG_PATH`/`TENANT_CONFIG_JSON` for premium single-tenant stacks.
 
