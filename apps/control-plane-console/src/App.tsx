@@ -161,7 +161,7 @@ function App() {
 
     setCreating(true)
     try {
-      await createTenant({
+      const tenantPayload: any = {
         name: form.name,
         hosts: [form.host],
         supportEmail: form.supportEmail,
@@ -171,7 +171,6 @@ function App() {
           apiKeyRef: form.apiKey,
           actorRoles,
         },
-        auth: authPayload,
         clientApp: {
           baseUrl: form.clientBaseUrl,
           landingPath: form.landingPath || '/overview',
@@ -179,7 +178,13 @@ function App() {
         branding: {},
         featureFlags: {},
         status: 'active',
-      })
+      }
+
+      if (Object.keys(authPayload).length > 0) {
+        tenantPayload.auth = authPayload
+      }
+
+      await createTenant(tenantPayload)
 
       setForm({
         name: '',
