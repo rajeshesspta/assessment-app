@@ -298,9 +298,48 @@
 }
 
 .hint-icon {
-  margin-left: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.06);
   color: #94a3b8;
   font-size: 0.9rem;
+  margin-left: 0.5rem;
+  cursor: pointer;
+  position: relative;
+}
+
+/* Tooltip using data-tooltip attribute */
+.hint-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  background: rgba(2, 6, 23, 0.95);
+  color: #e2e8f0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 20;
+}
+
+.hint-icon:hover::after,
+.hint-icon:focus::after,
+.hint-icon:active::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.hint-icon:focus {
+  outline: 2px solid rgba(56, 189, 248, 0.25);
+  outline-offset: 2px;
 }
 
 .form-grid input[type='text'],
