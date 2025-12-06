@@ -391,12 +391,17 @@ function App() {
             <p className="subtitle">Create registry entry and issue a control-plane key.</p>
             <form className="form-grid" onSubmit={handleCreate}>
               <label>
-                <span>Tenant Name</span>
+                <span>
+                  Tenant Name
+                  <span className="hint-icon" tabIndex={0} data-tooltip={"A friendly tenant name shown in admin lists (e.g., 'Acme Learning')."} aria-label="Tenant name hint">ℹ</span>
+                </span>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                <span className="hint-icon" tabIndex={0} data-tooltip={"A friendly tenant name shown in admin lists (e.g., 'Acme Learning')."} aria-label="Tenant name hint">ℹ</span>
               </label>
               <label>
-                <span>Deployment Type</span>
+                <span>
+                  Deployment Type
+                  <span className="hint-icon" tabIndex={0} data-tooltip={"Choose shared for standard tenants or premium to enable extra features."} aria-label="Deployment type hint">ℹ</span>
+                </span>
                 <select
                   value={form.deploymentType}
                   onChange={(e) => setForm({ ...form, deploymentType: e.target.value as DeploymentType })}
@@ -404,64 +409,75 @@ function App() {
                   <option value="shared">Shared</option>
                   <option value="premium">Premium</option>
                 </select>
-                <span className="hint-icon" tabIndex={0} data-tooltip={"Choose shared for standard tenants or premium to enable extra features."} aria-label="Deployment type hint">ℹ</span>
               </label>
               <label>
-                <span>Primary Host</span>
+                <span>
+                  Primary Host
+                  <span className="hint-icon" tabIndex={0} data-tooltip={"Canonical hostname that routes browser traffic to this tenant (e.g., acme.learn.example.com). No protocol."} aria-label="Primary host hint">ℹ</span>
+                </span>
                 <input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} required />
-                <span className="hint-icon" tabIndex={0} data-tooltip={"Canonical hostname that routes browser traffic to this tenant (e.g., acme.learn.example.com). No protocol."} aria-label="Primary host hint">ℹ</span>
               </label>
               <label>
-                <span>Support Email</span>
+                <span>
+                  Support Email
+                  <span className="hint-icon" tabIndex={0} data-tooltip={"Contact email shown on tenant pages and used for admin notifications."} aria-label="Support email hint">ℹ</span>
+                </span>
                 <input
                   type="email"
                   value={form.supportEmail}
                   onChange={(e) => setForm({ ...form, supportEmail: e.target.value })}
                   required
                 />
-                <span className="hint-icon" tabIndex={0} data-tooltip={"Contact email shown on tenant pages and used for admin notifications."} aria-label="Support email hint">ℹ</span>
               </label>
               <div className="form-row span-2">
                 <label>
-                  <span>Headless Base URL</span>
+                  <span>
+                    Headless Base URL
+                    <span className="hint-icon" tabIndex={0} data-tooltip={"The backend/API origin used for tenant-specific operations (include https://)."} aria-label="Headless base URL hint">ℹ</span>
+                  </span>
                   <input
                     value={form.headlessBaseUrl}
                     onChange={(e) => setForm({ ...form, headlessBaseUrl: e.target.value })}
                     placeholder="https://api.example.com"
                     required
                   />
-                    <span className="hint-icon" tabIndex={0} data-tooltip={"The backend/API origin used for tenant-specific operations (include https://)."} aria-label="Headless base URL hint">ℹ</span>
                 </label>
                 <label>
-                  <span>Headless API Key</span>
+                  <span>
+                    Headless API Key
+                    <span className="hint-icon" tabIndex={0} data-tooltip={"Secret credential used by platform services to authenticate to this tenant's headless API. Rotate if compromised."} aria-label="Headless API Key hint">ℹ</span>
+                  </span>
                   <div className="inline-field">
                     <input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} required />
                     <button type="button" className="ghost" onClick={() => setForm({ ...form, apiKey: generateApiKey() })}>
                       Regenerate
                     </button>
                   </div>
-                  <span className="hint-icon" tabIndex={0} data-tooltip={"Secret credential used by platform services to authenticate to this tenant's headless API. Rotate if compromised."} aria-label="Headless API Key hint">ℹ</span>
                 </label>
               </div>
 
               <label>
-                <span>Client App Base URL</span>
+                <span>
+                  Client App Base URL
+                  <span className="hint-icon" tabIndex={0} data-tooltip={"Public origin for the tenant's UI. Used for redirects and published links (include https://)."} aria-label="Client App Base URL hint">ℹ</span>
+                </span>
                 <input
                   value={form.clientBaseUrl}
                   onChange={(e) => setForm({ ...form, clientBaseUrl: e.target.value })}
                   placeholder="https://app.example.com"
                   required
                 />
-                <span className="hint-icon" tabIndex={0} data-tooltip={"Public origin for the tenant's UI. Used for redirects and published links (include https://)."} aria-label="Client App Base URL hint">ℹ</span>
               </label>
               <label>
-                <span>Landing Path</span>
+                <span>
+                  Landing Path
+                  <span className="hint-icon" tabIndex={0} data-tooltip={"Path the portal will open to after login (e.g., /overview). Starts with '/'."} aria-label="Landing path hint">ℹ</span>
+                </span>
                 <input
                   value={form.landingPath}
                   onChange={(e) => setForm({ ...form, landingPath: e.target.value })}
                   placeholder="/overview"
                 />
-                <span className="hint-icon" tabIndex={0} data-tooltip={"Path the portal will open to after login (e.g., /overview). Starts with '/'."} aria-label="Landing path hint">ℹ</span>
               </label>
               
               <div className="idp-section span-2">
