@@ -45,7 +45,6 @@ const tenantListSchema = z.array(tenantSchema)
 
 export type TenantRecord = z.infer<typeof tenantSchema>
 export type CreateTenantRequest = {
-  id: string
   name: string
   hosts: string[]
   supportEmail: string
@@ -53,7 +52,6 @@ export type CreateTenantRequest = {
   headless: {
     baseUrl: string
     apiKeyRef: string
-    tenantId: string
     actorRoles: string[]
   }
   auth: {

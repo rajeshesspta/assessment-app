@@ -40,13 +40,12 @@ function formatUpdatedAt(value: string) {
 function App() {
   const session = useSession()
   const authenticated = Boolean(session.actor) && !session.challengeId
-  const [activePage, setActivePage] = useState<'list' | 'create'>('list')
-  const { tenants, status, error, refresh } = useTenants({ enabled: authenticated && activePage === 'list' })
+  const [activePage, setActivePage] = useState<'dashboard' | 'tenants' | 'create'>('dashboard')
+  const { tenants, status, error, refresh } = useTenants({ enabled: authenticated })
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string>()
   const [form, setForm] = useState({
-    tenantId: '',
     name: '',
     host: '',
     supportEmail: '',
@@ -110,14 +109,7 @@ function App() {
       setCreateError('Provide at least one actor role')
       return
     }
-    if (
-      !form.tenantId ||
-      !form.name ||
-      !form.host ||
-      !form.supportEmail ||
-      !form.headlessBaseUrl ||
-      !form.clientBaseUrl
-    ) {
+    if (!form.name || !form.host || !form.supportEmail || !form.headlessBaseUrl || !form.clientBaseUrl) {
       setCreateError('Fill all required fields')
       return
     }
@@ -125,7 +117,6 @@ function App() {
     setCreating(true)
     try {
       await createTenant({
-        id: form.tenantId,
         name: form.name,
         hosts: [form.host],
         supportEmail: form.supportEmail,
@@ -133,7 +124,6 @@ function App() {
         headless: {
           baseUrl: form.headlessBaseUrl,
           apiKeyRef: form.apiKey,
-          tenantId: form.tenantId,
           actorRoles,
         },
         auth: {
@@ -154,9 +144,7 @@ function App() {
         status: 'active',
       })
 
-      setForm((prev) => ({
-        ...prev,
-        tenantId: '',
+      setForm({
         name: '',
         host: '',
         supportEmail: '',
@@ -168,9 +156,10 @@ function App() {
         googleClientIdRef: '',
         googleClientSecretRef: '',
         googleRedirectUris: '',
-      }))
+        premiumDeployment: false,
+      })
       refresh()
-      setActivePage('list')
+      setActivePage('tenants')
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Unable to create tenant')
     } finally {
@@ -199,9 +188,20 @@ function App() {
               <div className="dropdown-menu">
                 <button
                   type="button"
-                  className={activePage === 'list' ? 'active' : ''}
+                  className={activePage === 'dashboard' ? 'active' : ''}
                   onClick={() => {
-                    setActivePage('list')
+                    setActivePage('dashboard')
+                    setMenuOpen(false)
+                    refresh()
+                  }}
+                >
+                  Dashboard
+                </button>
+                <button
+                  type="button"
+                  className={activePage === 'tenants' ? 'active' : ''}
+                  onClick={() => {
+                    setActivePage('tenants')
                     setMenuOpen(false)
                     refresh()
                   }}
@@ -225,7 +225,7 @@ function App() {
             <span className="dot" />
             {session.actor?.username}
           </div>
-          <button className="ghost" onClick={refresh} disabled={status === 'loading' || activePage !== 'list'}>
+          <button className="ghost" onClick={refresh} disabled={status === 'loading'}>
             Refresh
           </button>
           <button className="ghost" onClick={session.signOut}>
@@ -235,15 +235,122 @@ function App() {
       </header>
 
       <main className="app-main">
-        {activePage === 'create' ? (
+        {activePage === 'dashboard' && (
+          <>
+            <section className="panel dashboard-hero">
+              <div>
+                <h2>Control Plane Overview</h2>
+                <p className="subtitle">Monitor rollout velocity, cohort health, and premium coverage.</p>
+              </div>
+              <div className="hero-actions">
+                <div className="status-chip">
+                  <span className={`status-dot ${status}`}></span>
+                  <span className="status-label">{statusMessage}</span>
+                </div>
+                <button className="ghost" type="button" onClick={() => setActivePage('tenants')}>
+                  View tenant list
+                </button>
+              </div>
+            </section>
+
+            <section className="metrics-grid dashboard-metrics">
+              <article>
+                <p>Total Tenants</p>
+                <strong>{metrics.total}</strong>
+              </article>
+              <article>
+                <p>Active</p>
+                <strong>{metrics.active}</strong>
+              </article>
+              <article>
+                <p>Paused</p>
+                <strong>{metrics.paused}</strong>
+              </article>
+              <article>
+                <p>Premium Deployments</p>
+                <strong>{metrics.premium}</strong>
+              </article>
+            </section>
+          </>
+        )}
+
+        {activePage === 'tenants' && (
+          <section className="panel">
+            <div className="toolbar">
+              <input
+                className="search"
+                placeholder="Search by name, id, or host"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <div className="toolbar-meta">
+                <span className={`status-dot ${status}`}></span>
+                <span className="status-label">{statusMessage}</span>
+              </div>
+            </div>
+
+            {error && <div className="callout error">{error}</div>}
+
+            <div className="table-wrapper">
+              {isLoading ? (
+                <div className="placeholder">Loading tenant registry…</div>
+              ) : filteredTenants.length === 0 ? (
+                <div className="placeholder">No tenants match that search.</div>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Tenant</th>
+                      <th>Status</th>
+                      <th>Hosts</th>
+                      <th>Support Email</th>
+                      <th>Premium</th>
+                      <th>Last Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTenants.map((tenant) => (
+                      <tr key={tenant.id}>
+                        <td>
+                          <p className="tenant-name">{tenant.name}</p>
+                          <p className="tenant-id">{tenant.id}</p>
+                        </td>
+                        <td>
+                          <span className={`status-badge ${statusClass[tenant.status] ?? 'badge-neutral'}`}>
+                            {statusLabels[tenant.status] ?? tenant.status}
+                          </span>
+                        </td>
+                        <td>
+                          <ul className="host-list">
+                            {tenant.hosts.map((host) => (
+                              <li key={host}>{host}</li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td>
+                          <a href={`mailto:${tenant.supportEmail}`} className="support-email">
+                            {tenant.supportEmail}
+                          </a>
+                        </td>
+                        <td>{tenant.premiumDeployment ? 'Yes' : 'No'}</td>
+                        <td>
+                          <p>{formatUpdatedAt(tenant.updatedAt)}</p>
+                          <p className="updated-by">by {tenant.updatedBy}</p>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activePage === 'create' && (
           <section className="panel narrow-panel">
             <h2>Onboard a Tenant</h2>
             <p className="subtitle">Create registry entry and issue a control-plane key.</p>
             <form className="form-grid" onSubmit={handleCreate}>
-              <label>
-                <span>Tenant ID</span>
-                <input value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })} required />
-              </label>
               <label>
                 <span>Tenant Name</span>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -338,103 +445,12 @@ function App() {
                 <button type="submit" className="primary" disabled={creating}>
                   {creating ? 'Creating…' : 'Create tenant'}
                 </button>
-                <button type="button" className="ghost" onClick={() => setActivePage('list')}>
-                  Back to list
+                <button type="button" className="ghost" onClick={() => setActivePage('dashboard')}>
+                  Back to dashboard
                 </button>
               </div>
             </form>
           </section>
-        ) : (
-          <>
-            <section className="metrics-grid">
-              <article>
-                <p>Total Tenants</p>
-                <strong>{metrics.total}</strong>
-              </article>
-              <article>
-                <p>Active</p>
-                <strong>{metrics.active}</strong>
-              </article>
-              <article>
-                <p>Paused</p>
-                <strong>{metrics.paused}</strong>
-              </article>
-              <article>
-                <p>Premium Deployments</p>
-                <strong>{metrics.premium}</strong>
-              </article>
-            </section>
-
-            <section className="panel">
-              <div className="toolbar">
-                <input
-                  className="search"
-                  placeholder="Search by name, id, or host"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <div className="toolbar-meta">
-                  <span className={`status-dot ${status}`}></span>
-                  <span className="status-label">{statusMessage}</span>
-                </div>
-              </div>
-
-              {error && <div className="callout error">{error}</div>}
-
-              <div className="table-wrapper">
-                {isLoading ? (
-                  <div className="placeholder">Loading tenant registry…</div>
-                ) : filteredTenants.length === 0 ? (
-                  <div className="placeholder">No tenants match that search.</div>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Tenant</th>
-                        <th>Status</th>
-                        <th>Hosts</th>
-                        <th>Support Email</th>
-                        <th>Premium</th>
-                        <th>Last Updated</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTenants.map((tenant) => (
-                        <tr key={tenant.id}>
-                          <td>
-                            <p className="tenant-name">{tenant.name}</p>
-                            <p className="tenant-id">{tenant.id}</p>
-                          </td>
-                          <td>
-                            <span className={`status-badge ${statusClass[tenant.status] ?? 'badge-neutral'}`}>
-                              {statusLabels[tenant.status] ?? tenant.status}
-                            </span>
-                          </td>
-                          <td>
-                            <ul className="host-list">
-                              {tenant.hosts.map((host) => (
-                                <li key={host}>{host}</li>
-                              ))}
-                            </ul>
-                          </td>
-                          <td>
-                            <a href={`mailto:${tenant.supportEmail}`} className="support-email">
-                              {tenant.supportEmail}
-                            </a>
-                          </td>
-                          <td>{tenant.premiumDeployment ? 'Yes' : 'No'}</td>
-                          <td>
-                            <p>{formatUpdatedAt(tenant.updatedAt)}</p>
-                            <p className="updated-by">by {tenant.updatedBy}</p>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </section>
-          </>
         )}
       </main>
     </div>
