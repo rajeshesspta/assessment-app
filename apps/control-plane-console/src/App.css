@@ -281,6 +281,28 @@
   font-size: 0.95rem;
 }
 
+.form-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.form-row label {
+  flex: 1 1 0;
+}
+
+.field-hint {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.hint-icon {
+  margin-left: 0.35rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
 .form-grid input[type='text'],
 .form-grid input[type='email'],
 .form-grid input[type='password'],

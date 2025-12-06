@@ -393,6 +393,7 @@ function App() {
               <label>
                 <span>Tenant Name</span>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                <div className="field-hint">A friendly tenant name shown in admin lists (e.g., “Acme Learning”).</div>
               </label>
               <label>
                 <span>Deployment Type</span>
@@ -403,10 +404,12 @@ function App() {
                   <option value="shared">Shared</option>
                   <option value="premium">Premium</option>
                 </select>
+                <div className="field-hint">Choose shared for standard tenants or premium to enable extra features.</div>
               </label>
               <label>
                 <span>Primary Host</span>
                 <input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} required />
+                <div className="field-hint">Canonical hostname that routes browser traffic to this tenant (e.g., acme.learn.example.com). No protocol.</div>
               </label>
               <label>
                 <span>Support Email</span>
@@ -416,16 +419,31 @@ function App() {
                   onChange={(e) => setForm({ ...form, supportEmail: e.target.value })}
                   required
                 />
+                <div className="field-hint">Contact email shown on tenant pages and used for admin notifications.</div>
               </label>
-              <label>
-                <span>Headless Base URL</span>
-                <input
-                  value={form.headlessBaseUrl}
-                  onChange={(e) => setForm({ ...form, headlessBaseUrl: e.target.value })}
-                  placeholder="https://api.example.com"
-                  required
-                />
-              </label>
+              <div className="form-row span-2">
+                <label>
+                  <span>Headless Base URL</span>
+                  <input
+                    value={form.headlessBaseUrl}
+                    onChange={(e) => setForm({ ...form, headlessBaseUrl: e.target.value })}
+                    placeholder="https://api.example.com"
+                    required
+                  />
+                  <div className="field-hint">The backend/API origin used for tenant-specific operations (include https://).</div>
+                </label>
+                <label>
+                  <span>Headless API Key</span>
+                  <div className="inline-field">
+                    <input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} required />
+                    <button type="button" className="ghost" onClick={() => setForm({ ...form, apiKey: generateApiKey() })}>
+                      Regenerate
+                    </button>
+                  </div>
+                  <div className="field-hint">Secret credential used by platform services to authenticate to this tenant's headless API. Rotate if compromised.</div>
+                </label>
+              </div>
+
               <label>
                 <span>Client App Base URL</span>
                 <input
@@ -434,6 +452,7 @@ function App() {
                   placeholder="https://app.example.com"
                   required
                 />
+                <div className="field-hint">Public origin for the tenant's UI. Used for redirects and published links (include https://).</div>
               </label>
               <label>
                 <span>Landing Path</span>
@@ -442,16 +461,9 @@ function App() {
                   onChange={(e) => setForm({ ...form, landingPath: e.target.value })}
                   placeholder="/overview"
                 />
+                <div className="field-hint">Path the portal will open to after login (e.g., /overview). Starts with '/'.</div>
               </label>
-              <label>
-                <span>API Key</span>
-                <div className="inline-field">
-                  <input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} required />
-                  <button type="button" className="ghost" onClick={() => setForm({ ...form, apiKey: generateApiKey() })}>
-                    Regenerate
-                  </button>
-                </div>
-              </label>
+              
               <div className="idp-section span-2">
                 <h3>Social Identity Providers</h3>
                 {(['google', 'microsoft'] as SocialProviderKey[]).map((provider) => (
