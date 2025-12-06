@@ -85,7 +85,7 @@ function App() {
     clientBaseUrl: '',
     landingPath: '/overview',
     deploymentType: 'shared' as DeploymentType,
-    google: createSocialProviderForm(true),
+    google: createSocialProviderForm(false),
     microsoft: createSocialProviderForm(false),
   })
   const [menuOpen, setMenuOpen] = useState(false)
@@ -138,10 +138,6 @@ function App() {
 
     const providerKeys: SocialProviderKey[] = ['google', 'microsoft']
     const enabledProviders = providerKeys.filter((key) => form[key].enabled)
-    if (enabledProviders.length === 0) {
-      setCreateError('Enable at least one social identity provider')
-      return
-    }
 
     const authPayload: CreateTenantRequest['auth'] = {}
     for (const key of enabledProviders) {
@@ -480,84 +476,16 @@ function App() {
                 />
               </label>
               
-              <div className="idp-section span-2">
-                <h3>Social Identity Providers</h3>
-                {(['google', 'microsoft'] as SocialProviderKey[]).map((provider) => (
-                  <div key={provider} className="idp-card">
-                    <div className="idp-toggle">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={form[provider].enabled}
-                          onChange={(event) =>
-                            setForm({
-                              ...form,
-                              [provider]: {
-                                ...form[provider],
-                                enabled: event.target.checked,
-                              },
-                            })
-                          }
-                        />
-                        <span>Enable {providerLabels[provider]}</span>
-                      </label>
-                    </div>
-                    <div className="idp-grid">
-                      <label>
-                        <span>Client ID Ref</span>
-                        <input
-                          value={form[provider].clientIdRef}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              [provider]: {
-                                ...form[provider],
-                                clientIdRef: e.target.value,
-                              },
-                            })
-                          }
-                          placeholder="vault:client-id"
-                          disabled={!form[provider].enabled}
-                        />
-                      </label>
-                      <label>
-                        <span>Client Secret Ref</span>
-                        <input
-                          value={form[provider].clientSecretRef}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              [provider]: {
-                                ...form[provider],
-                                clientSecretRef: e.target.value,
-                              },
-                            })
-                          }
-                          placeholder="vault:client-secret"
-                          disabled={!form[provider].enabled}
-                        />
-                      </label>
-                      <label className="span-2">
-                        <span>Redirect URIs (comma separated)</span>
-                        <input
-                          value={form[provider].redirectUris}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              [provider]: {
-                                ...form[provider],
-                                redirectUris: e.target.value,
-                              },
-                            })
-                          }
-                          placeholder="https://app.example.com/oauth/callback"
-                          disabled={!form[provider].enabled}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {/* Social IDP configuration moved out of the create flow. */}
+              {session.actor?.username === 'super-admin' ? (
+                <div className="callout span-2">
+                  Social identity providers and advanced tenant settings are configurable in the Tenant Settings page (Super Admin only).
+                </div>
+              ) : (
+                <div className="callout span-2">
+                  Social identity providers and advanced tenant settings can be configured later by a Super Admin.
+                </div>
+              )}
 
               {createError && <div className="callout error span-2">{createError}</div>}
               <div className="actions span-2">
