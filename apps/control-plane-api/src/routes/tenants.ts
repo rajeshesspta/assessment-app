@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { TenantRegistryRepository, TenantRecord } from '../repositories/tenant-registry';
 import { tenantRegistryInputSchema } from '../tenant-schema';
@@ -30,13 +31,22 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
   });
 
   app.post('/control/tenants', async (request, reply) => {
-    const parsed = tenantRegistryInputSchema.safeParse(request.body ?? {});
+    const input = request.body ?? {};
+    const tenantId = randomUUID();
+    input.id = tenantId;
+    if (input.headless && typeof input.headless === 'object') {
+      input.headless.tenantId = tenantId;
+    }
+    const parsed = tenantRegistryInputSchema.safeParse(input);
     if (!parsed.success) {
       reply.code(400);
       return { error: 'Invalid tenant payload', issues: parsed.error.issues };
     }
+    let actor = 'unknown';
     const actorHeader = actorHeaderSchema.safeParse({ actor: request.headers['x-control-plane-actor'] });
-    const actor = actorHeader.success ? actorHeader.data.actor : 'super-admin';
+    if (actorHeader.success && actorHeader.data.actor && actorHeader.data.actor.toLowerCase() !== 'super-admin') {
+      actor = actorHeader.data.actor;
+    }
     const record = await repo.upsertTenant(parsed.data, actor);
     return sanitizeRecord(record);
   });

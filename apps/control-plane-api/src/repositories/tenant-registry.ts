@@ -1,8 +1,14 @@
 import { z } from 'zod';
 import type { TenantRegistryStore, TenantRow, TenantRowWriteInput, TenantAuditLogEntry } from '../stores/tenant-registry-store';
-import { tenantConfigBundleSchema, tenantRegistryInputSchema, type TenantConfigBundle, type TenantRegistryInput } from '../tenant-schema';
+import {
+  tenantConfigBundleSchema,
+  tenantRegistryInputSchema,
+  tenantRegistryStoredSchema,
+  type TenantConfigBundle,
+  type TenantRegistryInput,
+} from '../tenant-schema';
 
-const tenantRecordSchema = tenantRegistryInputSchema.extend({
+const tenantRecordSchema = tenantRegistryStoredSchema.extend({
   updatedAt: z.string(),
   updatedBy: z.string(),
 });
@@ -57,30 +63,44 @@ export class TenantRegistryRepository {
   async buildTenantBundle(): Promise<TenantConfigBundle> {
     const tenants = (await this.listTenants())
       .filter(tenant => tenant.status === 'active')
-      .map(tenant => ({
-        tenantId: tenant.id,
-        name: tenant.name,
-        hosts: tenant.hosts,
-        supportEmail: tenant.supportEmail,
-        premiumDeployment: tenant.premiumDeployment,
-        headless: {
-          baseUrl: tenant.headless.baseUrl,
-          apiKey: tenant.headless.apiKeyRef,
-          tenantId: tenant.headless.tenantId,
-          actorRoles: tenant.headless.actorRoles,
-        },
-        auth: {
-          google: {
+      .map(tenant => {
+        const auth: Record<string, unknown> = {};
+        if (tenant.auth.google) {
+          auth.google = {
+            enabled: tenant.auth.google.enabled ?? true,
             clientId: tenant.auth.google.clientIdRef,
             clientSecret: tenant.auth.google.clientSecretRef,
             redirectUris: tenant.auth.google.redirectUris,
+          };
+        }
+        if (tenant.auth.microsoft) {
+          auth.microsoft = {
+            enabled: tenant.auth.microsoft.enabled ?? true,
+            clientId: tenant.auth.microsoft.clientIdRef,
+            clientSecret: tenant.auth.microsoft.clientSecretRef,
+            redirectUris: tenant.auth.microsoft.redirectUris,
+          };
+        }
+
+        return {
+          tenantId: tenant.id,
+          name: tenant.name,
+          hosts: tenant.hosts,
+          supportEmail: tenant.supportEmail,
+          premiumDeployment: tenant.premiumDeployment,
+          headless: {
+            baseUrl: tenant.headless.baseUrl,
+            apiKey: tenant.headless.apiKeyRef,
+            tenantId: tenant.headless.tenantId,
+            actorRoles: tenant.headless.actorRoles,
           },
-        },
-        clientApp: tenant.clientApp,
-        branding: tenant.branding,
-        featureFlags: tenant.featureFlags,
-        status: tenant.status,
-      }));
+          auth,
+          clientApp: tenant.clientApp,
+          branding: tenant.branding,
+          featureFlags: tenant.featureFlags,
+          status: tenant.status,
+        };
+      });
 
     return tenantConfigBundleSchema.parse({
       updatedAt: new Date().toISOString(),

@@ -4,7 +4,7 @@ import { controlPlaneApiBaseUrl } from './config'
 import { useTenants } from './hooks/useTenants'
 import { useSession } from './context/session-context'
 import { AuthScreens } from './components/AuthGate'
-import { createTenant } from './api/controlPlaneClient'
+import { createTenant, type CreateTenantRequest } from './api/controlPlaneClient'
 
 type TenantStatus = 'active' | 'paused' | 'deleting'
 
@@ -18,6 +18,37 @@ const statusClass: Record<TenantStatus, string> = {
   active: 'badge-success',
   paused: 'badge-warning',
   deleting: 'badge-danger',
+}
+
+type DeploymentType = 'shared' | 'premium'
+type SocialProviderKey = 'google' | 'microsoft'
+
+type SocialProviderForm = {
+  enabled: boolean
+  clientIdRef: string
+  clientSecretRef: string
+  redirectUris: string
+}
+
+const providerLabels: Record<SocialProviderKey, string> = {
+  google: 'Google',
+  microsoft: 'Microsoft',
+}
+
+function createSocialProviderForm(enabled: boolean): SocialProviderForm {
+  return {
+    enabled,
+    clientIdRef: '',
+    clientSecretRef: '',
+    redirectUris: '',
+  }
+}
+
+function parseRedirects(value: string) {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
 }
 
 function generateApiKey() {
@@ -51,13 +82,11 @@ function App() {
     supportEmail: '',
     headlessBaseUrl: '',
     apiKey: generateApiKey(),
-    actorRoles: 'TENANT_ADMIN',
     clientBaseUrl: '',
     landingPath: '/overview',
-    googleClientIdRef: '',
-    googleClientSecretRef: '',
-    googleRedirectUris: '',
-    premiumDeployment: false,
+    deploymentType: 'shared' as DeploymentType,
+    google: createSocialProviderForm(true),
+    microsoft: createSocialProviderForm(false),
   })
   const [menuOpen, setMenuOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
@@ -101,17 +130,37 @@ function App() {
     event.preventDefault()
     setCreateError(undefined)
 
-    const actorRoles = form.actorRoles
-      .split(',')
-      .map((role) => role.trim())
-      .filter(Boolean)
-    if (actorRoles.length === 0) {
-      setCreateError('Provide at least one actor role')
-      return
-    }
+    const actorRoles = ['TENANT_ADMIN']
     if (!form.name || !form.host || !form.supportEmail || !form.headlessBaseUrl || !form.clientBaseUrl) {
       setCreateError('Fill all required fields')
       return
+    }
+
+    const providerKeys: SocialProviderKey[] = ['google', 'microsoft']
+    const enabledProviders = providerKeys.filter((key) => form[key].enabled)
+    if (enabledProviders.length === 0) {
+      setCreateError('Enable at least one social identity provider')
+      return
+    }
+
+    const authPayload: CreateTenantRequest['auth'] = {}
+    for (const key of enabledProviders) {
+      const provider = form[key]
+      if (!provider.clientIdRef || !provider.clientSecretRef) {
+        setCreateError(`${providerLabels[key]} credentials are required`)
+        return
+      }
+      const redirects = parseRedirects(provider.redirectUris)
+      if (redirects.length === 0) {
+        setCreateError(`${providerLabels[key]} redirect URIs are required`)
+        return
+      }
+      authPayload[key] = {
+        enabled: true,
+        clientIdRef: provider.clientIdRef,
+        clientSecretRef: provider.clientSecretRef,
+        redirectUris: redirects,
+      }
     }
 
     setCreating(true)
@@ -120,21 +169,13 @@ function App() {
         name: form.name,
         hosts: [form.host],
         supportEmail: form.supportEmail,
-        premiumDeployment: form.premiumDeployment,
+        premiumDeployment: form.deploymentType === 'premium',
         headless: {
           baseUrl: form.headlessBaseUrl,
           apiKeyRef: form.apiKey,
           actorRoles,
         },
-        auth: {
-          google: {
-            clientIdRef: form.googleClientIdRef || 'set-me',
-            clientSecretRef: form.googleClientSecretRef || 'set-me',
-            redirectUris: form.googleRedirectUris
-              ? form.googleRedirectUris.split(',').map((url) => url.trim()).filter(Boolean)
-              : ['https://example.com/oauth/callback'],
-          },
-        },
+        auth: authPayload,
         clientApp: {
           baseUrl: form.clientBaseUrl,
           landingPath: form.landingPath || '/overview',
@@ -150,13 +191,11 @@ function App() {
         supportEmail: '',
         headlessBaseUrl: '',
         apiKey: generateApiKey(),
-        actorRoles: 'TENANT_ADMIN',
         clientBaseUrl: '',
         landingPath: '/overview',
-        googleClientIdRef: '',
-        googleClientSecretRef: '',
-        googleRedirectUris: '',
-        premiumDeployment: false,
+        deploymentType: 'shared',
+        google: createSocialProviderForm(true),
+        microsoft: createSocialProviderForm(false),
       })
       refresh()
       setActivePage('tenants')
@@ -356,6 +395,16 @@ function App() {
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
               </label>
               <label>
+                <span>Deployment Type</span>
+                <select
+                  value={form.deploymentType}
+                  onChange={(e) => setForm({ ...form, deploymentType: e.target.value as DeploymentType })}
+                >
+                  <option value="shared">Shared</option>
+                  <option value="premium">Premium</option>
+                </select>
+              </label>
+              <label>
                 <span>Primary Host</span>
                 <input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} required />
               </label>
@@ -403,42 +452,84 @@ function App() {
                   </button>
                 </div>
               </label>
-              <label>
-                <span>Actor Roles (comma separated)</span>
-                <input value={form.actorRoles} onChange={(e) => setForm({ ...form, actorRoles: e.target.value })} />
-              </label>
-              <label>
-                <span>Google Client ID Ref</span>
-                <input
-                  value={form.googleClientIdRef}
-                  onChange={(e) => setForm({ ...form, googleClientIdRef: e.target.value })}
-                  placeholder="vault:client-id"
-                />
-              </label>
-              <label>
-                <span>Google Client Secret Ref</span>
-                <input
-                  value={form.googleClientSecretRef}
-                  onChange={(e) => setForm({ ...form, googleClientSecretRef: e.target.value })}
-                  placeholder="vault:client-secret"
-                />
-              </label>
-              <label>
-                <span>Google Redirect URIs (comma)</span>
-                <input
-                  value={form.googleRedirectUris}
-                  onChange={(e) => setForm({ ...form, googleRedirectUris: e.target.value })}
-                  placeholder="https://app.example.com/oauth/callback"
-                />
-              </label>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={form.premiumDeployment}
-                  onChange={(e) => setForm({ ...form, premiumDeployment: e.target.checked })}
-                />
-                <span>Premium deployment</span>
-              </label>
+              <div className="idp-section span-2">
+                <h3>Social Identity Providers</h3>
+                {(['google', 'microsoft'] as SocialProviderKey[]).map((provider) => (
+                  <div key={provider} className="idp-card">
+                    <div className="idp-toggle">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={form[provider].enabled}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              [provider]: {
+                                ...form[provider],
+                                enabled: event.target.checked,
+                              },
+                            })
+                          }
+                        />
+                        <span>Enable {providerLabels[provider]}</span>
+                      </label>
+                    </div>
+                    <div className="idp-grid">
+                      <label>
+                        <span>Client ID Ref</span>
+                        <input
+                          value={form[provider].clientIdRef}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              [provider]: {
+                                ...form[provider],
+                                clientIdRef: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="vault:client-id"
+                          disabled={!form[provider].enabled}
+                        />
+                      </label>
+                      <label>
+                        <span>Client Secret Ref</span>
+                        <input
+                          value={form[provider].clientSecretRef}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              [provider]: {
+                                ...form[provider],
+                                clientSecretRef: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="vault:client-secret"
+                          disabled={!form[provider].enabled}
+                        />
+                      </label>
+                      <label className="span-2">
+                        <span>Redirect URIs (comma separated)</span>
+                        <input
+                          value={form[provider].redirectUris}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              [provider]: {
+                                ...form[provider],
+                                redirectUris: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="https://app.example.com/oauth/callback"
+                          disabled={!form[provider].enabled}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               {createError && <div className="callout error span-2">{createError}</div>}
               <div className="actions span-2">

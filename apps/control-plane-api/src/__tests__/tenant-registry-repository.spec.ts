@@ -92,8 +92,10 @@ describe('TenantRegistryRepository', () => {
   });
 
   it('upserts tenant payloads and writes audit entries', async () => {
+    const tenantUuid = '11111111-2222-4333-8444-555555555555';
+    const headlessUuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const input = {
-      id: 'tenant-beta',
+      id: tenantUuid,
       name: 'Tenant Beta',
       hosts: ['beta.localhost'],
       supportEmail: 'support@beta.test',
@@ -101,7 +103,7 @@ describe('TenantRegistryRepository', () => {
       headless: {
         baseUrl: 'https://headless.beta.test',
         apiKeyRef: 'beta-headless-key',
-        tenantId: 'beta-tenant',
+        tenantId: headlessUuid,
         actorRoles: ['TENANT_ADMIN'],
       },
       auth: {
@@ -131,11 +133,11 @@ describe('TenantRegistryRepository', () => {
 
     expect(auditLog).toHaveLength(1);
     expect(auditLog[0]).toMatchObject({
-      tenant_id: 'tenant-beta',
+      tenant_id: tenantUuid,
       actor: 'super-admin',
       action: 'UPSERT',
     });
-    expect(JSON.parse(auditLog[0].payload_json)).toMatchObject({ id: 'tenant-beta' });
+    expect(JSON.parse(auditLog[0].payload_json)).toMatchObject({ id: tenantUuid });
 
     expect(record.clientApp.landingPath).toBe('/home');
     expect(record.updatedBy).toBe('super-admin');

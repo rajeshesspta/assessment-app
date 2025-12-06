@@ -11,6 +11,13 @@ const brandingSchema = z
   })
   .default({})
 
+const socialProviderSchema = z.object({
+  enabled: z.boolean().optional(),
+  clientIdRef: z.string(),
+  clientSecretRef: z.string(),
+  redirectUris: z.array(z.string().url()).min(1),
+})
+
 const tenantSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -24,11 +31,8 @@ const tenantSchema = z.object({
     actorRoles: z.array(z.string().min(1)).min(1),
   }),
   auth: z.object({
-    google: z.object({
-      clientIdRef: z.string(),
-      clientSecretRef: z.string(),
-      redirectUris: z.array(z.string().url()).min(1),
-    }),
+    google: socialProviderSchema.optional(),
+    microsoft: socialProviderSchema.optional(),
   }),
   clientApp: z.object({
     baseUrl: z.string().url(),
@@ -55,7 +59,14 @@ export type CreateTenantRequest = {
     actorRoles: string[]
   }
   auth: {
-    google: {
+    google?: {
+      enabled?: boolean
+      clientIdRef: string
+      clientSecretRef: string
+      redirectUris: string[]
+    }
+    microsoft?: {
+      enabled?: boolean
       clientIdRef: string
       clientSecretRef: string
       redirectUris: string[]
