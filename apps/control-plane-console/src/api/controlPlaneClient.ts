@@ -33,7 +33,7 @@ const tenantSchema = z.object({
   auth: z.object({
     google: socialProviderSchema.optional(),
     microsoft: socialProviderSchema.optional(),
-  }),
+  }).optional(),
   clientApp: z.object({
     baseUrl: z.string().url(),
     landingPath: z.string().min(1),
@@ -58,7 +58,7 @@ export type CreateTenantRequest = {
     apiKeyRef: string
     actorRoles: string[]
   }
-  auth: {
+  auth?: {
     google?: {
       enabled?: boolean
       clientIdRef: string
@@ -154,7 +154,23 @@ export async function fetchSession(): Promise<SessionInfo | null> {
 }
 
 export async function createTenant(payload: CreateTenantRequest) {
-  const body = JSON.stringify(payload)
+  // Avoid sending an empty `auth` object. Clean the payload server-side expects
+  const bodyObj: any = { ...payload }
+  if (!bodyObj.auth || Object.keys(bodyObj.auth).length === 0) {
+    delete bodyObj.auth
+  } else {
+    // Remove any provider entries that are empty/undefined
+    for (const k of ['google', 'microsoft']) {
+      if (!bodyObj.auth[k] || Object.keys(bodyObj.auth[k]).length === 0) {
+        delete bodyObj.auth[k]
+      }
+    }
+    if (Object.keys(bodyObj.auth || {}).length === 0) {
+      delete bodyObj.auth
+    }
+  }
+
+  const body = JSON.stringify(bodyObj)
   const record = await requestJson<TenantRecord>('/control/tenants', { method: 'POST', body })
   return tenantSchema.parse(record)
 }

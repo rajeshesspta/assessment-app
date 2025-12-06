@@ -38,7 +38,7 @@ export class TenantRegistryRepository {
       support_email: record.supportEmail,
       premium_deployment: record.premiumDeployment ? 1 : 0,
       headless_config_json: JSON.stringify(record.headless),
-      auth_config_json: JSON.stringify(record.auth),
+      auth_config_json: JSON.stringify(record.auth ?? {}),
       client_app_json: JSON.stringify(record.clientApp),
       branding_json: JSON.stringify(record.branding),
       feature_flags_json: JSON.stringify(record.featureFlags),
@@ -65,20 +65,20 @@ export class TenantRegistryRepository {
       .filter(tenant => tenant.status === 'active')
       .map(tenant => {
         const auth: Record<string, unknown> = {};
-        if (tenant.auth.google) {
+        if (tenant.auth?.google) {
           auth.google = {
             enabled: tenant.auth.google.enabled ?? true,
-            clientId: tenant.auth.google.clientIdRef,
-            clientSecret: tenant.auth.google.clientSecretRef,
-            redirectUris: tenant.auth.google.redirectUris,
+            clientId: (tenant.auth as any).google.clientIdRef,
+            clientSecret: (tenant.auth as any).google.clientSecretRef,
+            redirectUris: (tenant.auth as any).google.redirectUris,
           };
         }
-        if (tenant.auth.microsoft) {
+        if (tenant.auth?.microsoft) {
           auth.microsoft = {
             enabled: tenant.auth.microsoft.enabled ?? true,
-            clientId: tenant.auth.microsoft.clientIdRef,
-            clientSecret: tenant.auth.microsoft.clientSecretRef,
-            redirectUris: tenant.auth.microsoft.redirectUris,
+            clientId: (tenant.auth as any).microsoft.clientIdRef,
+            clientSecret: (tenant.auth as any).microsoft.clientSecretRef,
+            redirectUris: (tenant.auth as any).microsoft.redirectUris,
           };
         }
 
@@ -116,7 +116,7 @@ export class TenantRegistryRepository {
       supportEmail: row.support_email,
       premiumDeployment: Boolean(row.premium_deployment),
       headless: JSON.parse(row.headless_config_json),
-      auth: JSON.parse(row.auth_config_json),
+      auth: JSON.parse(row.auth_config_json || '{}'),
       clientApp: JSON.parse(row.client_app_json),
       branding: JSON.parse(row.branding_json),
       featureFlags: JSON.parse(row.feature_flags_json),

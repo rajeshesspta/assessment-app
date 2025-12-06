@@ -43,7 +43,12 @@ const tenantAuthSchema = z
     google: tenantSocialAuthSchema.optional(),
     microsoft: tenantSocialAuthSchema.optional(),
   })
-  .refine(value => Boolean(value.google || value.microsoft), {
+  .refine(value => {
+    // Allow an empty auth object (no providers configured) during creation.
+    // If any provider keys are present, require at least one to be configured.
+    if (!value || Object.keys(value).length === 0) return true;
+    return Boolean(value.google || value.microsoft);
+  }, {
     message: 'At least one social identity provider must be configured',
     path: ['google'],
   });
@@ -55,7 +60,7 @@ const tenantRegistryBaseSchema = z.object({
   supportEmail: z.string().email(),
   premiumDeployment: z.boolean().default(false),
   headless: tenantHeadlessStoredSchema,
-  auth: tenantAuthSchema,
+  auth: tenantAuthSchema.optional(),
   clientApp: tenantClientAppSchema,
   branding: tenantBrandingSchema,
   featureFlags: tenantFeatureFlagSchema,
@@ -95,10 +100,7 @@ export const tenantConfigSchema = z.object({
       google: tenantConfigSocialAuthSchema.optional(),
       microsoft: tenantConfigSocialAuthSchema.optional(),
     })
-    .refine(value => Boolean(value.google || value.microsoft), {
-      message: 'At least one social identity provider must be configured',
-      path: ['google'],
-    }),
+    .optional(),
   clientApp: tenantClientAppSchema,
   branding: tenantBrandingSchema,
   featureFlags: tenantFeatureFlagSchema,
