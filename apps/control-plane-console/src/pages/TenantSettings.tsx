@@ -5,6 +5,8 @@ import {
   updateTenantClientApp,
   updateTenantHeadless,
   updateTenantMeta,
+  updateTenantBranding,
+  updateTenantFeatureFlags,
   type TenantRecord,
   type UpdateTenantAuthPayload,
   type UpdateTenantHeadlessPayload,
@@ -314,8 +316,8 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
       supportEmail: metaForm.supportEmail.trim(),
       premiumDeployment: metaForm.deploymentType === 'premium',
       status: metaForm.status,
-      branding: sanitizeBrandingInput(metaForm.branding),
-      featureFlags: metaForm.featureFlags ?? {},
+      branding: {},
+      featureFlags: {},
     }
     setMetaSaving(true)
     try {
@@ -459,6 +461,40 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     }
   }
 
+  const handleBrandingSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setMetaError(null)
+    setMetaSuccess(null)
+    const payload = sanitizeBrandingInput(metaForm.branding)
+    setMetaSaving(true)
+    try {
+      await updateTenantBranding(tenantId, payload)
+      await loadTenant(tenantId)
+      setMetaSuccess('Branding updated')
+    } catch (err) {
+      setMetaError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setMetaSaving(false)
+    }
+  }
+
+  const handleFeatureFlagsSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setMetaError(null)
+    setMetaSuccess(null)
+    const payload = metaForm.featureFlags ?? {}
+    setMetaSaving(true)
+    try {
+      await updateTenantFeatureFlags(tenantId, payload)
+      await loadTenant(tenantId)
+      setMetaSuccess('Feature flags updated')
+    } catch (err) {
+      setMetaError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setMetaSaving(false)
+    }
+  }
+
   return (
     <section className="panel tenant-settings-panel">
       <div className="panel-header">
@@ -598,7 +634,7 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
 
         {activeTab === 'branding' && (
           <div className="tab-panel">
-            <form className="form-stack" onSubmit={handleMetaSave}>
+            <form className="form-stack" onSubmit={handleBrandingSave}>
               <div className="form-card">
                 <h3>Branding</h3>
                 <div className="form-grid">
@@ -654,7 +690,7 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
 
         {activeTab === 'featureFlags' && (
           <div className="tab-panel">
-            <form className="form-stack" onSubmit={handleMetaSave}>
+            <form className="form-stack" onSubmit={handleFeatureFlagsSave}>
               <div className="form-card">
                 <h3>Feature flags</h3>
                 {Object.keys(metaForm.featureFlags ?? {}).length === 0 ? (

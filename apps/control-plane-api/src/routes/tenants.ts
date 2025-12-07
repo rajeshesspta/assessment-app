@@ -42,6 +42,10 @@ const tenantMetaUpdateSchema = z.object({
   featureFlags: tenantFeatureFlagSchema,
 });
 
+const tenantBrandingUpdateSchema = tenantBrandingSchema;
+
+const tenantFeatureFlagsUpdateSchema = tenantFeatureFlagSchema;
+
 const tenantHeadlessUpdateSchema = tenantHeadlessStoredSchema
   .extend({
     db: tenantDbConfigSchema.or(z.null()).optional(),
@@ -327,6 +331,74 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     const updatedRecord: TenantRecord = {
       ...record,
       clientApp: parsedBody.data,
+    };
+
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+    return sanitizeRecord(saved as TenantRecord);
+  });
+
+  app.patch('/control/tenants/:id/branding', async (request, reply) => {
+    const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'Invalid tenant id' };
+    }
+
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!roles.includes('SUPER_ADMIN')) {
+      reply.code(403);
+      return { error: 'Forbidden: only Super Admins may edit branding' };
+    }
+
+    const parsedBody = tenantBrandingUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      reply.code(400);
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
+    }
+
+    const record = await repo.getTenant(params.data.id);
+    if (!record) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+
+    const updatedRecord: TenantRecord = {
+      ...record,
+      branding: parsedBody.data,
+    };
+
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+    return sanitizeRecord(saved as TenantRecord);
+  });
+
+  app.patch('/control/tenants/:id/feature-flags', async (request, reply) => {
+    const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'Invalid tenant id' };
+    }
+
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!roles.includes('SUPER_ADMIN')) {
+      reply.code(403);
+      return { error: 'Forbidden: only Super Admins may edit feature flags' };
+    }
+
+    const parsedBody = tenantFeatureFlagsUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      reply.code(400);
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
+    }
+
+    const record = await repo.getTenant(params.data.id);
+    if (!record) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+
+    const updatedRecord: TenantRecord = {
+      ...record,
+      featureFlags: parsedBody.data,
     };
 
     const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);

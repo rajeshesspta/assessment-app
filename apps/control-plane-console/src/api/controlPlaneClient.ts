@@ -313,6 +313,22 @@ export async function updateTenantMeta(tenantId: string, payload: UpdateTenantMe
   return tenantSchema.parse(record);
 }
 
+export async function updateTenantBranding(tenantId: string, payload: TenantRecord['branding']) {
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/branding`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return tenantSchema.parse(record);
+}
+
+export async function updateTenantFeatureFlags(tenantId: string, payload: TenantRecord['featureFlags']) {
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/feature-flags`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return tenantSchema.parse(record);
+}
+
 export async function updateTenantHeadless(tenantId: string, payload: UpdateTenantHeadlessPayload) {
   const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/headless`, {
     method: 'PATCH',
