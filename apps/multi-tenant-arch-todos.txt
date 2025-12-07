@@ -172,3 +172,49 @@ Multi-tenant BFF + Portal Plan
 
 This checklist keeps headless agnostic, lets the shared BFF/portal serve many tenants safely, and still supports separate deployments for premium customers when needed.
 
+
+Tenant DB Config & Secret Resolution
+=====================================
+
+- Problem: some tenants need tenant-specific persistence (Cosmos, remote SQL, or file-backed SQLite). These connection details are sensitive and must not be exposed in plaintext to arbitrary clients.
+- Goal: surface per-tenant DB configuration from the Control Plane to trusted runtimes (headless) using secret references and a secure resolution flow.
+
+Design principles
+- Never place plaintext credentials in the public tenant bundle.
+- Use secret refs (e.g., `secretRef: "kv://tenant-alpha/headless-db"`) in the bundle; trusted runtimes resolve the ref using a configured secret provider.
+- Keep the bundle lightweight and idempotent; include `bundleVersion`/`updatedAt` for atomic swaps.
+
+Minimal schema additions (control plane)
+- `tenant.headless.db?: { provider: 'sqlite'|'cosmos'|'memory'|'postgres'; connectionStringRef?: string; filePattern?: string; options?: Record<string,string> }`
+- Store `db_config_json` in tenant row; persist only refs, not secrets.
+
+BFF behavior
+- BFF loads the bundle and exposes `tenant.headless.db` to runtime code but does not resolve secret refs itself by default.
+- Optionally the BFF can be configured to resolve secrets for downstream services (only with strict access control).
+
+Headless runtime responsibilities
+- Provide a pluggable secret resolver (env|vault|console-proxy) to turn `connectionStringRef` into usable credentials.
+- On first tenant use, resolve secrets, initialize tenant DB client, cache the client, and surface health/metrics per-tenant.
+- Support rotation: detect changed `updatedAt`/`bundleVersion`, re-resolve refs, and swap connections with graceful handover.
+
+Operational & security notes
+- Limit who can set/rotate `db` config in the Control Plane (Super Admin or mapped role).
+- Audit every change to DB config and every secret resolution attempt in headless logs (do not log secret contents).
+- Provide runbook for emergency rotation and rollback.
+
+Implementation backlog (small, ordered)
+- [ ] Schema: add `headless.db` to `apps/control-plane-api/src/tenant-schema.ts` and migrations.
+- [ ] Repo: persist `db_config_json` in tenant rows and include it in bundle builder.
+- [ ] Console: add Tenant Settings UI to edit `db` refs (Super Admin only) and link to secret manager instructions.
+- [ ] BFF: expose `headless.db` in runtime types; optionally add a configurable secret resolver.
+- [ ] Headless: implement secret-resolver interface, per-tenant DB client factory, and rotation support.
+- [ ] Tests: unit tests for schema parsing, integration test that mocks secret resolver and verifies DB client initialization.
+- [ ] Docs: update `docs/control-plane-plan.md` and README entries describing secret refs and resolution.
+
+Next actionable steps (short-term, 2-4 dev days)
+- [ ] Implement schema + repository persistence for `headless.db` (Step A).
+- [ ] Update BFF runtime types to accept the new shape and surface it to runtime code (Step B).
+- [ ] Add a basic secret resolver implementation in headless that reads from env for local dev (Step C).
+- [ ] Add integration test for headless that uses env-backed resolver and in-memory SQLite.
+
+
