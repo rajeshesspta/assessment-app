@@ -15,6 +15,102 @@ const tenantRecordSchema = tenantRegistryStoredSchema.extend({
 
 export type TenantRecord = z.infer<typeof tenantRecordSchema>;
 
+type ProviderKey = 'google' | 'microsoft';
+type TenantAuth = NonNullable<TenantRecord['auth']>;
+type TenantAuthProvider = TenantAuth[ProviderKey];
+
+interface LegacyProviderShape {
+  enabled?: boolean;
+  clientIdRef?: string;
+  clientSecretRef?: string;
+  clientId?: string;
+  clientSecret?: string;
+  redirectUris?: unknown;
+  redirectUri?: unknown;
+  redirectUrl?: unknown;
+  redirectURL?: unknown;
+  callbackUrl?: unknown;
+}
+
+function normalizeRedirects(input: unknown): string[] {
+  const collect: string[] = [];
+
+  const pushValues = (value: unknown) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        collect.push(trimmed);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(item => pushValues(item));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      Object.values(value as Record<string, unknown>).forEach(entry => pushValues(entry));
+    }
+  };
+
+  pushValues(input);
+
+  return collect.filter((value, index, array) => array.indexOf(value) === index);
+}
+
+function normalizeLegacyProvider(value: unknown): TenantAuthProvider | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const provider = value as LegacyProviderShape;
+  const clientIdRef = (provider.clientIdRef ?? provider.clientId)?.trim();
+  const clientSecretRef = (provider.clientSecretRef ?? provider.clientSecret)?.trim();
+  const redirectCandidates =
+    provider.redirectUris ?? provider.redirectUri ?? provider.redirectUrl ?? provider.redirectURL ?? provider.callbackUrl;
+  const redirectUris = normalizeRedirects(redirectCandidates);
+
+  if (!clientIdRef || !clientSecretRef || redirectUris.length === 0) {
+    return undefined;
+  }
+
+  return {
+    enabled: typeof provider.enabled === 'boolean' ? provider.enabled : true,
+    clientIdRef,
+    clientSecretRef,
+    redirectUris,
+  } satisfies TenantAuthProvider;
+}
+
+function normalizeAuthConfig(raw: unknown): TenantRecord['auth'] | undefined {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+
+  const record = raw as Record<string, unknown>;
+  const normalized: Partial<Record<ProviderKey, TenantAuthProvider>> = {};
+  const providerKeys: ProviderKey[] = ['google', 'microsoft'];
+
+  for (const key of providerKeys) {
+    const value = normalizeLegacyProvider(record[key]);
+    if (value) {
+      normalized[key] = value;
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? (normalized as TenantAuth) : undefined;
+}
+
+function safeParseJson(value: string | null | undefined): unknown {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
 export class TenantRegistryRepository {
   constructor(private readonly store: TenantRegistryStore) {}
 
@@ -109,6 +205,7 @@ export class TenantRegistryRepository {
   }
 
   private rowToRecord(row: TenantRow): TenantRecord {
+    const authConfig = normalizeAuthConfig(safeParseJson(row.auth_config_json));
     return tenantRecordSchema.parse({
       id: row.id,
       name: row.name,
@@ -116,7 +213,7 @@ export class TenantRegistryRepository {
       supportEmail: row.support_email,
       premiumDeployment: Boolean(row.premium_deployment),
       headless: JSON.parse(row.headless_config_json),
-      auth: JSON.parse(row.auth_config_json || '{}'),
+      auth: authConfig,
       clientApp: JSON.parse(row.client_app_json),
       branding: JSON.parse(row.branding_json),
       featureFlags: JSON.parse(row.feature_flags_json),

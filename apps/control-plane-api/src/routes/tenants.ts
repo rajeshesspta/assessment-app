@@ -13,6 +13,17 @@ const actorHeaderSchema = z.object({
   roles: z.string().optional(),
 });
 
+const authProviderUpdateSchema = z.object({
+  clientIdRef: z.string().min(1),
+  clientSecretRef: z.string().min(1),
+  redirectUris: z.array(z.string().min(1)).min(1),
+});
+
+const tenantAuthUpdateSchema = z.object({
+  google: z.union([authProviderUpdateSchema, z.null()]).optional(),
+  microsoft: z.union([authProviderUpdateSchema, z.null()]).optional(),
+});
+
 function coerceHeaderValue(value: unknown): string | undefined {
   if (Array.isArray(value)) {
     return value[0];
@@ -57,7 +68,8 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
   });
 
   app.post('/control/tenants', async (request, reply) => {
-    const input = request.body ?? {};
+    const rawBody = typeof request.body === 'object' && request.body !== null ? request.body : {};
+    const input: Record<string, any> = { ...(rawBody as Record<string, any>) };
     const tenantId = randomUUID();
     input.id = tenantId;
     if (input.headless && typeof input.headless === 'object') {
@@ -102,10 +114,10 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const body = request.body ?? {};
-    // Basic structure validation: accept object with google/microsoft optional
-    if (typeof body !== 'object') {
+    const parsedBody = tenantAuthUpdateSchema.safeParse(body);
+    if (!parsedBody.success) {
       reply.code(400);
-      return { error: 'Invalid payload' };
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
     }
 
     const record = await repo.getTenant(params.data.id);
@@ -114,29 +126,57 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
       return { error: 'Tenant not found' };
     }
 
-    // Merge and persist: keep other fields unchanged
-    const updated = {
+    type ProviderKey = 'google' | 'microsoft';
+    type AuthRecord = NonNullable<TenantRecord['auth']>;
+    let nextAuth: AuthRecord | undefined = record.auth ? { ...record.auth } : undefined;
+    const updates = parsedBody.data;
+
+    const applyUpdate = (key: ProviderKey) => {
+      if (!(key in updates)) {
+        return;
+      }
+      const value = updates[key];
+      if (!value) {
+        if (nextAuth) {
+          delete nextAuth[key];
+        }
+        return;
+      }
+      const auth = nextAuth ?? (nextAuth = {} as AuthRecord);
+      auth[key] = {
+        enabled: true,
+        clientIdRef: value.clientIdRef,
+        clientSecretRef: value.clientSecretRef,
+        redirectUris: value.redirectUris.map(uri => uri.trim()).filter(uri => uri.length > 0),
+      } as AuthRecord[ProviderKey];
+    };
+
+    applyUpdate('google');
+    applyUpdate('microsoft');
+
+    if (nextAuth && Object.keys(nextAuth).length === 0) {
+      nextAuth = undefined;
+    }
+
+    const updatedRecord = {
       ...record,
-      auth: {
-        ...(body.google ? body.google : {}),
-        ...(body.microsoft ? body.microsoft : {}),
-      },
-    } as unknown as TenantRecord;
+      auth: nextAuth,
+    } as TenantRecord;
 
     // Use existing upsert path to persist (repo.upsertTenant expects TenantRegistryInput)
     // Build a minimal input object based on stored record
     const input = {
-      id: updated.id,
-      name: updated.name,
-      hosts: updated.hosts,
-      supportEmail: updated.supportEmail,
-      premiumDeployment: updated.premiumDeployment,
-      headless: updated.headless,
-      auth: updated.auth,
-      clientApp: updated.clientApp,
-      branding: updated.branding,
-      featureFlags: updated.featureFlags,
-      status: updated.status,
+      id: updatedRecord.id,
+      name: updatedRecord.name,
+      hosts: updatedRecord.hosts,
+      supportEmail: updatedRecord.supportEmail,
+      premiumDeployment: updatedRecord.premiumDeployment,
+      headless: updatedRecord.headless,
+      auth: nextAuth,
+      clientApp: updatedRecord.clientApp,
+      branding: updatedRecord.branding,
+      featureFlags: updatedRecord.featureFlags,
+      status: updatedRecord.status,
     };
 
     const saved = await repo.upsertTenant(input as any, actor);

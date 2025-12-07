@@ -87,6 +87,19 @@ export type CreateTenantRequest = {
   status?: 'active' | 'paused' | 'deleting'
 }
 
+export type UpdateTenantAuthPayload = {
+  google?: {
+    clientIdRef: string
+    clientSecretRef: string
+    redirectUris: string[]
+  } | null
+  microsoft?: {
+    clientIdRef: string
+    clientSecretRef: string
+    redirectUris: string[]
+  } | null
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   if (!headers.has('accept')) {
@@ -183,7 +196,7 @@ export async function getTenant(id: string) {
   return tenantSchema.parse(record);
 }
 
-export async function updateTenantAuth(tenantId: string, authPayload: CreateTenantRequest['auth']) {
+export async function updateTenantAuth(tenantId: string, authPayload: UpdateTenantAuthPayload) {
   const body = JSON.stringify(authPayload ?? {});
   const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/auth`, { method: 'PUT', body });
   return tenantSchema.parse(record);

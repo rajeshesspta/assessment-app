@@ -22,6 +22,7 @@ function buildTenantRow(overrides: Partial<TenantRow> = {}): TenantRow {
     }),
     auth_config_json: JSON.stringify({
       google: {
+        enabled: true,
         clientIdRef: 'alpha-google-client',
         clientSecretRef: 'alpha-google-secret',
         redirectUris: ['https://alpha.localhost/auth/google/callback'],
@@ -108,6 +109,7 @@ describe('TenantRegistryRepository', () => {
       },
       auth: {
         google: {
+          enabled: true,
           clientIdRef: 'beta-google-client',
           clientSecretRef: 'beta-google-secret',
           redirectUris: ['https://beta.localhost/auth/google/callback'],
@@ -167,6 +169,43 @@ describe('TenantRegistryRepository', () => {
       tenantId: 'tenant-alpha',
       headless: { apiKey: 'alpha-key' },
       auth: { google: { clientId: 'alpha-google-client' } },
+    });
+  });
+
+  it('normalizes legacy auth provider shapes', async () => {
+    const legacyRow = buildTenantRow({
+      id: 'legacy-tenant',
+      auth_config_json: JSON.stringify({
+        google: {
+          clientId: 'legacy-google-client',
+          clientSecret: 'legacy-google-secret',
+          redirectUri: 'https://legacy.app/auth/google/callback',
+        },
+        microsoft: {
+          enabled: false,
+          clientIdRef: 'legacy-ms-client',
+          clientSecret: 'legacy-ms-secret',
+          redirectUris: {
+            primary: 'https://legacy.app/auth/microsoft/callback',
+          },
+        },
+      }),
+    });
+    rows[legacyRow.id] = legacyRow;
+
+    const record = await repository.getTenant('legacy-tenant');
+
+    expect(record?.auth?.google).toMatchObject({
+      enabled: true,
+      clientIdRef: 'legacy-google-client',
+      clientSecretRef: 'legacy-google-secret',
+      redirectUris: ['https://legacy.app/auth/google/callback'],
+    });
+    expect(record?.auth?.microsoft).toMatchObject({
+      enabled: false,
+      clientIdRef: 'legacy-ms-client',
+      clientSecretRef: 'legacy-ms-secret',
+      redirectUris: ['https://legacy.app/auth/microsoft/callback'],
     });
   });
 });

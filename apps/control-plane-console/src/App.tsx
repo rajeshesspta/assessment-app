@@ -75,6 +75,8 @@ function App() {
   const [activePage, setActivePage] = useState<'dashboard' | 'tenants' | 'create' | 'settings'>('dashboard')
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null)
   const { tenants, status, error, refresh } = useTenants({ enabled: authenticated })
+    const selectedTenant = useMemo(() => tenants.find((tenant) => tenant.id === selectedTenantId) ?? null, [tenants, selectedTenantId])
+
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string>()
@@ -264,7 +266,9 @@ function App() {
                   type="button"
                   className={activePage === 'settings' ? 'active' : ''}
                   onClick={() => {
-                    setSelectedTenantId(tenants.length ? tenants[0].id : null)
+                    if (!selectedTenantId && tenants.length) {
+                      setSelectedTenantId(tenants[0].id)
+                    }
                     setActivePage('settings')
                     setMenuOpen(false)
                   }}
@@ -534,7 +538,7 @@ function App() {
           // lazy-load the settings page for the selected tenant
           <div className="panel">
             {/* Import dynamically to avoid adding to top-level bundle in this diff */}
-            <TenantSettings tenantId={selectedTenantId} onBack={() => setActivePage('tenants')} />
+            <TenantSettings tenantId={selectedTenantId} tenant={selectedTenant} onBack={() => setActivePage('tenants')} />
           </div>
         )}
       </main>
