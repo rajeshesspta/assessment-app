@@ -614,28 +614,6 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
                   </select>
                 </label>
               </div>
-              <div className="form-card">
-                <h3>Client application</h3>
-                <label>
-                  Base URL
-                  <input value={clientForm.baseUrl} onChange={(e) => setClientForm({ ...clientForm, baseUrl: e.target.value })} required />
-                </label>
-                <label>
-                  Default landing path
-                  <input
-                    value={clientForm.landingPath}
-                    onChange={(e) => setClientForm({ ...clientForm, landingPath: e.target.value })}
-                    placeholder="/overview"
-                  />
-                </label>
-                {clientError && <div className="callout error">{clientError}</div>}
-                {clientSuccess && <div className="callout success">{clientSuccess}</div>}
-                <div className="actions">
-                  <button type="submit" className="primary" disabled={clientSaving || loading}>
-                    {clientSaving ? 'Saving…' : 'Save client app'}
-                  </button>
-                </div>
-              </div>
               {metaError && <div className="callout error">{metaError}</div>}
               {metaSuccess && <div className="callout success">{metaSuccess}</div>}
               <div className="actions">
