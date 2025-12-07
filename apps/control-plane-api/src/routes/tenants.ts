@@ -34,12 +34,13 @@ const tenantAuthUpdateSchema = z.object({
 
 const tenantMetaUpdateSchema = z.object({
   name: z.string().min(1),
-  hosts: z.array(z.string().min(1)).min(1),
   supportEmail: z.string().email(),
   premiumDeployment: z.boolean(),
   status: z.enum(['active', 'paused', 'deleting']),
-  branding: tenantBrandingSchema,
-  featureFlags: tenantFeatureFlagSchema,
+});
+
+const tenantHostsUpdateSchema = z.object({
+  hosts: z.array(z.string().min(1)).min(1),
 });
 
 const tenantBrandingUpdateSchema = tenantBrandingSchema;
@@ -242,11 +243,8 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     const updatedRecord: TenantRecord = {
       ...record,
       name: updates.name,
-      hosts: updates.hosts,
       supportEmail: updates.supportEmail,
       premiumDeployment: updates.premiumDeployment,
-      branding: updates.branding,
-      featureFlags: updates.featureFlags,
       status: updates.status,
     } satisfies TenantRecord;
 
@@ -331,6 +329,40 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     const updatedRecord: TenantRecord = {
       ...record,
       clientApp: parsedBody.data,
+    };
+
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+    return sanitizeRecord(saved as TenantRecord);
+  });
+
+  app.patch('/control/tenants/:id/hosts', async (request, reply) => {
+    const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'Invalid tenant id' };
+    }
+
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!roles.includes('SUPER_ADMIN')) {
+      reply.code(403);
+      return { error: 'Forbidden: only Super Admins may edit hosts' };
+    }
+
+    const parsedBody = tenantHostsUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      reply.code(400);
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
+    }
+
+    const record = await repo.getTenant(params.data.id);
+    if (!record) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+
+    const updatedRecord: TenantRecord = {
+      ...record,
+      hosts: parsedBody.data.hosts,
     };
 
     const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);

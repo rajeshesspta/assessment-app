@@ -7,13 +7,14 @@ import {
   updateTenantMeta,
   updateTenantBranding,
   updateTenantFeatureFlags,
+  updateTenantHosts,
   type TenantRecord,
   type UpdateTenantAuthPayload,
   type UpdateTenantHeadlessPayload,
 } from '../api/controlPlaneClient'
 import { useSession } from '../context/session-context'
 
-type TabKey = 'meta' | 'branding' | 'featureFlags' | 'identity' | 'persistence'
+type TabKey = 'meta' | 'branding' | 'featureFlags' | 'access' | 'identity' | 'persistence'
 type ProviderKey = 'google' | 'microsoft'
 
 type ProviderForm = {
@@ -205,6 +206,9 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
   const [metaSaving, setMetaSaving] = useState(false)
   const [metaError, setMetaError] = useState<string | null>(null)
   const [metaSuccess, setMetaSuccess] = useState<string | null>(null)
+  const [hostSaving, setHostSaving] = useState(false)
+  const [hostError, setHostError] = useState<string | null>(null)
+  const [hostSuccess, setHostSuccess] = useState<string | null>(null)
   const [headlessForm, setHeadlessForm] = useState<HeadlessFormState>(() => deriveHeadlessForm(tenant))
   const [headlessSaving, setHeadlessSaving] = useState(false)
   const [headlessError, setHeadlessError] = useState<string | null>(null)
@@ -267,6 +271,8 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
       setMetaError(null)
       setHeadlessSuccess(null)
       setHeadlessError(null)
+      setHostSuccess(null)
+      setHostError(null)
       setClientSuccess(null)
       setClientError(null)
       setGoogleSuccess(null)
@@ -301,23 +307,15 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     event.preventDefault()
     setMetaError(null)
     setMetaSuccess(null)
-    const hosts = parseHostsInput(metaForm.hostsInput)
-    if (hosts.length === 0) {
-      setMetaError('Add at least one host before saving')
-      return
-    }
     if (!metaForm.supportEmail) {
       setMetaError('Support email is required')
       return
     }
     const payload = {
       name: metaForm.name.trim(),
-      hosts,
       supportEmail: metaForm.supportEmail.trim(),
       premiumDeployment: metaForm.deploymentType === 'premium',
       status: metaForm.status,
-      branding: {},
-      featureFlags: {},
     }
     setMetaSaving(true)
     try {
@@ -461,6 +459,27 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     }
   }
 
+  const handleHostsSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setHostError(null)
+    setHostSuccess(null)
+    const hosts = parseHostsInput(metaForm.hostsInput)
+    if (hosts.length === 0) {
+      setHostError('Add at least one host before saving')
+      return
+    }
+    setHostSaving(true)
+    try {
+      await updateTenantHosts(tenantId, hosts)
+      await loadTenant(tenantId)
+      setHostSuccess('Hosts updated')
+    } catch (err) {
+      setHostError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setHostSaving(false)
+    }
+  }
+
   const handleBrandingSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setMetaError(null)
@@ -536,6 +555,13 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
           </button>
           <button
             type="button"
+            className={activeTab === 'access' ? 'tab-button active' : 'tab-button'}
+            onClick={() => setActiveTab('access')}
+          >
+            Hosts &amp; Client App
+          </button>
+          <button
+            type="button"
             className={activeTab === 'identity' ? 'tab-button active' : 'tab-button'}
             onClick={() => setActiveTab('identity')}
           >
@@ -565,17 +591,6 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
                     value={metaForm.supportEmail}
                     onChange={(e) => setMetaForm({ ...metaForm, supportEmail: e.target.value })}
                     required
-                  />
-                </label>
-              </div>
-              <div className="form-card">
-                <label>
-                  Hosts (one per line)
-                  <textarea
-                    className="textarea-field"
-                    rows={4}
-                    value={metaForm.hostsInput}
-                    onChange={(e) => setMetaForm({ ...metaForm, hostsInput: e.target.value })}
                   />
                 </label>
               </div>
@@ -710,6 +725,53 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
               <div className="actions">
                 <button type="submit" className="primary" disabled={metaSaving || loading}>
                   {metaSaving ? 'Saving…' : 'Save feature flags'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'access' && (
+          <div className="tab-panel">
+            <form className="form-card" onSubmit={handleHostsSave}>
+              <h3>Allowed hosts</h3>
+              <label>
+                Hosts (one per line)
+                <textarea
+                  className="textarea-field"
+                  rows={4}
+                  value={metaForm.hostsInput}
+                  onChange={(e) => setMetaForm({ ...metaForm, hostsInput: e.target.value })}
+                />
+              </label>
+              {hostError && <div className="callout error">{hostError}</div>}
+              {hostSuccess && <div className="callout success">{hostSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={hostSaving || loading}>
+                  {hostSaving ? 'Saving…' : 'Save hosts'}
+                </button>
+              </div>
+            </form>
+
+            <form className="form-card" onSubmit={handleClientSave}>
+              <h3>Client application</h3>
+              <label>
+                Base URL
+                <input value={clientForm.baseUrl} onChange={(e) => setClientForm({ ...clientForm, baseUrl: e.target.value })} required />
+              </label>
+              <label>
+                Default landing path
+                <input
+                  value={clientForm.landingPath}
+                  onChange={(e) => setClientForm({ ...clientForm, landingPath: e.target.value })}
+                  placeholder="/overview"
+                />
+              </label>
+              {clientError && <div className="callout error">{clientError}</div>}
+              {clientSuccess && <div className="callout success">{clientSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={clientSaving || loading}>
+                  {clientSaving ? 'Saving…' : 'Save client app'}
                 </button>
               </div>
             </form>

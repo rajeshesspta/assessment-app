@@ -149,12 +149,9 @@ export type UpdateTenantAuthPayload = {
 
 export type UpdateTenantMetaPayload = {
   name: string
-  hosts: string[]
   supportEmail: string
   premiumDeployment: boolean
   status: TenantRecord['status']
-  branding: TenantRecord['branding']
-  featureFlags: TenantRecord['featureFlags']
 }
 
 export type UpdateTenantHeadlessPayload = {
@@ -333,6 +330,14 @@ export async function updateTenantHeadless(tenantId: string, payload: UpdateTena
   const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/headless`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+  return tenantSchema.parse(record);
+}
+
+export async function updateTenantHosts(tenantId: string, hosts: string[]) {
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/hosts`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hosts }),
   });
   return tenantSchema.parse(record);
 }
