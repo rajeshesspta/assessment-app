@@ -18,7 +18,6 @@ const OTP_TTL_MS = env.OTP_TTL_SECONDS * 1000;
 const SESSION_TTL_MS = env.SESSION_TTL_SECONDS * 1000;
 const isProduction = process.env.NODE_ENV === 'production';
 const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-
 function generateOtp(): string {
   return randomInt(0, 10 ** OTP_LENGTH)
     .toString()
@@ -51,6 +50,7 @@ type ConsoleSession = {
   username: string;
   sessionId: string;
   expiresAt: number;
+  roles: string[];
 };
 
 declare module 'fastify' {
@@ -94,6 +94,14 @@ function createSecurityStoreFromProvider(): SecurityStore {
   }
 }
 
+function resolveConsoleRoles(username: string): string[] {
+  const roles = new Set<string>();
+  if (username === env.CONSOLE_BASIC_USER) {
+    roles.add('SUPER_ADMIN');
+  }
+  return Array.from(roles);
+}
+
 async function requireSession(request: FastifyRequest, reply: FastifyReply, securityStore: SecurityStore) {
   try {
     const token = request.cookies[SESSION_COOKIE_NAME];
@@ -113,10 +121,12 @@ async function requireSession(request: FastifyRequest, reply: FastifyReply, secu
       securityStore.revokeSession(persisted.id, new Date().toISOString());
       throw new Error('Session expired');
     }
+    const resolvedRoles = resolveConsoleRoles(persisted.username);
     const session: ConsoleSession = {
       username: payload.sub,
       sessionId: payload.sid,
       expiresAt: expiresAtMs,
+      roles: resolvedRoles,
     };
     request.session = session;
     return session;
@@ -292,6 +302,7 @@ export async function createServer(deps?: { securityStore?: SecurityStore }): Pr
       securityStore.updateChallengeStatus(challenge.id, 'verified', verifiedAt);
       const sessionId = randomUUID();
       const expiresAtIso = new Date(now + SESSION_TTL_MS).toISOString();
+      const resolvedRoles = resolveConsoleRoles(challenge.username);
       securityStore.createSession({
         id: sessionId,
         username: challenge.username,
@@ -321,7 +332,7 @@ export async function createServer(deps?: { securityStore?: SecurityStore }): Pr
       reply.setCookie(SESSION_COOKIE_NAME, token, cookieOptions);
 
       return reply.send({
-        actor: { username: challenge.username },
+        actor: { username: challenge.username, roles: resolvedRoles },
         expiresAt: expiresAtIso,
       });
     });
@@ -351,7 +362,7 @@ export async function createServer(deps?: { securityStore?: SecurityStore }): Pr
         return;
       }
       return reply.send({
-        actor: { username: session.username },
+        actor: { username: session.username, roles: session.roles },
         expiresAt: new Date(session.expiresAt).toISOString(),
       });
     });
@@ -407,6 +418,9 @@ export async function createServer(deps?: { securityStore?: SecurityStore }): Pr
     // (updatedBy) can reflect who performed an action.
     if (session && session.username) {
       sanitizedHeaders['x-control-plane-actor'] = session.username;
+      if (session.roles?.length) {
+        sanitizedHeaders['x-control-plane-roles'] = session.roles.join(',');
+      }
     }
 
     const upstream = await fetch(upstreamUrl, {

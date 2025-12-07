@@ -10,7 +10,33 @@ const tenantIdParamsSchema = z.object({
 
 const actorHeaderSchema = z.object({
   actor: z.string().min(1).optional(),
+  roles: z.string().optional(),
 });
+
+function coerceHeaderValue(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return typeof value === 'string' ? value : undefined;
+}
+
+function parseActorContext(headers: Record<string, unknown>) {
+  const parsed = actorHeaderSchema.safeParse({
+    actor: coerceHeaderValue(headers['x-control-plane-actor']),
+    roles: coerceHeaderValue(headers['x-control-plane-roles']),
+  });
+
+  const actor = parsed.success && parsed.data.actor ? parsed.data.actor : 'system';
+  const roles: string[] = [];
+  if (parsed.success && parsed.data.roles) {
+    parsed.data.roles
+      .split(',')
+      .map(role => role.trim().toUpperCase())
+      .filter(role => role.length > 0)
+      .forEach(role => roles.push(role));
+  }
+  return { actor, roles };
+}
 
 function sanitizeRecord(record: TenantRecord | undefined) {
   if (!record) {
@@ -42,8 +68,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
       reply.code(400);
       return { error: 'Invalid tenant payload', issues: parsed.error.issues };
     }
-    const actorHeader = actorHeaderSchema.safeParse({ actor: request.headers['x-control-plane-actor'] });
-    const actor = actorHeader.success && actorHeader.data.actor ? actorHeader.data.actor : 'system';
+    const { actor } = parseActorContext(request.headers);
     const record = await repo.upsertTenant(parsed.data, actor);
     return sanitizeRecord(record);
   });
@@ -70,11 +95,10 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
       return { error: 'Invalid tenant id' };
     }
 
-    const actorHeader = actorHeaderSchema.safeParse({ actor: request.headers['x-control-plane-actor'] });
-    const actor = actorHeader.success && actorHeader.data.actor ? actorHeader.data.actor : 'unknown';
-    if (actor !== 'super-admin') {
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!roles.includes('SUPER_ADMIN')) {
       reply.code(403);
-      return { error: 'Forbidden: only super-admin may manage tenant identity providers' };
+      return { error: 'Forbidden: only Super Admins may manage tenant identity providers' };
     }
 
     const body = request.body ?? {};

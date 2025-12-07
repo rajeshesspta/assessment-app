@@ -132,7 +132,7 @@ function App() {
     event.preventDefault()
     setCreateError(undefined)
 
-    const actorRoles = [session.actor?.username ?? 'system']
+    const actorRoles = session.actor?.roles && session.actor.roles.length > 0 ? [...session.actor.roles] : ['TENANT_ADMIN']
     if (!form.name || !form.host || !form.supportEmail || !form.headlessBaseUrl || !form.clientBaseUrl) {
       setCreateError('Fill all required fields')
       return
@@ -507,7 +507,7 @@ function App() {
               </label>
               
               {/* Social IDP configuration moved out of the create flow. */}
-              {session.actor?.username === 'super-admin' ? (
+              {session.actor?.roles?.includes('SUPER_ADMIN') ? (
                 <div className="callout span-2">
                   Social identity providers and advanced tenant settings are configurable in the Tenant Settings page (Super Admin only).
                 </div>

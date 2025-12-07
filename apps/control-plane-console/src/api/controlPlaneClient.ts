@@ -117,7 +117,10 @@ export async function listTenants(signal?: AbortSignal): Promise<TenantRecord[]>
 }
 
 const sessionSchema = z.object({
-  actor: z.object({ username: z.string() }),
+  actor: z.object({
+    username: z.string(),
+    roles: z.array(z.string()).optional().default([]),
+  }),
   expiresAt: z.string().datetime(),
 })
 

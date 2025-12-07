@@ -3,6 +3,7 @@ import { fetchSession, login as loginApi, logout, verifyOtp as verifyOtpApi } fr
 
 interface Actor {
   username: string
+  roles: string[]
 }
 
 interface SessionValue {

@@ -50,7 +50,9 @@ export default function TenantSettings({ tenantId, onBack }: { tenantId: string 
 
   if (!tenantId) return null
 
-  if (session.actor?.username !== 'super-admin') {
+  const canManage = session.actor?.roles?.includes('SUPER_ADMIN') ?? false
+
+  if (!canManage) {
     return (
       <section className="panel narrow-panel">
         <h2>Tenant Settings</h2>
