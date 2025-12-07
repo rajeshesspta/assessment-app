@@ -1,6 +1,30 @@
 import { z } from 'zod'
 import { controlPlaneApiBaseUrl } from '../config'
 
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+export class UnauthorizedError extends ApiError {
+  constructor(message: string) {
+    super(401, message)
+    this.name = 'UnauthorizedError'
+  }
+}
+
+type UnauthorizedHandler = () => void
+
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+export function setUnauthorizedHandler(handler?: UnauthorizedHandler) {
+  unauthorizedHandler = handler ?? null
+}
+
 const brandingSchema = z
   .object({
     logoUrl: z.string().url().optional(),
@@ -100,7 +124,32 @@ export type UpdateTenantAuthPayload = {
   } | null
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export type UpdateTenantMetaPayload = {
+  name: string
+  hosts: string[]
+  supportEmail: string
+  premiumDeployment: boolean
+  status: TenantRecord['status']
+  branding: TenantRecord['branding']
+  featureFlags: TenantRecord['featureFlags']
+}
+
+export type UpdateTenantHeadlessPayload = {
+  baseUrl: string
+  apiKeyRef: string
+  actorRoles: string[]
+}
+
+export type UpdateTenantClientAppPayload = {
+  baseUrl: string
+  landingPath: string
+}
+
+interface RequestOptions {
+  skipUnauthorizedInterceptor?: boolean
+}
+
+async function requestJson<T>(path: string, init?: RequestInit, options?: RequestOptions): Promise<T> {
   const headers = new Headers(init?.headers)
   if (!headers.has('accept')) {
     headers.set('accept', 'application/json')
@@ -117,7 +166,14 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const details = await response.text().catch(() => '')
-    throw new Error(`Request failed (${response.status}): ${details || response.statusText}`)
+    const message = `Request failed (${response.status}): ${details || response.statusText}`
+    if (response.status === 401) {
+      if (!options?.skipUnauthorizedInterceptor) {
+        unauthorizedHandler?.()
+      }
+      throw new UnauthorizedError(message)
+    }
+    throw new ApiError(response.status, message)
   }
 
   return response.json() as Promise<T>
@@ -140,17 +196,25 @@ const sessionSchema = z.object({
 type SessionInfo = z.infer<typeof sessionSchema>
 
 export async function login(username: string, password: string) {
-  return requestJson<{ challengeId: string; expiresAt: string; delivery: string; devOtp?: string }>('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ username, password }),
-  })
+  return requestJson<{ challengeId: string; expiresAt: string; delivery: string; devOtp?: string }>(
+    '/auth/login',
+    {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    },
+    { skipUnauthorizedInterceptor: true },
+  )
 }
 
 export async function verifyOtp(challengeId: string, otp: string) {
-  return requestJson<SessionInfo>('/auth/verify', {
-    method: 'POST',
-    body: JSON.stringify({ challengeId, otp }),
-  })
+  return requestJson<SessionInfo>(
+    '/auth/verify',
+    {
+      method: 'POST',
+      body: JSON.stringify({ challengeId, otp }),
+    },
+    { skipUnauthorizedInterceptor: true },
+  )
 }
 
 export async function logout() {
@@ -159,10 +223,10 @@ export async function logout() {
 
 export async function fetchSession(): Promise<SessionInfo | null> {
   try {
-    const data = await requestJson<SessionInfo>('/auth/session')
+    const data = await requestJson<SessionInfo>('/auth/session', undefined, { skipUnauthorizedInterceptor: true })
     return sessionSchema.parse(data)
   } catch (error) {
-    if (error instanceof Error && error.message.includes('(401)')) {
+    if (error instanceof UnauthorizedError) {
       return null
     }
     throw error
@@ -199,5 +263,29 @@ export async function getTenant(id: string) {
 export async function updateTenantAuth(tenantId: string, authPayload: UpdateTenantAuthPayload) {
   const body = JSON.stringify(authPayload ?? {});
   const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/auth`, { method: 'PUT', body });
+  return tenantSchema.parse(record);
+}
+
+export async function updateTenantMeta(tenantId: string, payload: UpdateTenantMetaPayload) {
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/meta`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return tenantSchema.parse(record);
+}
+
+export async function updateTenantHeadless(tenantId: string, payload: UpdateTenantHeadlessPayload) {
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/headless`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  return tenantSchema.parse(record);
+}
+
+export async function updateTenantClientApp(tenantId: string, payload: UpdateTenantClientAppPayload) {
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/client-app`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
   return tenantSchema.parse(record);
 }

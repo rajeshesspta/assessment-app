@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const tenantBrandingSchema = z
+export const tenantBrandingSchema = z
   .object({
     logoUrl: z.string().url().optional(),
     faviconUrl: z.string().url().optional(),
@@ -10,20 +10,20 @@ const tenantBrandingSchema = z
   })
   .default({});
 
-const tenantFeatureFlagSchema = z.record(z.boolean()).default({});
+export const tenantFeatureFlagSchema = z.record(z.boolean()).default({});
 
-const tenantHeadlessStoredSchema = z.object({
+export const tenantHeadlessStoredSchema = z.object({
   baseUrl: z.string().url(),
   apiKeyRef: z.string().min(1),
   tenantId: z.string().min(1),
   actorRoles: z.array(z.string().min(1)).min(1),
 });
 
-const tenantHeadlessSchema = tenantHeadlessStoredSchema.extend({
+export const tenantHeadlessSchema = tenantHeadlessStoredSchema.extend({
   tenantId: z.string().uuid(),
 });
 
-const tenantClientAppSchema = z.object({
+export const tenantClientAppSchema = z.object({
   baseUrl: z.string().url(),
   landingPath: z
     .string()
@@ -31,7 +31,7 @@ const tenantClientAppSchema = z.object({
     .transform(value => (value.startsWith('/') ? value : `/${value}`)),
 });
 
-const tenantSocialAuthSchema = z.object({
+export const tenantSocialAuthSchema = z.object({
   enabled: z.boolean().default(true),
   clientIdRef: z.string().min(1),
   clientSecretRef: z.string().min(1),

@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { fetchSession, login as loginApi, logout, verifyOtp as verifyOtpApi } from '../api/controlPlaneClient'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { fetchSession, login as loginApi, logout, setUnauthorizedHandler, verifyOtp as verifyOtpApi } from '../api/controlPlaneClient'
 
 interface Actor {
   username: string
@@ -25,6 +25,24 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [challenge, setChallenge] = useState<{ id: string; expiresAt: string; devOtp?: string } | null>(null)
   const [error, setError] = useState<string>()
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<string | null>(null)
+
+  const clearSession = useCallback((message?: string) => {
+    setActor(null)
+    setChallenge(null)
+    setSessionExpiresAt(null)
+    setError(message)
+  }, [])
+
+  const handleUnauthorized = useCallback(() => {
+    clearSession('Session expired. Sign in again.')
+  }, [clearSession])
+
+  useEffect(() => {
+    const handler = () => handleUnauthorized()
+    setUnauthorizedHandler(handler)
+    return () => setUnauthorizedHandler(undefined)
+  }, [handleUnauthorized])
 
   useEffect(() => {
     let mounted = true
@@ -32,6 +50,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       .then((session) => {
         if (mounted) {
           setActor(session?.actor ?? null)
+          setSessionExpiresAt(session?.expiresAt ?? null)
         }
       })
       .finally(() => {
@@ -64,6 +83,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     try {
       const session = await verifyOtpApi(challenge.id, otp)
       setActor(session.actor)
+      setSessionExpiresAt(session.expiresAt)
       setChallenge(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to verify OTP')
@@ -72,10 +92,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await logout()
-    setActor(null)
-    setChallenge(null)
+    try {
+      await logout()
+    } catch (err) {
+      // Still clear local state even if the server already expired the session
+      console.error('Failed to logout cleanly', err)
+    } finally {
+      clearSession()
+    }
   }
+
+  useEffect(() => {
+    if (!actor || !sessionExpiresAt) {
+      return
+    }
+    const timeoutMs = new Date(sessionExpiresAt).getTime() - Date.now()
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      handleUnauthorized()
+      return
+    }
+    const timer = setTimeout(() => {
+      handleUnauthorized()
+    }, timeoutMs)
+    return () => clearTimeout(timer)
+  }, [actor, sessionExpiresAt, handleUnauthorized])
 
   const value = useMemo<SessionValue>(
     () => ({

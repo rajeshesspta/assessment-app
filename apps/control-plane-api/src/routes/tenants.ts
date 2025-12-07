@@ -2,7 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { TenantRegistryRepository, TenantRecord } from '../repositories/tenant-registry';
-import { tenantRegistryInputSchema } from '../tenant-schema';
+import {
+  tenantBrandingSchema,
+  tenantClientAppSchema,
+  tenantFeatureFlagSchema,
+  tenantHeadlessStoredSchema,
+  tenantRegistryInputSchema,
+  type TenantRegistryInput,
+} from '../tenant-schema';
 
 const tenantIdParamsSchema = z.object({
   id: z.string().min(1),
@@ -23,6 +30,20 @@ const tenantAuthUpdateSchema = z.object({
   google: z.union([authProviderUpdateSchema, z.null()]).optional(),
   microsoft: z.union([authProviderUpdateSchema, z.null()]).optional(),
 });
+
+const tenantMetaUpdateSchema = z.object({
+  name: z.string().min(1),
+  hosts: z.array(z.string().min(1)).min(1),
+  supportEmail: z.string().email(),
+  premiumDeployment: z.boolean(),
+  status: z.enum(['active', 'paused', 'deleting']),
+  branding: tenantBrandingSchema,
+  featureFlags: tenantFeatureFlagSchema,
+});
+
+const tenantHeadlessUpdateSchema = tenantHeadlessStoredSchema.omit({ tenantId: true });
+
+const tenantClientAppUpdateSchema = tenantClientAppSchema;
 
 function coerceHeaderValue(value: unknown): string | undefined {
   if (Array.isArray(value)) {
@@ -59,6 +80,22 @@ function sanitizeRecord(record: TenantRecord | undefined) {
     updatedAt,
     updatedBy,
   };
+}
+
+function recordToInput(record: TenantRecord): TenantRegistryInput {
+  return tenantRegistryInputSchema.parse({
+    id: record.id,
+    name: record.name,
+    hosts: record.hosts,
+    supportEmail: record.supportEmail,
+    premiumDeployment: record.premiumDeployment,
+    headless: record.headless,
+    auth: record.auth,
+    clientApp: record.clientApp,
+    branding: record.branding,
+    featureFlags: record.featureFlags,
+    status: record.status,
+  });
 }
 
 export async function registerTenantRoutes(app: FastifyInstance, repo: TenantRegistryRepository) {
@@ -163,23 +200,120 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
       auth: nextAuth,
     } as TenantRecord;
 
-    // Use existing upsert path to persist (repo.upsertTenant expects TenantRegistryInput)
-    // Build a minimal input object based on stored record
-    const input = {
-      id: updatedRecord.id,
-      name: updatedRecord.name,
-      hosts: updatedRecord.hosts,
-      supportEmail: updatedRecord.supportEmail,
-      premiumDeployment: updatedRecord.premiumDeployment,
-      headless: updatedRecord.headless,
-      auth: nextAuth,
-      clientApp: updatedRecord.clientApp,
-      branding: updatedRecord.branding,
-      featureFlags: updatedRecord.featureFlags,
-      status: updatedRecord.status,
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+    return sanitizeRecord(saved as TenantRecord);
+  });
+
+  app.patch('/control/tenants/:id/meta', async (request, reply) => {
+    const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'Invalid tenant id' };
+    }
+
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!roles.includes('SUPER_ADMIN')) {
+      reply.code(403);
+      return { error: 'Forbidden: only Super Admins may edit tenant metadata' };
+    }
+
+    const parsedBody = tenantMetaUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      reply.code(400);
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
+    }
+
+    const record = await repo.getTenant(params.data.id);
+    if (!record) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+
+    const updates = parsedBody.data;
+    const updatedRecord: TenantRecord = {
+      ...record,
+      name: updates.name,
+      hosts: updates.hosts,
+      supportEmail: updates.supportEmail,
+      premiumDeployment: updates.premiumDeployment,
+      branding: updates.branding,
+      featureFlags: updates.featureFlags,
+      status: updates.status,
+    } satisfies TenantRecord;
+
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+    return sanitizeRecord(saved as TenantRecord);
+  });
+
+  app.patch('/control/tenants/:id/headless', async (request, reply) => {
+    const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'Invalid tenant id' };
+    }
+
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!roles.includes('SUPER_ADMIN')) {
+      reply.code(403);
+      return { error: 'Forbidden: only Super Admins may edit headless access' };
+    }
+
+    const parsedBody = tenantHeadlessUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      reply.code(400);
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
+    }
+
+    const record = await repo.getTenant(params.data.id);
+    if (!record) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+
+    const updatedRecord: TenantRecord = {
+      ...record,
+      headless: {
+        ...record.headless,
+        ...parsedBody.data,
+        tenantId: record.headless.tenantId,
+      },
     };
 
-    const saved = await repo.upsertTenant(input as any, actor);
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+    return sanitizeRecord(saved as TenantRecord);
+  });
+
+  app.patch('/control/tenants/:id/client-app', async (request, reply) => {
+    const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'Invalid tenant id' };
+    }
+
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!roles.includes('SUPER_ADMIN')) {
+      reply.code(403);
+      return { error: 'Forbidden: only Super Admins may edit client app access' };
+    }
+
+    const parsedBody = tenantClientAppUpdateSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      reply.code(400);
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
+    }
+
+    const record = await repo.getTenant(params.data.id);
+    if (!record) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+
+    const updatedRecord: TenantRecord = {
+      ...record,
+      clientApp: parsedBody.data,
+    };
+
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
     return sanitizeRecord(saved as TenantRecord);
   });
 }

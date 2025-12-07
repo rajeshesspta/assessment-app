@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { getTenant, updateTenantAuth, type UpdateTenantAuthPayload, type TenantRecord } from '../api/controlPlaneClient'
+import {
+  getTenant,
+  updateTenantAuth,
+  updateTenantClientApp,
+  updateTenantHeadless,
+  updateTenantMeta,
+  type TenantRecord,
+  type UpdateTenantAuthPayload,
+} from '../api/controlPlaneClient'
 import { useSession } from '../context/session-context'
+
+type TabKey = 'meta' | 'identity' | 'persistence'
+type ProviderKey = 'google' | 'microsoft'
 
 type ProviderForm = {
   enabled: boolean
@@ -9,10 +20,58 @@ type ProviderForm = {
   redirectUris: string
 }
 
+type BrandingFormState = {
+  logoUrl: string
+  faviconUrl: string
+  primaryColor: string
+  accentColor: string
+  backgroundImageUrl: string
+}
+
+type MetaFormState = {
+  name: string
+  supportEmail: string
+  hostsInput: string
+  status: TenantRecord['status']
+  deploymentType: 'shared' | 'premium'
+  branding: BrandingFormState
+  featureFlags: TenantRecord['featureFlags']
+}
+
+type HeadlessFormState = {
+  baseUrl: string
+  apiKeyRef: string
+  actorRolesInput: string
+}
+
+type ClientFormState = {
+  baseUrl: string
+  landingPath: string
+}
+
+const providerLabels: Record<ProviderKey, string> = {
+  google: 'Google',
+  microsoft: 'Microsoft',
+}
+
 function parseRedirects(value = '') {
   return value
-    .split(',')
+    .split(/[,\n]/)
     .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function parseHostsInput(value: string) {
+  return value
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function parseActorRoles(value: string) {
+  return value
+    .split(/[,\n]/)
+    .map((role) => role.trim().toUpperCase())
     .filter(Boolean)
 }
 
@@ -34,6 +93,57 @@ function deriveProviderForm(
   }
 }
 
+function createBrandingForm(source?: TenantRecord['branding']): BrandingFormState {
+  return {
+    logoUrl: source?.logoUrl ?? '',
+    faviconUrl: source?.faviconUrl ?? '',
+    primaryColor: source?.primaryColor ?? '',
+    accentColor: source?.accentColor ?? '',
+    backgroundImageUrl: source?.backgroundImageUrl ?? '',
+  }
+}
+
+function deriveMetaForm(record?: TenantRecord | null): MetaFormState {
+  return {
+    name: record?.name ?? '',
+    supportEmail: record?.supportEmail ?? '',
+    hostsInput: record?.hosts?.join('\n') ?? '',
+    status: record?.status ?? 'active',
+    deploymentType: record?.premiumDeployment ? 'premium' : 'shared',
+    branding: createBrandingForm(record?.branding),
+    featureFlags: record?.featureFlags ?? {},
+  }
+}
+
+function deriveHeadlessForm(record?: TenantRecord | null): HeadlessFormState {
+  return {
+    baseUrl: record?.headless?.baseUrl ?? '',
+    apiKeyRef: record?.headless?.apiKeyRef ?? '',
+    actorRolesInput: record?.headless?.actorRoles?.join(', ') ?? '',
+  }
+}
+
+function deriveClientForm(record?: TenantRecord | null): ClientFormState {
+  return {
+    baseUrl: record?.clientApp?.baseUrl ?? '',
+    landingPath: record?.clientApp?.landingPath ?? '/overview',
+  }
+}
+
+function sanitizeBrandingInput(branding: BrandingFormState): TenantRecord['branding'] {
+  const clean = Object.entries(branding).reduce<Record<string, string | undefined>>((acc, [key, value]) => {
+    const trimmed = value.trim()
+    acc[key] = trimmed.length > 0 ? trimmed : undefined
+    return acc
+  }, {})
+  return clean as TenantRecord['branding']
+}
+
+function generateApiKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 interface TenantSettingsProps {
   tenantId: string | null
   tenant: TenantRecord | null
@@ -42,45 +152,54 @@ interface TenantSettingsProps {
 
 export default function TenantSettings({ tenantId, tenant, onBack }: TenantSettingsProps) {
   const session = useSession()
+  const [activeTab, setActiveTab] = useState<TabKey>('meta')
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [metaForm, setMetaForm] = useState<MetaFormState>(() => deriveMetaForm(tenant))
+  const [metaSaving, setMetaSaving] = useState(false)
+  const [metaError, setMetaError] = useState<string | null>(null)
+  const [metaSuccess, setMetaSuccess] = useState<string | null>(null)
+  const [headlessForm, setHeadlessForm] = useState<HeadlessFormState>(() => deriveHeadlessForm(tenant))
+  const [headlessSaving, setHeadlessSaving] = useState(false)
+  const [headlessError, setHeadlessError] = useState<string | null>(null)
+  const [headlessSuccess, setHeadlessSuccess] = useState<string | null>(null)
+  const [clientForm, setClientForm] = useState<ClientFormState>(() => deriveClientForm(tenant))
+  const [clientSaving, setClientSaving] = useState(false)
+  const [clientError, setClientError] = useState<string | null>(null)
+  const [clientSuccess, setClientSuccess] = useState<string | null>(null)
   const [google, setGoogle] = useState<ProviderForm>(createEmptyProvider)
   const [microsoft, setMicrosoft] = useState<ProviderForm>(createEmptyProvider)
+  const [googleSaving, setGoogleSaving] = useState(false)
+  const [googleError, setGoogleError] = useState<string | null>(null)
+  const [googleSuccess, setGoogleSuccess] = useState<string | null>(null)
+  const [microsoftSaving, setMicrosoftSaving] = useState(false)
+  const [microsoftError, setMicrosoftError] = useState<string | null>(null)
+  const [microsoftSuccess, setMicrosoftSuccess] = useState<string | null>(null)
 
   const canManage = session.actor?.roles?.includes('SUPER_ADMIN') ?? false
 
+  const syncForms = useCallback((record: TenantRecord) => {
+    setMetaForm(deriveMetaForm(record))
+    setHeadlessForm(deriveHeadlessForm(record))
+    setClientForm(deriveClientForm(record))
+    setGoogle(deriveProviderForm(record.auth?.google))
+    setMicrosoft(deriveProviderForm(record.auth?.microsoft))
+  }, [])
+
   const loadTenant = useCallback(
-    async (id: string, options?: { preserveSuccess?: boolean }) => {
+    async (id: string) => {
       setLoading(true)
-      setError(null)
-      if (!options?.preserveSuccess) {
-        setSuccess(null)
-      }
+      setLoadError(null)
       try {
         const t = await getTenant(id)
-        const g = t.auth?.google
-        const m = t.auth?.microsoft
-        setGoogle({
-          enabled: Boolean(g),
-          clientIdRef: g?.clientIdRef ?? '',
-          clientSecretRef: g?.clientSecretRef ?? '',
-          redirectUris: g?.redirectUris?.join(', ') ?? '',
-        })
-        setMicrosoft({
-          enabled: Boolean(m),
-          clientIdRef: m?.clientIdRef ?? '',
-          clientSecretRef: m?.clientSecretRef ?? '',
-          redirectUris: m?.redirectUris?.join(', ') ?? '',
-        })
+        syncForms(t)
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
+        setLoadError(e instanceof Error ? e.message : String(e))
       } finally {
         setLoading(false)
       }
     },
-    [],
+    [syncForms],
   )
 
   useEffect(() => {
@@ -92,13 +211,28 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     if (!tenantId || !tenant || tenant.id !== tenantId) {
       return
     }
-    const g = tenant.auth?.google
-    const m = tenant.auth?.microsoft
-    setGoogle(deriveProviderForm(g))
-    setMicrosoft(deriveProviderForm(m))
-  }, [tenant, tenantId])
+    syncForms(tenant)
+  }, [tenant, tenantId, syncForms])
 
-  if (!tenantId) return null
+  useEffect(() => {
+    if (tenantId) {
+      setActiveTab('meta')
+      setMetaSuccess(null)
+      setMetaError(null)
+      setHeadlessSuccess(null)
+      setHeadlessError(null)
+      setClientSuccess(null)
+      setClientError(null)
+      setGoogleSuccess(null)
+      setGoogleError(null)
+      setMicrosoftSuccess(null)
+      setMicrosoftError(null)
+    }
+  }, [tenantId])
+
+  if (!tenantId) {
+    return null
+  }
 
   if (!canManage) {
     return (
@@ -115,37 +249,72 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     )
   }
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+  const tenantLabel = tenant?.name ?? metaForm.name ?? tenantId
+
+  const handleMetaSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setMetaError(null)
+    setMetaSuccess(null)
+    const hosts = parseHostsInput(metaForm.hostsInput)
+    if (hosts.length === 0) {
+      setMetaError('Add at least one host before saving')
+      return
+    }
+    if (!metaForm.supportEmail) {
+      setMetaError('Support email is required')
+      return
+    }
+    const payload = {
+      name: metaForm.name.trim(),
+      hosts,
+      supportEmail: metaForm.supportEmail.trim(),
+      premiumDeployment: metaForm.deploymentType === 'premium',
+      status: metaForm.status,
+      branding: sanitizeBrandingInput(metaForm.branding),
+      featureFlags: metaForm.featureFlags ?? {},
+    }
+    setMetaSaving(true)
+    try {
+      await updateTenantMeta(tenantId, payload)
+      await loadTenant(tenantId)
+      setMetaSuccess('Metadata updated')
+    } catch (err) {
+      setMetaError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setMetaSaving(false)
+    }
+  }
+
+  const handleProviderSubmit = async (event: FormEvent<HTMLFormElement>, provider: ProviderKey) => {
+    event.preventDefault()
+    const state = provider === 'google' ? google : microsoft
+    const setError = provider === 'google' ? setGoogleError : setMicrosoftError
+    const setSuccess = provider === 'google' ? setGoogleSuccess : setMicrosoftSuccess
+    const setSaving = provider === 'google' ? setGoogleSaving : setMicrosoftSaving
     setError(null)
     setSuccess(null)
+
     const payload: UpdateTenantAuthPayload = {}
-    if (google.enabled) {
-      const redirects = parseRedirects(google.redirectUris)
-      if (!google.clientIdRef || !google.clientSecretRef || redirects.length === 0) {
-        setError('Google configuration incomplete')
+    if (state.enabled) {
+      const redirects = parseRedirects(state.redirectUris)
+      if (!state.clientIdRef || !state.clientSecretRef || redirects.length === 0) {
+        setError(`${providerLabels[provider]} configuration incomplete`)
         return
       }
-      payload.google = { clientIdRef: google.clientIdRef.trim(), clientSecretRef: google.clientSecretRef.trim(), redirectUris: redirects }
-    } else {
-      payload.google = null
-    }
-    if (microsoft.enabled) {
-      const redirects = parseRedirects(microsoft.redirectUris)
-      if (!microsoft.clientIdRef || !microsoft.clientSecretRef || redirects.length === 0) {
-        setError('Microsoft configuration incomplete')
-        return
+      payload[provider] = {
+        clientIdRef: state.clientIdRef.trim(),
+        clientSecretRef: state.clientSecretRef.trim(),
+        redirectUris: redirects,
       }
-      payload.microsoft = { clientIdRef: microsoft.clientIdRef.trim(), clientSecretRef: microsoft.clientSecretRef.trim(), redirectUris: redirects }
     } else {
-      payload.microsoft = null
+      payload[provider] = null
     }
 
     setSaving(true)
     try {
       await updateTenantAuth(tenantId, payload)
-      await loadTenant(tenantId, { preserveSuccess: true })
-      setSuccess('Updated identity providers')
+      await loadTenant(tenantId)
+      setSuccess(`${providerLabels[provider]} settings saved`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -153,65 +322,357 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     }
   }
 
+  const handleHeadlessSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setHeadlessError(null)
+    setHeadlessSuccess(null)
+    const actorRoles = parseActorRoles(headlessForm.actorRolesInput)
+    if (actorRoles.length === 0) {
+      setHeadlessError('Provide at least one actor role')
+      return
+    }
+    const payload = {
+      baseUrl: headlessForm.baseUrl.trim(),
+      apiKeyRef: headlessForm.apiKeyRef.trim(),
+      actorRoles,
+    }
+    setHeadlessSaving(true)
+    try {
+      await updateTenantHeadless(tenantId, payload)
+      await loadTenant(tenantId)
+      setHeadlessSuccess('Headless access saved')
+    } catch (err) {
+      setHeadlessError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setHeadlessSaving(false)
+    }
+  }
+
+  const handleClientSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setClientError(null)
+    setClientSuccess(null)
+    if (!clientForm.baseUrl.trim()) {
+      setClientError('Client base URL is required')
+      return
+    }
+    const payload = {
+      baseUrl: clientForm.baseUrl.trim(),
+      landingPath: clientForm.landingPath.trim() || '/overview',
+    }
+    setClientSaving(true)
+    try {
+      await updateTenantClientApp(tenantId, payload)
+      await loadTenant(tenantId)
+      setClientSuccess('Client app saved')
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClientSaving(false)
+    }
+  }
+
   return (
-    <section className="panel narrow-panel">
-      <h2>Tenant Settings</h2>
-      <p className="subtitle">
-        Manage social identity providers for tenant <strong>{tenant?.name ?? tenantId}</strong> ({tenantId})
-      </p>
+    <section className="panel tenant-settings-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Tenant Settings</h2>
+          <p className="subtitle">
+            Editing <strong>{tenantLabel}</strong> ({tenantId})
+          </p>
+        </div>
+        <button className="ghost" onClick={onBack}>
+          Back
+        </button>
+      </div>
+      {loadError && <div className="callout error">{loadError}</div>}
       {loading && <div className="callout info">Loading tenant settings…</div>}
-      {error && <div className="callout error">{error}</div>}
-      {success && <div className="callout success">{success}</div>}
-      <form className="form-grid" onSubmit={handleSubmit}>
-        <fieldset>
-          <legend>Google</legend>
-          <p className="hint">Check Enable before saving or this provider will be removed.</p>
-          <label>
-            <input type="checkbox" checked={google.enabled} onChange={(e) => setGoogle({ ...google, enabled: e.target.checked })} /> Enable
-          </label>
-          <label>
-            Client ID Secret Ref
-            <input value={google.clientIdRef} onChange={(e) => setGoogle({ ...google, clientIdRef: e.target.value })} />
-          </label>
-          <label>
-            Client Secret Ref
-            <input value={google.clientSecretRef} onChange={(e) => setGoogle({ ...google, clientSecretRef: e.target.value })} />
-          </label>
-          <label>
-            Redirect URIs (comma separated)
-            <input value={google.redirectUris} onChange={(e) => setGoogle({ ...google, redirectUris: e.target.value })} />
-          </label>
-        </fieldset>
 
-        <fieldset>
-          <legend>Microsoft</legend>
-          <p className="hint">Check Enable before saving or this provider will be removed.</p>
-          <label>
-            <input type="checkbox" checked={microsoft.enabled} onChange={(e) => setMicrosoft({ ...microsoft, enabled: e.target.checked })} /> Enable
-          </label>
-          <label>
-            Client ID Secret Ref
-            <input value={microsoft.clientIdRef} onChange={(e) => setMicrosoft({ ...microsoft, clientIdRef: e.target.value })} />
-          </label>
-          <label>
-            Client Secret Ref
-            <input value={microsoft.clientSecretRef} onChange={(e) => setMicrosoft({ ...microsoft, clientSecretRef: e.target.value })} />
-          </label>
-          <label>
-            Redirect URIs (comma separated)
-            <input value={microsoft.redirectUris} onChange={(e) => setMicrosoft({ ...microsoft, redirectUris: e.target.value })} />
-          </label>
-        </fieldset>
-
-        <div className="actions span-2">
-          <button type="submit" className="primary" disabled={saving || loading}>
-            {saving ? 'Saving…' : 'Save settings'}
+      <div className="tab-shell">
+        <div className="tab-list">
+          <button
+            type="button"
+            className={activeTab === 'meta' ? 'tab-button active' : 'tab-button'}
+            onClick={() => setActiveTab('meta')}
+          >
+            Meta &amp; Status
           </button>
-          <button type="button" className="ghost" onClick={onBack}>
-            Back
+          <button
+            type="button"
+            className={activeTab === 'identity' ? 'tab-button active' : 'tab-button'}
+            onClick={() => setActiveTab('identity')}
+          >
+            Identity Providers
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'persistence' ? 'tab-button active' : 'tab-button'}
+            onClick={() => setActiveTab('persistence')}
+          >
+            Persistence &amp; Access
           </button>
         </div>
-      </form>
+
+        {activeTab === 'meta' && (
+          <div className="tab-panel">
+            <form className="form-stack" onSubmit={handleMetaSave}>
+              <div className="form-card two-col">
+                <label>
+                  Tenant name
+                  <input value={metaForm.name} onChange={(e) => setMetaForm({ ...metaForm, name: e.target.value })} required />
+                </label>
+                <label>
+                  Support email
+                  <input
+                    type="email"
+                    value={metaForm.supportEmail}
+                    onChange={(e) => setMetaForm({ ...metaForm, supportEmail: e.target.value })}
+                    required
+                  />
+                </label>
+              </div>
+              <div className="form-card">
+                <label>
+                  Hosts (one per line)
+                  <textarea
+                    className="textarea-field"
+                    rows={4}
+                    value={metaForm.hostsInput}
+                    onChange={(e) => setMetaForm({ ...metaForm, hostsInput: e.target.value })}
+                  />
+                </label>
+              </div>
+              <div className="form-card two-col">
+                <label>
+                  Status
+                  <select value={metaForm.status} onChange={(e) => setMetaForm({ ...metaForm, status: e.target.value as TenantRecord['status'] })}>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="deleting">Deleting</option>
+                  </select>
+                </label>
+                <label>
+                  Deployment type
+                  <select
+                    value={metaForm.deploymentType}
+                    onChange={(e) => setMetaForm({ ...metaForm, deploymentType: e.target.value as MetaFormState['deploymentType'] })}
+                  >
+                    <option value="shared">Shared</option>
+                    <option value="premium">Premium</option>
+                  </select>
+                </label>
+              </div>
+              <div className="form-card">
+                <h3>Branding</h3>
+                <div className="form-grid">
+                  <label>
+                    Primary color
+                    <input
+                      value={metaForm.branding.primaryColor}
+                      placeholder="#2244FF"
+                      onChange={(e) => setMetaForm({ ...metaForm, branding: { ...metaForm.branding, primaryColor: e.target.value } })}
+                    />
+                  </label>
+                  <label>
+                    Accent color
+                    <input
+                      value={metaForm.branding.accentColor}
+                      placeholder="#89CFF0"
+                      onChange={(e) => setMetaForm({ ...metaForm, branding: { ...metaForm.branding, accentColor: e.target.value } })}
+                    />
+                  </label>
+                  <label>
+                    Logo URL
+                    <input
+                      value={metaForm.branding.logoUrl}
+                      onChange={(e) => setMetaForm({ ...metaForm, branding: { ...metaForm.branding, logoUrl: e.target.value } })}
+                    />
+                  </label>
+                  <label>
+                    Favicon URL
+                    <input
+                      value={metaForm.branding.faviconUrl}
+                      onChange={(e) => setMetaForm({ ...metaForm, branding: { ...metaForm.branding, faviconUrl: e.target.value } })}
+                    />
+                  </label>
+                  <label className="span-2">
+                    Background image URL
+                    <input
+                      value={metaForm.branding.backgroundImageUrl}
+                      onChange={(e) => setMetaForm({ ...metaForm, branding: { ...metaForm.branding, backgroundImageUrl: e.target.value } })}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="form-card">
+                <h3>Feature flags</h3>
+                {Object.keys(metaForm.featureFlags ?? {}).length === 0 ? (
+                  <p className="field-hint">No feature flags configured.</p>
+                ) : (
+                  <div className="pill-list">
+                    {Object.entries(metaForm.featureFlags).map(([flag, enabled]) => (
+                      <span key={flag} className={enabled ? 'pill success' : 'pill'}>
+                        {flag} {enabled ? '• on' : '• off'}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {metaError && <div className="callout error">{metaError}</div>}
+              {metaSuccess && <div className="callout success">{metaSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={metaSaving || loading}>
+                  {metaSaving ? 'Saving…' : 'Save meta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'identity' && (
+          <div className="tab-panel">
+            <div className="idp-grid">
+              <form className="form-card" onSubmit={(event) => handleProviderSubmit(event, 'google')}>
+                <div className="idp-toggle">
+                  <label>
+                    <input type="checkbox" checked={google.enabled} onChange={(e) => setGoogle({ ...google, enabled: e.target.checked })} /> Enable
+                    {google.enabled ? 'Google is active' : 'Disable Google'}
+                  </label>
+                </div>
+                <label>
+                  Client ID ref
+                  <input value={google.clientIdRef} onChange={(e) => setGoogle({ ...google, clientIdRef: e.target.value })} />
+                </label>
+                <label>
+                  Client secret ref
+                  <input value={google.clientSecretRef} onChange={(e) => setGoogle({ ...google, clientSecretRef: e.target.value })} />
+                </label>
+                <label>
+                  Redirect URIs
+                  <textarea
+                    className="textarea-field"
+                    rows={3}
+                    value={google.redirectUris}
+                    onChange={(e) => setGoogle({ ...google, redirectUris: e.target.value })}
+                  />
+                  <span className="field-hint">Comma or newline separated</span>
+                </label>
+                {googleError && <div className="callout error">{googleError}</div>}
+                {googleSuccess && <div className="callout success">{googleSuccess}</div>}
+                <div className="actions">
+                  <button type="submit" className="primary" disabled={googleSaving || loading}>
+                    {googleSaving ? 'Saving…' : 'Save Google'}
+                  </button>
+                </div>
+              </form>
+
+              <form className="form-card" onSubmit={(event) => handleProviderSubmit(event, 'microsoft')}>
+                <div className="idp-toggle">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={microsoft.enabled}
+                      onChange={(e) => setMicrosoft({ ...microsoft, enabled: e.target.checked })}
+                    />{' '}
+                    Enable
+                    {microsoft.enabled ? 'Microsoft is active' : 'Disable Microsoft'}
+                  </label>
+                </div>
+                <label>
+                  Client ID ref
+                  <input value={microsoft.clientIdRef} onChange={(e) => setMicrosoft({ ...microsoft, clientIdRef: e.target.value })} />
+                </label>
+                <label>
+                  Client secret ref
+                  <input value={microsoft.clientSecretRef} onChange={(e) => setMicrosoft({ ...microsoft, clientSecretRef: e.target.value })} />
+                </label>
+                <label>
+                  Redirect URIs
+                  <textarea
+                    className="textarea-field"
+                    rows={3}
+                    value={microsoft.redirectUris}
+                    onChange={(e) => setMicrosoft({ ...microsoft, redirectUris: e.target.value })}
+                  />
+                  <span className="field-hint">Comma or newline separated</span>
+                </label>
+                {microsoftError && <div className="callout error">{microsoftError}</div>}
+                {microsoftSuccess && <div className="callout success">{microsoftSuccess}</div>}
+                <div className="actions">
+                  <button type="submit" className="primary" disabled={microsoftSaving || loading}>
+                    {microsoftSaving ? 'Saving…' : 'Save Microsoft'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'persistence' && (
+          <div className="tab-panel">
+            <form className="form-card" onSubmit={handleHeadlessSave}>
+              <h3>Headless API access</h3>
+              <label>
+                Base URL
+                <input
+                  value={headlessForm.baseUrl}
+                  onChange={(e) => setHeadlessForm({ ...headlessForm, baseUrl: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                API Key reference
+                <div className="inline-field">
+                  <input value={headlessForm.apiKeyRef} onChange={(e) => setHeadlessForm({ ...headlessForm, apiKeyRef: e.target.value })} />
+                  <button type="button" className="ghost" onClick={() => setHeadlessForm({ ...headlessForm, apiKeyRef: generateApiKey() })}>
+                    Rotate key
+                  </button>
+                </div>
+              </label>
+              <label>
+                Allowed actor roles
+                <textarea
+                  className="textarea-field"
+                  rows={3}
+                  value={headlessForm.actorRolesInput}
+                  onChange={(e) => setHeadlessForm({ ...headlessForm, actorRolesInput: e.target.value })}
+                />
+                <span className="field-hint">Comma separated list (e.g. TENANT_ADMIN, CONTENT_AUTHOR)</span>
+              </label>
+              {headlessError && <div className="callout error">{headlessError}</div>}
+              {headlessSuccess && <div className="callout success">{headlessSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={headlessSaving || loading}>
+                  {headlessSaving ? 'Saving…' : 'Save API access'}
+                </button>
+              </div>
+            </form>
+
+            <form className="form-card" onSubmit={handleClientSave}>
+              <h3>Client application</h3>
+              <label>
+                Base URL
+                <input value={clientForm.baseUrl} onChange={(e) => setClientForm({ ...clientForm, baseUrl: e.target.value })} required />
+              </label>
+              <label>
+                Default landing path
+                <input
+                  value={clientForm.landingPath}
+                  onChange={(e) => setClientForm({ ...clientForm, landingPath: e.target.value })}
+                  placeholder="/overview"
+                />
+              </label>
+              {clientError && <div className="callout error">{clientError}</div>}
+              {clientSuccess && <div className="callout success">{clientSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={clientSaving || loading}>
+                  {clientSaving ? 'Saving…' : 'Save client app'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
     </section>
   )
 }
