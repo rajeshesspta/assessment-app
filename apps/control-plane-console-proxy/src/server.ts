@@ -403,6 +403,11 @@ export async function createServer(deps?: { securityStore?: SecurityStore }): Pr
       sanitizedHeaders[key] = Array.isArray(value) ? value.join(',') : String(value);
     }
     sanitizedHeaders['x-control-plane-key'] = env.CONTROL_PLANE_API_KEY;
+    // Forward the authenticated console actor to the control plane API so audit metadata
+    // (updatedBy) can reflect who performed an action.
+    if (session && session.username) {
+      sanitizedHeaders['x-control-plane-actor'] = session.username;
+    }
 
     const upstream = await fetch(upstreamUrl, {
       method,
