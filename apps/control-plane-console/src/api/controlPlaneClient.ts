@@ -174,3 +174,14 @@ export async function createTenant(payload: CreateTenantRequest) {
   const record = await requestJson<TenantRecord>('/control/tenants', { method: 'POST', body })
   return tenantSchema.parse(record)
 }
+
+export async function getTenant(id: string) {
+  const record = await requestJson<TenantRecord>(`/control/tenants/${id}`);
+  return tenantSchema.parse(record);
+}
+
+export async function updateTenantAuth(tenantId: string, authPayload: CreateTenantRequest['auth']) {
+  const body = JSON.stringify(authPayload ?? {});
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/auth`, { method: 'PUT', body });
+  return tenantSchema.parse(record);
+}

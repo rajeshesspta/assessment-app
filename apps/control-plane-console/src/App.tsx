@@ -71,7 +71,8 @@ function formatUpdatedAt(value: string) {
 function App() {
   const session = useSession()
   const authenticated = Boolean(session.actor) && !session.challengeId
-  const [activePage, setActivePage] = useState<'dashboard' | 'tenants' | 'create'>('dashboard')
+  const [activePage, setActivePage] = useState<'dashboard' | 'tenants' | 'create' | 'settings'>('dashboard')
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null)
   const { tenants, status, error, refresh } = useTenants({ enabled: authenticated })
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
@@ -258,6 +259,17 @@ function App() {
                 >
                   Create tenant
                 </button>
+                <button
+                  type="button"
+                  className={activePage === 'settings' ? 'active' : ''}
+                  onClick={() => {
+                    setSelectedTenantId(tenants.length ? tenants[0].id : null)
+                    setActivePage('settings')
+                    setMenuOpen(false)
+                  }}
+                >
+                  Tenant settings
+                </button>
               </div>
             )}
           </div>
@@ -344,6 +356,7 @@ function App() {
                       <th>Status</th>
                       <th>Hosts</th>
                       <th>Support Email</th>
+                      <th>Actions</th>
                       <th>Premium</th>
                       <th>Last Updated</th>
                     </tr>
@@ -376,6 +389,17 @@ function App() {
                         <td>
                           <p>{formatUpdatedAt(tenant.updatedAt)}</p>
                           <p className="updated-by">by {tenant.updatedBy}</p>
+                        </td>
+                        <td>
+                          <button
+                            className="ghost"
+                            onClick={() => {
+                              setSelectedTenantId(tenant.id)
+                              setActivePage('settings')
+                            }}
+                          >
+                            Manage
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -503,6 +527,14 @@ function App() {
               </div>
             </form>
           </section>
+        )}
+
+        {activePage === 'settings' && (
+          // lazy-load the settings page for the selected tenant
+          <div className="panel">
+            {/* Import dynamically to avoid adding to top-level bundle in this diff */}
+            <TenantSettings tenantId={selectedTenantId} onBack={() => setActivePage('tenants')} />
+          </div>
         )}
       </main>
     </div>
