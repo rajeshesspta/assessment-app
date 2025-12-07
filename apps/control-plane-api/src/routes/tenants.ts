@@ -6,6 +6,7 @@ import {
   tenantBrandingSchema,
   tenantClientAppSchema,
   tenantFeatureFlagSchema,
+  tenantDbConfigSchema,
   tenantHeadlessStoredSchema,
   tenantRegistryInputSchema,
   type TenantRegistryInput,
@@ -41,7 +42,11 @@ const tenantMetaUpdateSchema = z.object({
   featureFlags: tenantFeatureFlagSchema,
 });
 
-const tenantHeadlessUpdateSchema = tenantHeadlessStoredSchema.omit({ tenantId: true });
+const tenantHeadlessUpdateSchema = tenantHeadlessStoredSchema
+  .extend({
+    db: tenantDbConfigSchema.or(z.null()).optional(),
+  })
+  .omit({ tenantId: true });
 
 const tenantClientAppUpdateSchema = tenantClientAppSchema;
 
@@ -270,13 +275,24 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
       return { error: 'Tenant not found' };
     }
 
+    const { db, ...rest } = parsedBody.data;
+    const nextHeadless: TenantRecord['headless'] = {
+      ...record.headless,
+      ...rest,
+      tenantId: record.headless.tenantId,
+    };
+
+    if ('db' in parsedBody.data) {
+      if (!db) {
+        delete nextHeadless.db;
+      } else {
+        nextHeadless.db = db;
+      }
+    }
+
     const updatedRecord: TenantRecord = {
       ...record,
-      headless: {
-        ...record.headless,
-        ...parsedBody.data,
-        tenantId: record.headless.tenantId,
-      },
+      headless: nextHeadless,
     };
 
     const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);

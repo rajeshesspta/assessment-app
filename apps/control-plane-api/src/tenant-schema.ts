@@ -1,5 +1,28 @@
 import { z } from 'zod';
 
+const sqliteDbSchema = z
+  .object({
+    provider: z.literal('sqlite'),
+    filePath: z.string().min(1).optional(),
+    filePattern: z.string().min(1).optional(),
+    options: z.record(z.string()).optional(),
+  })
+  .refine(value => Boolean(value.filePath || value.filePattern), {
+    message: 'Provide a SQLite file path or pattern',
+    path: ['filePath'],
+  });
+
+const cosmosDbSchema = z.object({
+  provider: z.literal('cosmos'),
+  connectionStringRef: z.string().min(1),
+  databaseId: z.string().min(1),
+  containerId: z.string().min(1),
+  preferredRegions: z.array(z.string().min(1)).optional(),
+  options: z.record(z.string()).optional(),
+});
+
+export const tenantDbConfigSchema = z.union([sqliteDbSchema, cosmosDbSchema]);
+
 export const tenantBrandingSchema = z
   .object({
     logoUrl: z.string().url().optional(),
@@ -17,6 +40,7 @@ export const tenantHeadlessStoredSchema = z.object({
   apiKeyRef: z.string().min(1),
   tenantId: z.string().min(1),
   actorRoles: z.array(z.string().min(1)).min(1),
+  db: tenantDbConfigSchema.optional(),
 });
 
 export const tenantHeadlessSchema = tenantHeadlessStoredSchema.extend({
@@ -94,6 +118,7 @@ export const tenantConfigSchema = z.object({
     apiKey: z.string().min(1),
     tenantId: z.string().min(1),
     actorRoles: z.array(z.string().min(1)).min(1),
+    db: tenantDbConfigSchema.optional(),
   }),
   auth: z
     .object({

@@ -42,6 +42,28 @@ const socialProviderSchema = z.object({
   redirectUris: z.array(z.string().url()).min(1),
 })
 
+const dbConfigSchema = z.union([
+  z
+    .object({
+      provider: z.literal('sqlite'),
+      filePath: z.string().min(1).optional(),
+      filePattern: z.string().min(1).optional(),
+      options: z.record(z.string()).optional(),
+    })
+    .refine((value) => Boolean(value.filePath || value.filePattern), {
+      message: 'Provide a SQLite file path or pattern',
+      path: ['filePath'],
+    }),
+  z.object({
+    provider: z.literal('cosmos'),
+    connectionStringRef: z.string().min(1),
+    databaseId: z.string().min(1),
+    containerId: z.string().min(1),
+    preferredRegions: z.array(z.string().min(1)).optional(),
+    options: z.record(z.string()).optional(),
+  }),
+]);
+
 const tenantSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -53,6 +75,7 @@ const tenantSchema = z.object({
     apiKeyRef: z.string(),
     tenantId: z.string(),
     actorRoles: z.array(z.string().min(1)).min(1),
+    db: dbConfigSchema.optional(),
   }),
   auth: z.object({
     google: socialProviderSchema.optional(),
@@ -138,6 +161,22 @@ export type UpdateTenantHeadlessPayload = {
   baseUrl: string
   apiKeyRef: string
   actorRoles: string[]
+  db?:
+    | {
+        provider: 'sqlite'
+        filePath?: string
+        filePattern?: string
+        options?: Record<string, string>
+      }
+    | {
+        provider: 'cosmos'
+        connectionStringRef: string
+        databaseId: string
+        containerId: string
+        preferredRegions?: string[]
+        options?: Record<string, string>
+      }
+    | null
 }
 
 export type UpdateTenantClientAppPayload = {

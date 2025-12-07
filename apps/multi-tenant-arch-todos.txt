@@ -216,5 +216,7 @@ Next actionable steps (short-term, 2-4 dev days)
 - [ ] Update BFF runtime types to accept the new shape and surface it to runtime code (Step B).
 - [ ] Add a basic secret resolver implementation in headless that reads from env for local dev (Step C).
 - [ ] Add integration test for headless that uses env-backed resolver and in-memory SQLite.
+- [ ] Control plane console: Persistence tab exposes a DB provider selector (SQLite, Cosmos, etc.) and reveals provider-specific refs/fields before saving.
+- [ ] Headless/runtime wiring: consume the tenant-selected provider when instantiating repositories so storage choice actually steers data placement.
 
 

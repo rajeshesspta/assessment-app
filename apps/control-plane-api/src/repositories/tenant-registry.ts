@@ -189,6 +189,7 @@ export class TenantRegistryRepository {
             apiKey: tenant.headless.apiKeyRef,
             tenantId: tenant.headless.tenantId,
             actorRoles: tenant.headless.actorRoles,
+            db: tenant.headless.db,
           },
           auth,
           clientApp: tenant.clientApp,

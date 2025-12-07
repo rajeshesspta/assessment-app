@@ -262,19 +262,6 @@ function App() {
                 >
                   Create tenant
                 </button>
-                <button
-                  type="button"
-                  className={activePage === 'settings' ? 'active' : ''}
-                  onClick={() => {
-                    if (!selectedTenantId && tenants.length) {
-                      setSelectedTenantId(tenants[0].id)
-                    }
-                    setActivePage('settings')
-                    setMenuOpen(false)
-                  }}
-                >
-                  Tenant settings
-                </button>
               </div>
             )}
           </div>

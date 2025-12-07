@@ -7,6 +7,7 @@ import {
   updateTenantMeta,
   type TenantRecord,
   type UpdateTenantAuthPayload,
+  type UpdateTenantHeadlessPayload,
 } from '../api/controlPlaneClient'
 import { useSession } from '../context/session-context'
 
@@ -38,10 +39,19 @@ type MetaFormState = {
   featureFlags: TenantRecord['featureFlags']
 }
 
+type DbProvider = 'sqlite' | 'cosmos'
+type DbProviderOption = '' | DbProvider
+
 type HeadlessFormState = {
   baseUrl: string
   apiKeyRef: string
   actorRolesInput: string
+  dbProvider: DbProviderOption
+  sqliteFilePath: string
+  sqliteFilePattern: string
+  cosmosConnectionStringRef: string
+  cosmosDatabaseId: string
+  cosmosContainerId: string
 }
 
 type ClientFormState = {
@@ -116,10 +126,35 @@ function deriveMetaForm(record?: TenantRecord | null): MetaFormState {
 }
 
 function deriveHeadlessForm(record?: TenantRecord | null): HeadlessFormState {
+  const db = record?.headless?.db
+  let dbProvider: DbProviderOption = ''
+  let sqliteFilePath = ''
+  let sqliteFilePattern = ''
+  let cosmosConnectionStringRef = ''
+  let cosmosDatabaseId = ''
+  let cosmosContainerId = ''
+
+  if (db?.provider === 'sqlite') {
+    dbProvider = 'sqlite'
+    sqliteFilePath = db.filePath ?? ''
+    sqliteFilePattern = db.filePattern ?? ''
+  } else if (db?.provider === 'cosmos') {
+    dbProvider = 'cosmos'
+    cosmosConnectionStringRef = db.connectionStringRef ?? ''
+    cosmosDatabaseId = db.databaseId ?? ''
+    cosmosContainerId = db.containerId ?? ''
+  }
+
   return {
     baseUrl: record?.headless?.baseUrl ?? '',
     apiKeyRef: record?.headless?.apiKeyRef ?? '',
     actorRolesInput: record?.headless?.actorRoles?.join(', ') ?? '',
+    dbProvider,
+    sqliteFilePath,
+    sqliteFilePattern,
+    cosmosConnectionStringRef,
+    cosmosDatabaseId,
+    cosmosContainerId,
   }
 }
 
@@ -142,6 +177,15 @@ function sanitizeBrandingInput(branding: BrandingFormState): TenantRecord['brand
 function generateApiKey() {
   const bytes = crypto.getRandomValues(new Uint8Array(24))
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function isValidUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return Boolean(parsed.protocol && parsed.host)
+  } catch {
+    return false
+  }
 }
 
 interface TenantSettingsProps {
@@ -326,15 +370,53 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     event.preventDefault()
     setHeadlessError(null)
     setHeadlessSuccess(null)
+    const baseUrl = headlessForm.baseUrl.trim()
+    if (!isValidUrl(baseUrl)) {
+      setHeadlessError('Enter a valid base URL (include https://) before saving')
+      return
+    }
     const actorRoles = parseActorRoles(headlessForm.actorRolesInput)
     if (actorRoles.length === 0) {
       setHeadlessError('Provide at least one actor role')
       return
     }
-    const payload = {
-      baseUrl: headlessForm.baseUrl.trim(),
+    let dbPayload: UpdateTenantHeadlessPayload['db'] | null | undefined
+    if (headlessForm.dbProvider === '') {
+      dbPayload = null
+    } else if (headlessForm.dbProvider === 'sqlite') {
+      const filePath = headlessForm.sqliteFilePath.trim()
+      const filePattern = headlessForm.sqliteFilePattern.trim()
+      if (!filePath && !filePattern) {
+        setHeadlessError('Provide a SQLite file path or pattern')
+        return
+      }
+      dbPayload = {
+        provider: 'sqlite',
+        ...(filePath ? { filePath } : {}),
+        ...(filePattern ? { filePattern } : {}),
+      }
+    } else if (headlessForm.dbProvider === 'cosmos') {
+      const connectionStringRef = headlessForm.cosmosConnectionStringRef.trim()
+      const databaseId = headlessForm.cosmosDatabaseId.trim()
+      const containerId = headlessForm.cosmosContainerId.trim()
+      if (!connectionStringRef || !databaseId || !containerId) {
+        setHeadlessError('Fill all Cosmos DB fields before saving')
+        return
+      }
+      dbPayload = {
+        provider: 'cosmos',
+        connectionStringRef,
+        databaseId,
+        containerId,
+      }
+    }
+    const payload: UpdateTenantHeadlessPayload = {
+      baseUrl,
       apiKeyRef: headlessForm.apiKeyRef.trim(),
       actorRoles,
+    }
+    if (dbPayload !== undefined) {
+      payload.db = dbPayload
     }
     setHeadlessSaving(true)
     try {
@@ -352,12 +434,17 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     event.preventDefault()
     setClientError(null)
     setClientSuccess(null)
-    if (!clientForm.baseUrl.trim()) {
+    const baseUrl = clientForm.baseUrl.trim()
+    if (!baseUrl) {
       setClientError('Client base URL is required')
       return
     }
+    if (!isValidUrl(baseUrl)) {
+      setClientError('Enter a valid client base URL (include https://)')
+      return
+    }
     const payload = {
-      baseUrl: clientForm.baseUrl.trim(),
+      baseUrl,
       landingPath: clientForm.landingPath.trim() || '/overview',
     }
     setClientSaving(true)
@@ -639,6 +726,96 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
                 />
                 <span className="field-hint">Comma separated list (e.g. TENANT_ADMIN, CONTENT_AUTHOR)</span>
               </label>
+              <label>
+                Database provider
+                <select
+                  value={headlessForm.dbProvider}
+                  onChange={(e) => {
+                    const next = e.target.value as DbProviderOption
+                    setHeadlessForm((prev) => ({
+                      ...prev,
+                      dbProvider: next,
+                      ...(next === 'sqlite'
+                        ? {
+                            cosmosConnectionStringRef: '',
+                            cosmosDatabaseId: '',
+                            cosmosContainerId: '',
+                          }
+                        : next === 'cosmos'
+                        ? {
+                            sqliteFilePath: '',
+                            sqliteFilePattern: '',
+                          }
+                        : {
+                            sqliteFilePath: '',
+                            sqliteFilePattern: '',
+                            cosmosConnectionStringRef: '',
+                            cosmosDatabaseId: '',
+                            cosmosContainerId: '',
+                          }),
+                    }))
+                  }}
+                >
+                  <option value="">Platform default</option>
+                  <option value="sqlite">SQLite (file-backed)</option>
+                  <option value="cosmos">Azure Cosmos DB</option>
+                </select>
+                <span className="field-hint">Choose where tenant data persists. Defaults to the platform-wide storage.</span>
+              </label>
+              {headlessForm.dbProvider === 'sqlite' && (
+                <div className="form-card">
+                  <h4>SQLite options</h4>
+                  <label>
+                    File path (secret ref)
+                    <input
+                      value={headlessForm.sqliteFilePath}
+                      onChange={(e) => setHeadlessForm({ ...headlessForm, sqliteFilePath: e.target.value })}
+                      placeholder="kv://tenant-alpha/sqlite-path"
+                    />
+                  </label>
+                  <label>
+                    File pattern (optional)
+                    <input
+                      value={headlessForm.sqliteFilePattern}
+                      onChange={(e) => setHeadlessForm({ ...headlessForm, sqliteFilePattern: e.target.value })}
+                      placeholder="data/sqlite/{tenantId}.db"
+                    />
+                  </label>
+                  <p className="field-hint">
+                    Store only references; the runtime resolves refs into actual filesystem paths or secrets.
+                  </p>
+                </div>
+              )}
+              {headlessForm.dbProvider === 'cosmos' && (
+                <div className="form-card">
+                  <h4>Cosmos DB options</h4>
+                  <label>
+                    Connection string secret ref
+                    <input
+                      value={headlessForm.cosmosConnectionStringRef}
+                      onChange={(e) => setHeadlessForm({ ...headlessForm, cosmosConnectionStringRef: e.target.value })}
+                      placeholder="kv://tenant-alpha/cosmos-conn"
+                    />
+                  </label>
+                  <label>
+                    Database ID
+                    <input
+                      value={headlessForm.cosmosDatabaseId}
+                      onChange={(e) => setHeadlessForm({ ...headlessForm, cosmosDatabaseId: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Container ID
+                    <input
+                      value={headlessForm.cosmosContainerId}
+                      onChange={(e) => setHeadlessForm({ ...headlessForm, cosmosContainerId: e.target.value })}
+                    />
+                  </label>
+                  <p className="field-hint">
+                    Follow Azure Cosmos DB guidance: keep refs in Key Vault, distribute data across partitions, and reuse a singleton client in the runtime.
+                  </p>
+                </div>
+              )}
               {headlessError && <div className="callout error">{headlessError}</div>}
               {headlessSuccess && <div className="callout success">{headlessSuccess}</div>}
               <div className="actions">
