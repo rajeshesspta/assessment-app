@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { TenantRegistryRepository, TenantRecord } from '../repositories/tenant-registry';
+import type { EngineSizeRepository } from '../repositories/engine-size';
 import {
   tenantBrandingSchema,
   tenantClientAppSchema,
@@ -9,16 +10,13 @@ import {
   tenantDbConfigSchema,
   tenantHeadlessStoredSchema,
   tenantRegistryInputSchema,
+  tenantEngineSizeSchema,
   type TenantRegistryInput,
 } from '../tenant-schema';
+import { parseActorContext, isSuperAdmin } from './actor-context';
 
 const tenantIdParamsSchema = z.object({
   id: z.string().min(1),
-});
-
-const actorHeaderSchema = z.object({
-  actor: z.string().min(1).optional(),
-  roles: z.string().optional(),
 });
 
 const authProviderUpdateSchema = z.object({
@@ -55,30 +53,11 @@ const tenantHeadlessUpdateSchema = tenantHeadlessStoredSchema
 
 const tenantClientAppUpdateSchema = tenantClientAppSchema;
 
-function coerceHeaderValue(value: unknown): string | undefined {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-  return typeof value === 'string' ? value : undefined;
-}
+const tenantEngineSizeSelectionSchema = z.object({
+  engineSizeId: z.string().uuid(),
+});
 
-function parseActorContext(headers: Record<string, unknown>) {
-  const parsed = actorHeaderSchema.safeParse({
-    actor: coerceHeaderValue(headers['x-control-plane-actor']),
-    roles: coerceHeaderValue(headers['x-control-plane-roles']),
-  });
-
-  const actor = parsed.success && parsed.data.actor ? parsed.data.actor : 'system';
-  const roles: string[] = [];
-  if (parsed.success && parsed.data.roles) {
-    parsed.data.roles
-      .split(',')
-      .map(role => role.trim().toUpperCase())
-      .filter(role => role.length > 0)
-      .forEach(role => roles.push(role));
-  }
-  return { actor, roles };
-}
+const tenantEngineSizeUpdateSchema = z.union([tenantEngineSizeSelectionSchema, z.null()]);
 
 function sanitizeRecord(record: TenantRecord | undefined) {
   if (!record) {
@@ -104,11 +83,16 @@ function recordToInput(record: TenantRecord): TenantRegistryInput {
     clientApp: record.clientApp,
     branding: record.branding,
     featureFlags: record.featureFlags,
+    engineSize: record.engineSize,
     status: record.status,
   });
 }
 
-export async function registerTenantRoutes(app: FastifyInstance, repo: TenantRegistryRepository) {
+export async function registerTenantRoutes(
+  app: FastifyInstance,
+  repo: TenantRegistryRepository,
+  engineSizes: EngineSizeRepository,
+) {
   app.get('/control/tenants', async () => {
     const tenants = await repo.listTenants();
     return tenants.map(record => sanitizeRecord(record));
@@ -155,7 +139,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const { actor, roles } = parseActorContext(request.headers);
-    if (!roles.includes('SUPER_ADMIN')) {
+    if (!isSuperAdmin({ actor, roles })) {
       reply.code(403);
       return { error: 'Forbidden: only Super Admins may manage tenant identity providers' };
     }
@@ -222,7 +206,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const { actor, roles } = parseActorContext(request.headers);
-    if (!roles.includes('SUPER_ADMIN')) {
+    if (!isSuperAdmin({ actor, roles })) {
       reply.code(403);
       return { error: 'Forbidden: only Super Admins may edit tenant metadata' };
     }
@@ -260,7 +244,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const { actor, roles } = parseActorContext(request.headers);
-    if (!roles.includes('SUPER_ADMIN')) {
+    if (!isSuperAdmin({ actor, roles })) {
       reply.code(403);
       return { error: 'Forbidden: only Super Admins may edit headless access' };
     }
@@ -301,6 +285,58 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     return sanitizeRecord(saved as TenantRecord);
   });
 
+  app.patch('/control/tenants/:id/engine-size', async (request, reply) => {
+    const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'Invalid tenant id' };
+    }
+
+    const { actor, roles } = parseActorContext(request.headers);
+    if (!isSuperAdmin({ actor, roles })) {
+      reply.code(403);
+      return { error: 'Forbidden: only Super Admins may edit engine size' };
+    }
+
+    const parsedBody = tenantEngineSizeUpdateSchema.safeParse(request.body ?? null);
+    if (!parsedBody.success) {
+      reply.code(400);
+      return { error: 'Invalid payload', issues: parsedBody.error.issues };
+    }
+
+    const record = await repo.getTenant(params.data.id);
+    if (!record) {
+      reply.code(404);
+      return { error: 'Tenant not found' };
+    }
+
+    const payload = parsedBody.data;
+    let nextEngineSize: TenantRecord['engineSize'] | undefined;
+    if (payload) {
+      const engineSize = await engineSizes.getEngineSize(payload.engineSizeId);
+      if (!engineSize) {
+        reply.code(404);
+        return { error: 'Engine size not found' };
+      }
+      nextEngineSize = {
+        id: engineSize.id,
+        name: engineSize.name,
+        description: engineSize.description,
+        metadata: engineSize.metadata,
+        createdAt: engineSize.createdAt,
+        updatedAt: engineSize.updatedAt,
+      };
+    }
+
+    const updatedRecord: TenantRecord = {
+      ...record,
+      engineSize: nextEngineSize,
+    };
+
+    const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+    return sanitizeRecord(saved as TenantRecord);
+  });
+
   app.patch('/control/tenants/:id/client-app', async (request, reply) => {
     const params = tenantIdParamsSchema.safeParse(request.params ?? {});
     if (!params.success) {
@@ -309,7 +345,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const { actor, roles } = parseActorContext(request.headers);
-    if (!roles.includes('SUPER_ADMIN')) {
+    if (!isSuperAdmin({ actor, roles })) {
       reply.code(403);
       return { error: 'Forbidden: only Super Admins may edit client app access' };
     }
@@ -343,7 +379,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const { actor, roles } = parseActorContext(request.headers);
-    if (!roles.includes('SUPER_ADMIN')) {
+    if (!isSuperAdmin({ actor, roles })) {
       reply.code(403);
       return { error: 'Forbidden: only Super Admins may edit hosts' };
     }
@@ -377,7 +413,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const { actor, roles } = parseActorContext(request.headers);
-    if (!roles.includes('SUPER_ADMIN')) {
+    if (!isSuperAdmin({ actor, roles })) {
       reply.code(403);
       return { error: 'Forbidden: only Super Admins may edit branding' };
     }
@@ -411,7 +447,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const { actor, roles } = parseActorContext(request.headers);
-    if (!roles.includes('SUPER_ADMIN')) {
+    if (!isSuperAdmin({ actor, roles })) {
       reply.code(403);
       return { error: 'Forbidden: only Super Admins may edit feature flags' };
     }

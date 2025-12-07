@@ -138,6 +138,8 @@ export class TenantRegistryRepository {
       client_app_json: JSON.stringify(record.clientApp),
       branding_json: JSON.stringify(record.branding),
       feature_flags_json: JSON.stringify(record.featureFlags),
+      engine_size_id: record.engineSize?.id ?? null,
+      engine_size_json: record.engineSize ? JSON.stringify(record.engineSize) : null,
       status: record.status,
       updated_at: now,
       updated_by: actor,
@@ -195,6 +197,7 @@ export class TenantRegistryRepository {
           clientApp: tenant.clientApp,
           branding: tenant.branding,
           featureFlags: tenant.featureFlags,
+          engineSize: tenant.engineSize,
           status: tenant.status,
         };
       });
@@ -207,6 +210,35 @@ export class TenantRegistryRepository {
 
   private rowToRecord(row: TenantRow): TenantRecord {
     const authConfig = normalizeAuthConfig(safeParseJson(row.auth_config_json));
+    const engineSizeSnapshot = safeParseJson(row.engine_size_json);
+    let engineSize: TenantRecord['engineSize'] | undefined;
+    if (engineSizeSnapshot && typeof engineSizeSnapshot === 'object') {
+      const candidate = engineSizeSnapshot as Partial<TenantRecord['engineSize']> & {
+        name?: unknown;
+        description?: unknown;
+        metadata?: unknown;
+        createdAt?: unknown;
+        updatedAt?: unknown;
+      };
+      if (typeof candidate.name === 'string') {
+        const idCandidate = 'id' in candidate && typeof candidate.id === 'string' ? candidate.id : row.engine_size_id ?? undefined;
+        if (idCandidate) {
+          const fallbackTimestamp = row.updated_at;
+          const metadataValue =
+            candidate.metadata && typeof candidate.metadata === 'object' && !Array.isArray(candidate.metadata)
+              ? (candidate.metadata as Record<string, unknown>)
+              : undefined;
+          engineSize = {
+            id: idCandidate,
+            name: candidate.name,
+            description: typeof candidate.description === 'string' ? candidate.description : undefined,
+            metadata: metadataValue,
+            createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : fallbackTimestamp,
+            updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : fallbackTimestamp,
+          };
+        }
+      }
+    }
     return tenantRecordSchema.parse({
       id: row.id,
       name: row.name,
@@ -218,6 +250,7 @@ export class TenantRegistryRepository {
       clientApp: JSON.parse(row.client_app_json),
       branding: JSON.parse(row.branding_json),
       featureFlags: JSON.parse(row.feature_flags_json),
+      engineSize,
       status: row.status,
       updatedAt: row.updated_at,
       updatedBy: row.updated_by,

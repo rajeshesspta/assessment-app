@@ -2,17 +2,21 @@ import { CosmosClient } from '@azure/cosmos';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { env } from './env';
 import { TenantRegistryRepository } from './repositories/tenant-registry';
+import { EngineSizeRepository } from './repositories/engine-size';
 import { registerTenantRoutes } from './routes/tenants';
 import { registerTenantBundleRoute } from './routes/tenant-bundle';
+import { registerEngineSizeRoutes } from './routes/engine-sizes';
 import { runMigrations } from './db/migrations';
 import { createTenantRegistryDatabase } from './db/connection';
 import { CosmosTenantRegistryStore, SqliteTenantRegistryStore } from './stores/tenant-registry-store';
+import { CosmosEngineSizeStore, SqliteEngineSizeStore } from './stores/engine-size-store';
 
 interface ServerDependencies {
-  repository: TenantRegistryRepository;
+  tenantRepository: TenantRegistryRepository;
+  engineSizeRepository: EngineSizeRepository;
 }
 
-export async function buildServer({ repository }: ServerDependencies): Promise<FastifyInstance> {
+export async function buildServer({ tenantRepository, engineSizeRepository }: ServerDependencies): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   app.addHook('onRequest', (request, reply, done) => {
@@ -25,40 +29,50 @@ export async function buildServer({ repository }: ServerDependencies): Promise<F
   });
 
   app.get('/control/health', async () => {
-    const tenants = await repository.listTenants();
+    const tenants = await tenantRepository.listTenants();
     return {
       status: 'ok',
       tenants: tenants.length,
     };
   });
 
-  await registerTenantRoutes(app, repository);
-  await registerTenantBundleRoute(app, repository);
+  await registerTenantRoutes(app, tenantRepository, engineSizeRepository);
+  await registerEngineSizeRoutes(app, engineSizeRepository, tenantRepository);
+  await registerTenantBundleRoute(app, tenantRepository);
 
   return app;
 }
 
-function createTenantRegistryRepository(): TenantRegistryRepository {
+function createRepositories(): { tenantRepository: TenantRegistryRepository; engineSizeRepository: EngineSizeRepository } {
   if (env.CONTROL_PLANE_DB_PROVIDER === 'sqlite') {
     const db = createTenantRegistryDatabase();
     runMigrations(db);
-    const store = new SqliteTenantRegistryStore(db);
-    return new TenantRegistryRepository(store);
+    const tenantStore = new SqliteTenantRegistryStore(db);
+    const engineSizeStore = new SqliteEngineSizeStore(db);
+    return {
+      tenantRepository: new TenantRegistryRepository(tenantStore),
+      engineSizeRepository: new EngineSizeRepository(engineSizeStore),
+    };
   }
 
   const client = new CosmosClient({ endpoint: env.CONTROL_PLANE_COSMOS_ENDPOINT, key: env.CONTROL_PLANE_COSMOS_KEY });
   const database = client.database(env.CONTROL_PLANE_COSMOS_DATABASE);
   const tenants = database.container(env.CONTROL_PLANE_COSMOS_TENANTS_CONTAINER);
   const audit = database.container(env.CONTROL_PLANE_COSMOS_AUDIT_CONTAINER);
-  const store = new CosmosTenantRegistryStore(tenants, audit);
-  return new TenantRegistryRepository(store);
+  const engineSizes = database.container(env.CONTROL_PLANE_COSMOS_ENGINE_SIZES_CONTAINER);
+  const tenantStore = new CosmosTenantRegistryStore(tenants, audit);
+  const engineSizeStore = new CosmosEngineSizeStore(engineSizes);
+  return {
+    tenantRepository: new TenantRegistryRepository(tenantStore),
+    engineSizeRepository: new EngineSizeRepository(engineSizeStore),
+  };
 }
 
 const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 
 if (!isTestEnv) {
-  const repository = createTenantRegistryRepository();
-  const app = await buildServer({ repository });
+  const { tenantRepository, engineSizeRepository } = createRepositories();
+  const app = await buildServer({ tenantRepository, engineSizeRepository });
 
   app
     .listen({ port: env.PORT, host: env.HOST })

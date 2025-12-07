@@ -35,6 +35,17 @@ export const tenantBrandingSchema = z
 
 export const tenantFeatureFlagSchema = z.record(z.boolean()).default({});
 
+const tenantEngineMetadataSchema = z.record(z.unknown()).optional();
+
+export const tenantEngineSizeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  description: z.string().max(280).optional(),
+  metadata: tenantEngineMetadataSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 export const tenantHeadlessStoredSchema = z.object({
   baseUrl: z.string().url(),
   apiKeyRef: z.string().min(1),
@@ -88,6 +99,7 @@ const tenantRegistryBaseSchema = z.object({
   clientApp: tenantClientAppSchema,
   branding: tenantBrandingSchema,
   featureFlags: tenantFeatureFlagSchema,
+  engineSize: tenantEngineSizeSchema.optional(),
   status: z.enum(['active', 'paused', 'deleting']).default('active'),
 });
 
@@ -129,6 +141,7 @@ export const tenantConfigSchema = z.object({
   clientApp: tenantClientAppSchema,
   branding: tenantBrandingSchema,
   featureFlags: tenantFeatureFlagSchema,
+  engineSize: tenantEngineSizeSchema.optional(),
 });
 
 export type TenantConfig = z.infer<typeof tenantConfigSchema>;

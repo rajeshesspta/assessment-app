@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import TenantSettings from './pages/TenantSettings'
+import EngineSizesCatalog from './pages/EngineSizesCatalog'
 import './App.css'
 import { controlPlaneApiBaseUrl } from './config'
 import { useTenants } from './hooks/useTenants'
@@ -72,7 +73,7 @@ function formatUpdatedAt(value: string) {
 function App() {
   const session = useSession()
   const authenticated = Boolean(session.actor) && !session.challengeId
-  const [activePage, setActivePage] = useState<'dashboard' | 'tenants' | 'create' | 'settings'>('dashboard')
+  const [activePage, setActivePage] = useState<'dashboard' | 'tenants' | 'create' | 'settings' | 'engineSizes'>('dashboard')
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null)
   const { tenants, status, error, refresh } = useTenants({ enabled: authenticated })
     const selectedTenant = useMemo(() => tenants.find((tenant) => tenant.id === selectedTenantId) ?? null, [tenants, selectedTenantId])
@@ -262,6 +263,18 @@ function App() {
                 >
                   Create tenant
                 </button>
+                {session.actor?.roles?.includes('SUPER_ADMIN') && (
+                  <button
+                    type="button"
+                    className={activePage === 'engineSizes' ? 'active' : ''}
+                    onClick={() => {
+                      setActivePage('engineSizes')
+                      setMenuOpen(false)
+                    }}
+                  >
+                    Engine sizes
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -528,6 +541,8 @@ function App() {
             <TenantSettings tenantId={selectedTenantId} tenant={selectedTenant} onBack={() => setActivePage('tenants')} />
           </div>
         )}
+
+        {activePage === 'engineSizes' && <EngineSizesCatalog onBack={() => setActivePage('dashboard')} />}
       </main>
     </div>
   )

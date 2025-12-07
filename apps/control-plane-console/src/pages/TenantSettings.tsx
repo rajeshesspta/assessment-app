@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   getTenant,
   updateTenantAuth,
@@ -8,7 +8,10 @@ import {
   updateTenantBranding,
   updateTenantFeatureFlags,
   updateTenantHosts,
+  updateTenantEngineSize,
+  listEngineSizes,
   type TenantRecord,
+  type EngineSizeRecord,
   type UpdateTenantAuthPayload,
   type UpdateTenantHeadlessPayload,
 } from '../api/controlPlaneClient'
@@ -61,6 +64,8 @@ type ClientFormState = {
   baseUrl: string
   landingPath: string
 }
+
+type EngineSizeOption = Pick<EngineSizeRecord, 'id' | 'name' | 'description'>
 
 const providerLabels: Record<ProviderKey, string> = {
   google: 'Google',
@@ -225,8 +230,44 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
   const [microsoftSaving, setMicrosoftSaving] = useState(false)
   const [microsoftError, setMicrosoftError] = useState<string | null>(null)
   const [microsoftSuccess, setMicrosoftSuccess] = useState<string | null>(null)
+  const [engineSizes, setEngineSizes] = useState<EngineSizeOption[]>([])
+  const [engineSizesLoading, setEngineSizesLoading] = useState(false)
+  const [engineSizesError, setEngineSizesError] = useState<string | null>(null)
+  const [engineSizeSelection, setEngineSizeSelection] = useState<string>(() => tenant?.engineSize?.id ?? '')
+  const [engineSizeAssigned, setEngineSizeAssigned] = useState<TenantRecord['engineSize'] | undefined>(() => tenant?.engineSize ?? undefined)
+  const [engineSizeSaving, setEngineSizeSaving] = useState(false)
+  const [engineSizeError, setEngineSizeError] = useState<string | null>(null)
+  const [engineSizeSuccess, setEngineSizeSuccess] = useState<string | null>(null)
 
   const canManage = session.actor?.roles?.includes('SUPER_ADMIN') ?? false
+
+  const mergedEngineSizeOptions = useMemo(() => {
+    if (!engineSizeAssigned?.id) {
+      return engineSizes
+    }
+    const exists = engineSizes.some((size) => size.id === engineSizeAssigned.id)
+    return exists ? engineSizes : [engineSizeAssigned, ...engineSizes]
+  }, [engineSizeAssigned, engineSizes])
+
+  const selectedEngineSize = useMemo(() => {
+    if (!engineSizeSelection) {
+      return undefined
+    }
+    return mergedEngineSizeOptions.find((size) => size.id === engineSizeSelection)
+  }, [engineSizeSelection, mergedEngineSizeOptions])
+
+  const refreshEngineSizes = useCallback(async () => {
+    setEngineSizesLoading(true)
+    setEngineSizesError(null)
+    try {
+      const catalog = await listEngineSizes()
+      setEngineSizes(catalog.map((size) => ({ id: size.id, name: size.name, description: size.description })))
+    } catch (err) {
+      setEngineSizesError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setEngineSizesLoading(false)
+    }
+  }, [])
 
   const syncForms = useCallback((record: TenantRecord) => {
     setMetaForm(deriveMetaForm(record))
@@ -234,6 +275,8 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     setClientForm(deriveClientForm(record))
     setGoogle(deriveProviderForm(record.auth?.google))
     setMicrosoft(deriveProviderForm(record.auth?.microsoft))
+    setEngineSizeSelection(record.engineSize?.id ?? '')
+    setEngineSizeAssigned(record.engineSize ?? undefined)
   }, [])
 
   const loadTenant = useCallback(
@@ -258,6 +301,11 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
   }, [tenantId, canManage, loadTenant])
 
   useEffect(() => {
+    if (!canManage) return
+    void refreshEngineSizes()
+  }, [canManage, refreshEngineSizes])
+
+  useEffect(() => {
     if (!tenantId || !tenant || tenant.id !== tenantId) {
       return
     }
@@ -279,6 +327,8 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
       setGoogleError(null)
       setMicrosoftSuccess(null)
       setMicrosoftError(null)
+      setEngineSizeSuccess(null)
+      setEngineSizeError(null)
     }
   }, [tenantId])
 
@@ -514,6 +564,24 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
     }
   }
 
+  const handleEngineSizeSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setEngineSizeError(null)
+    setEngineSizeSuccess(null)
+    const payload = engineSizeSelection ? { engineSizeId: engineSizeSelection } : null
+    setEngineSizeSaving(true)
+    try {
+      await updateTenantEngineSize(tenantId, payload)
+      await loadTenant(tenantId)
+      await refreshEngineSizes()
+      setEngineSizeSuccess(payload ? 'Engine size updated' : 'Engine size cleared')
+    } catch (err) {
+      setEngineSizeError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setEngineSizeSaving(false)
+    }
+  }
+
   return (
     <section className="panel tenant-settings-panel">
       <div className="panel-header">
@@ -572,7 +640,7 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
             className={activeTab === 'persistence' ? 'tab-button active' : 'tab-button'}
             onClick={() => setActiveTab('persistence')}
           >
-            Persistence &amp; Access
+            Engine Configuration
           </button>
         </div>
 
@@ -838,7 +906,7 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
         {activeTab === 'persistence' && (
           <div className="tab-panel">
             <form className="form-card" onSubmit={handleHeadlessSave}>
-              <h3>Headless API access</h3>
+              <h3>Engine configuration</h3>
               <label>
                 Base URL
                 <input
@@ -961,6 +1029,59 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
               <div className="actions">
                 <button type="submit" className="primary" disabled={headlessSaving || loading}>
                   {headlessSaving ? 'Saving…' : 'Save API access'}
+                </button>
+              </div>
+            </form>
+
+            <form className="form-card" onSubmit={handleEngineSizeSave}>
+              <h3>Engine Size</h3>
+              <label>
+                Profile
+                <div className="inline-field">
+                  <select
+                    value={engineSizeSelection}
+                    onChange={(e) => setEngineSizeSelection(e.target.value)}
+                    disabled={engineSizesLoading}
+                  >
+                    <option value="">Platform default</option>
+                    {mergedEngineSizeOptions.map((size) => (
+                      <option key={size.id} value={size.id}>
+                        {size.name}
+                        {engineSizeAssigned && size.id === engineSizeAssigned.id && !engineSizes.some((option) => option.id === size.id)
+                          ? ' • legacy'
+                          : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="ghost" onClick={() => void refreshEngineSizes()} disabled={engineSizesLoading}>
+                    {engineSizesLoading ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                </div>
+              </label>
+              {engineSizesError && <div className="callout error">{engineSizesError}</div>}
+              {engineSizesLoading && <div className="callout info">Loading engine sizes…</div>}
+              {!engineSizesLoading && mergedEngineSizeOptions.length === 0 ? (
+                <p className="field-hint">No engine sizes defined yet. Create one in the catalog to customize engine capacity.</p>
+              ) : (
+                <div className="callout muted">
+                  {selectedEngineSize ? (
+                    <>
+                      <strong>{selectedEngineSize.name}</strong>
+                      <p className="field-hint">{selectedEngineSize.description ?? 'No description provided.'}</p>
+                    </>
+                  ) : (
+                    <p className="field-hint">Using the platform default engine configuration.</p>
+                  )}
+                  {engineSizeAssigned && !engineSizes.find((size) => size.id === engineSizeAssigned.id) && engineSizeSelection === engineSizeAssigned.id && (
+                    <p className="field-hint">This profile is no longer in the catalog; saving will clear it unless you select another.</p>
+                  )}
+                </div>
+              )}
+              {engineSizeError && <div className="callout error">{engineSizeError}</div>}
+              {engineSizeSuccess && <div className="callout success">{engineSizeSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={engineSizeSaving || loading}>
+                  {engineSizeSaving ? 'Saving…' : 'Save Engine Size'}
                 </button>
               </div>
             </form>

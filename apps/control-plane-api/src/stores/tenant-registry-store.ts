@@ -13,6 +13,8 @@ export interface TenantRow {
   client_app_json: string;
   branding_json: string;
   feature_flags_json: string;
+  engine_size_id: string | null;
+  engine_size_json: string | null;
   status: string;
   updated_at: string;
   updated_by: string;
@@ -44,7 +46,7 @@ export class SqliteTenantRegistryStore implements TenantRegistryStore {
     return this.db
       .prepare(`
         SELECT id, name, hosts_json, support_email, premium_deployment, headless_config_json, auth_config_json,
-               client_app_json, branding_json, feature_flags_json, status, updated_at, updated_by
+            client_app_json, branding_json, feature_flags_json, engine_size_id, engine_size_json, status, updated_at, updated_by
         FROM tenant_registry
         ORDER BY updated_at DESC
       `)
@@ -54,8 +56,8 @@ export class SqliteTenantRegistryStore implements TenantRegistryStore {
   async getTenant(id: string): Promise<TenantRow | undefined> {
     return this.db
       .prepare(`
-        SELECT id, name, hosts_json, support_email, premium_deployment, headless_config_json, auth_config_json,
-               client_app_json, branding_json, feature_flags_json, status, updated_at, updated_by
+          SELECT id, name, hosts_json, support_email, premium_deployment, headless_config_json, auth_config_json,
+            client_app_json, branding_json, feature_flags_json, engine_size_id, engine_size_json, status, updated_at, updated_by
         FROM tenant_registry
         WHERE id = ?
       `)
@@ -67,10 +69,10 @@ export class SqliteTenantRegistryStore implements TenantRegistryStore {
       .prepare(`
         INSERT INTO tenant_registry (
           id, name, hosts_json, support_email, premium_deployment, headless_config_json, auth_config_json,
-          client_app_json, branding_json, feature_flags_json, status, updated_at, updated_by
+          client_app_json, branding_json, feature_flags_json, engine_size_id, engine_size_json, status, updated_at, updated_by
         ) VALUES (
           @id, @name, @hosts_json, @support_email, @premium_deployment, @headless_config_json, @auth_config_json,
-          @client_app_json, @branding_json, @feature_flags_json, @status, @updated_at, @updated_by
+          @client_app_json, @branding_json, @feature_flags_json, @engine_size_id, @engine_size_json, @status, @updated_at, @updated_by
         )
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
@@ -82,6 +84,8 @@ export class SqliteTenantRegistryStore implements TenantRegistryStore {
           client_app_json = excluded.client_app_json,
           branding_json = excluded.branding_json,
           feature_flags_json = excluded.feature_flags_json,
+          engine_size_id = excluded.engine_size_id,
+          engine_size_json = excluded.engine_size_json,
           status = excluded.status,
           updated_at = excluded.updated_at,
           updated_by = excluded.updated_by

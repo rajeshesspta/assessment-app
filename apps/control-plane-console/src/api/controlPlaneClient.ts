@@ -64,6 +64,17 @@ const dbConfigSchema = z.union([
   }),
 ]);
 
+const metadataSchema = z.record(z.unknown()).optional();
+
+const engineSizeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  metadata: metadataSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 const tenantSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -90,11 +101,23 @@ const tenantSchema = z.object({
   status: z.enum(['active', 'paused', 'deleting']),
   updatedAt: z.string(),
   updatedBy: z.string(),
+  engineSize: engineSizeSchema.optional(),
 })
 
 const tenantListSchema = z.array(tenantSchema)
+const engineSizeListSchema = z.array(engineSizeSchema)
 
 export type TenantRecord = z.infer<typeof tenantSchema>
+export type EngineSizeRecord = z.infer<typeof engineSizeSchema>
+export type CreateEngineSizePayload = {
+  name: string
+  description?: string
+}
+
+export type UpdateEngineSizePayload = {
+  name?: string
+  description?: string
+}
 export type CreateTenantRequest = {
   name: string
   hosts: string[]
@@ -181,11 +204,15 @@ export type UpdateTenantClientAppPayload = {
   landingPath: string
 }
 
+export type UpdateTenantEngineSizePayload = {
+  engineSizeId: string
+} | null;
+
 interface RequestOptions {
   skipUnauthorizedInterceptor?: boolean
 }
 
-async function requestJson<T>(path: string, init?: RequestInit, options?: RequestOptions): Promise<T> {
+async function performRequest(path: string, init?: RequestInit, options?: RequestOptions): Promise<Response> {
   const headers = new Headers(init?.headers)
   if (!headers.has('accept')) {
     headers.set('accept', 'application/json')
@@ -212,6 +239,14 @@ async function requestJson<T>(path: string, init?: RequestInit, options?: Reques
     throw new ApiError(response.status, message)
   }
 
+  return response
+}
+
+async function requestJson<T>(path: string, init?: RequestInit, options?: RequestOptions): Promise<T> {
+  const response = await performRequest(path, init, options)
+  if (response.status === 204) {
+    return undefined as T
+  }
   return response.json() as Promise<T>
 }
 
@@ -219,6 +254,32 @@ export async function listTenants(signal?: AbortSignal): Promise<TenantRecord[]>
   const payload = await requestJson('/control/tenants', { signal })
   const tenants = tenantListSchema.parse(payload)
   return tenants.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+export async function listEngineSizes(signal?: AbortSignal): Promise<EngineSizeRecord[]> {
+  const payload = await requestJson('/control/engine-sizes', { signal })
+  const catalog = engineSizeListSchema.parse(payload)
+  return catalog.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+export async function createEngineSize(payload: CreateEngineSizePayload): Promise<EngineSizeRecord> {
+  const record = await requestJson<EngineSizeRecord>('/control/engine-sizes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return engineSizeSchema.parse(record)
+}
+
+export async function updateEngineSize(id: string, payload: UpdateEngineSizePayload): Promise<EngineSizeRecord> {
+  const record = await requestJson<EngineSizeRecord>(`/control/engine-sizes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  return engineSizeSchema.parse(record)
+}
+
+export async function deleteEngineSize(id: string): Promise<void> {
+  await requestJson<void>(`/control/engine-sizes/${id}`, { method: 'DELETE' })
 }
 
 const sessionSchema = z.object({
@@ -346,6 +407,15 @@ export async function updateTenantClientApp(tenantId: string, payload: UpdateTen
   const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/client-app`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+  return tenantSchema.parse(record);
+}
+
+export async function updateTenantEngineSize(tenantId: string, payload: UpdateTenantEngineSizePayload) {
+  const body = JSON.stringify(payload);
+  const record = await requestJson<TenantRecord>(`/control/tenants/${tenantId}/engine-size`, {
+    method: 'PATCH',
+    body,
   });
   return tenantSchema.parse(record);
 }

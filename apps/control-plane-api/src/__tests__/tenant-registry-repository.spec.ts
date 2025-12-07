@@ -34,6 +34,8 @@ function buildTenantRow(overrides: Partial<TenantRow> = {}): TenantRow {
     }),
     branding_json: JSON.stringify({ primaryColor: '#111111' }),
     feature_flags_json: JSON.stringify({ analytics: true }),
+    engine_size_id: null,
+    engine_size_json: null,
     status: 'active',
     updated_at: '2024-01-01T00:00:00.000Z',
     updated_by: 'system',
@@ -94,6 +96,7 @@ describe('TenantRegistryRepository', () => {
 
   it('upserts tenant payloads and writes audit entries', async () => {
     const tenantUuid = '11111111-2222-4333-8444-555555555555';
+    const engineSizeId = 'aaaaaaaa-bbbb-4ccc-8ddd-ffffffffffff';
     const headlessUuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const input = {
       id: tenantUuid,
@@ -121,6 +124,14 @@ describe('TenantRegistryRepository', () => {
       },
       branding: { primaryColor: '#222' },
       featureFlags: { analytics: true },
+      engineSize: {
+        id: engineSizeId,
+        name: 'Dedicated S',
+        description: '1 vCPU / 4 GB RAM',
+        metadata: { tier: 'starter' },
+        createdAt: '2024-02-01T00:00:00.000Z',
+        updatedAt: '2024-02-01T00:00:00.000Z',
+      },
       status: 'active' as const,
     };
 
@@ -142,6 +153,9 @@ describe('TenantRegistryRepository', () => {
     expect(JSON.parse(auditLog[0].payload_json)).toMatchObject({ id: tenantUuid });
 
     expect(record.clientApp.landingPath).toBe('/home');
+    expect(storedRow.engine_size_id).toBe(engineSizeId);
+    expect(JSON.parse(storedRow.engine_size_json ?? 'null')).toMatchObject({ id: engineSizeId, name: 'Dedicated S', createdAt: '2024-02-01T00:00:00.000Z' });
+    expect(record.engineSize).toMatchObject({ id: engineSizeId, name: 'Dedicated S', createdAt: '2024-02-01T00:00:00.000Z' });
     expect(record.updatedBy).toBe('super-admin');
   });
 
