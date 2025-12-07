@@ -130,7 +130,7 @@ function App() {
     event.preventDefault()
     setCreateError(undefined)
 
-    const actorRoles = ['TENANT_ADMIN']
+    const actorRoles = [session.actor?.username ?? 'system']
     if (!form.name || !form.host || !form.supportEmail || !form.headlessBaseUrl || !form.clientBaseUrl) {
       setCreateError('Fill all required fields')
       return
