@@ -11,7 +11,7 @@ import {
 } from '../api/controlPlaneClient'
 import { useSession } from '../context/session-context'
 
-type TabKey = 'meta' | 'identity' | 'persistence'
+type TabKey = 'meta' | 'branding' | 'featureFlags' | 'identity' | 'persistence'
 type ProviderKey = 'google' | 'microsoft'
 
 type ProviderForm = {
@@ -486,6 +486,20 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
           </button>
           <button
             type="button"
+            className={activeTab === 'branding' ? 'tab-button active' : 'tab-button'}
+            onClick={() => setActiveTab('branding')}
+          >
+            Branding
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'featureFlags' ? 'tab-button active' : 'tab-button'}
+            onClick={() => setActiveTab('featureFlags')}
+          >
+            Feature Flags
+          </button>
+          <button
+            type="button"
             className={activeTab === 'identity' ? 'tab-button active' : 'tab-button'}
             onClick={() => setActiveTab('identity')}
           >
@@ -550,6 +564,42 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
                 </label>
               </div>
               <div className="form-card">
+                <h3>Client application</h3>
+                <label>
+                  Base URL
+                  <input value={clientForm.baseUrl} onChange={(e) => setClientForm({ ...clientForm, baseUrl: e.target.value })} required />
+                </label>
+                <label>
+                  Default landing path
+                  <input
+                    value={clientForm.landingPath}
+                    onChange={(e) => setClientForm({ ...clientForm, landingPath: e.target.value })}
+                    placeholder="/overview"
+                  />
+                </label>
+                {clientError && <div className="callout error">{clientError}</div>}
+                {clientSuccess && <div className="callout success">{clientSuccess}</div>}
+                <div className="actions">
+                  <button type="submit" className="primary" disabled={clientSaving || loading}>
+                    {clientSaving ? 'Saving…' : 'Save client app'}
+                  </button>
+                </div>
+              </div>
+              {metaError && <div className="callout error">{metaError}</div>}
+              {metaSuccess && <div className="callout success">{metaSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={metaSaving || loading}>
+                  {metaSaving ? 'Saving…' : 'Save meta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'branding' && (
+          <div className="tab-panel">
+            <form className="form-stack" onSubmit={handleMetaSave}>
+              <div className="form-card">
                 <h3>Branding</h3>
                 <div className="form-grid">
                   <label>
@@ -591,6 +641,20 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
                   </label>
                 </div>
               </div>
+              {metaError && <div className="callout error">{metaError}</div>}
+              {metaSuccess && <div className="callout success">{metaSuccess}</div>}
+              <div className="actions">
+                <button type="submit" className="primary" disabled={metaSaving || loading}>
+                  {metaSaving ? 'Saving…' : 'Save branding'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'featureFlags' && (
+          <div className="tab-panel">
+            <form className="form-stack" onSubmit={handleMetaSave}>
               <div className="form-card">
                 <h3>Feature flags</h3>
                 {Object.keys(metaForm.featureFlags ?? {}).length === 0 ? (
@@ -609,7 +673,7 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
               {metaSuccess && <div className="callout success">{metaSuccess}</div>}
               <div className="actions">
                 <button type="submit" className="primary" disabled={metaSaving || loading}>
-                  {metaSaving ? 'Saving…' : 'Save meta'}
+                  {metaSaving ? 'Saving…' : 'Save feature flags'}
                 </button>
               </div>
             </form>
@@ -821,29 +885,6 @@ export default function TenantSettings({ tenantId, tenant, onBack }: TenantSetti
               <div className="actions">
                 <button type="submit" className="primary" disabled={headlessSaving || loading}>
                   {headlessSaving ? 'Saving…' : 'Save API access'}
-                </button>
-              </div>
-            </form>
-
-            <form className="form-card" onSubmit={handleClientSave}>
-              <h3>Client application</h3>
-              <label>
-                Base URL
-                <input value={clientForm.baseUrl} onChange={(e) => setClientForm({ ...clientForm, baseUrl: e.target.value })} required />
-              </label>
-              <label>
-                Default landing path
-                <input
-                  value={clientForm.landingPath}
-                  onChange={(e) => setClientForm({ ...clientForm, landingPath: e.target.value })}
-                  placeholder="/overview"
-                />
-              </label>
-              {clientError && <div className="callout error">{clientError}</div>}
-              {clientSuccess && <div className="callout success">{clientSuccess}</div>}
-              <div className="actions">
-                <button type="submit" className="primary" disabled={clientSaving || loading}>
-                  {clientSaving ? 'Saving…' : 'Save client app'}
                 </button>
               </div>
             </form>
