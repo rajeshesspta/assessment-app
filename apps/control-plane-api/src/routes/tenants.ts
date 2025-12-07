@@ -9,7 +9,7 @@ const tenantIdParamsSchema = z.object({
 });
 
 const actorHeaderSchema = z.object({
-  actor: z.string().min(1).default('super-admin'),
+  actor: z.string().min(1).optional(),
 });
 
 function sanitizeRecord(record: TenantRecord | undefined) {
@@ -71,7 +71,7 @@ export async function registerTenantRoutes(app: FastifyInstance, repo: TenantReg
     }
 
     const actorHeader = actorHeaderSchema.safeParse({ actor: request.headers['x-control-plane-actor'] });
-    const actor = actorHeader.success ? actorHeader.data.actor : 'unknown';
+    const actor = actorHeader.success && actorHeader.data.actor ? actorHeader.data.actor : 'unknown';
     if (actor !== 'super-admin') {
       reply.code(403);
       return { error: 'Forbidden: only super-admin may manage tenant identity providers' };

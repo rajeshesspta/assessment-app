@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import TenantSettings from './pages/TenantSettings'
 import './App.css'
 import { controlPlaneApiBaseUrl } from './config'
 import { useTenants } from './hooks/useTenants'
