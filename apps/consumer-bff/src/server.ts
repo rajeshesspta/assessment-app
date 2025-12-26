@@ -520,6 +520,39 @@ app.get('/api/attempts/:id', async (request, reply) => {
   }
 });
 
+app.get('/api/items', async (request, reply) => {
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  const query = request.query as Record<string, string>;
+  const searchParams = new URLSearchParams(query);
+  try {
+    return await callHeadless(tenant, `/items?${searchParams.toString()}`, undefined, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.post('/api/items', async (request, reply) => {
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/items', {
+      method: 'POST',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
 if (!isTestEnv) {
   app
     .listen({ port: env.PORT, host: env.HOST })

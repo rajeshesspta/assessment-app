@@ -154,4 +154,39 @@ describe('server routes', () => {
     const sessionCookie = cookies.find(c => c.name === 'consumer_portal_session');
     expect(sessionCookie?.value).toBe('');
   });
+
+  it('forwards item bank requests to headless API', async () => {
+    const tenant = createTenantConfig({ hosts: ['tenant.test'] });
+    app = await setupServer([tenant]);
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify([{ id: 'item-1', prompt: 'Test Item' }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/items',
+      query: { kind: 'MCQ' },
+      headers: {
+        host: 'tenant.test',
+        'x-actor-roles': 'CONTENT_AUTHOR',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([{ id: 'item-1', prompt: 'Test Item' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [urlArg, initArg] = fetchMock.mock.calls[0];
+    expect(String(urlArg)).toContain('/items?kind=MCQ');
+    expect(initArg?.headers).toMatchObject({
+      'x-api-key': tenant.headless.apiKey,
+      'x-tenant-id': tenant.headless.tenantId,
+      'x-actor-roles': 'CONTENT_AUTHOR',
+    });
+  });
 });
