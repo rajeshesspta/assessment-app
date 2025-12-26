@@ -106,8 +106,8 @@ Platform Implementation Checklist
 - [x] Keep `assessments.allowedAttempts` + assignment targets (cohort IDs or learner IDs) in sync with repositories + migrations.
 
 **Cohorts & Assignment Flow**
-- [ ] Create/manage cohort APIs (name, description, learner IDs, tenantId).
-- [ ] Assignment endpoints that attach assessments to cohorts or individuals and hydrate learner attempt quotas.
+- [x] Create/manage cohort APIs (name, description, learner IDs, tenantId).
+- [x] Assignment endpoints that attach assessments to cohorts or individuals and hydrate learner attempt quotas.
 
 **Attempts & Learner Scope**
 - [x] Attempt creation enforces learner role + cohort membership + allowedAttempts (landed in attempts module).
@@ -299,23 +299,31 @@ Assessment Module Iteration Checklist
 
 **Iteration 14: Generic Grouping & Metadata**
 - Goal: Enable domain-agnostic organization of assessments using collections, tags, and metadata.
-- [ ] Schema: Add `collection_id`, `tags_json`, and `metadata_json` to the `assessments` table.
-- [ ] Types: Update `Assessment` interface in `src/common/types.ts`.
-- [ ] Repository: Update `AssessmentRepository` to persist and retrieve new fields.
-- [ ] UI: Update `CreateAssessmentModal` to include fields for Collection ID and Tags.
-- [ ] UI: Update `AssessmentsPage` to display and filter by Collection/Tags.
+- [x] Schema: Add `collection_id`, `tags_json`, and `metadata_json` to the `assessments` table.
+- [x] Types: Update `Assessment` interface in `src/common/types.ts`.
+- [x] Repository: Update `AssessmentRepository` to persist and retrieve new fields.
+- [x] UI: Update `CreateAssessmentModal` to include fields for Collection ID and Tags.
+- [x] UI: Update `AssessmentsPage` to display and filter by Collection/Tags.
 
 **Iteration 15: Learner Management & Individual Assignments**
 - Goal: Provide a dedicated interface for managing learners and assigning assessments directly to individuals.
-- [ ] UI: Create `LearnersPage` to list all users with the `LEARNER` role.
-- [ ] BFF: Add proxy routes for `GET /api/users` and `POST /api/cohorts/assignments/users/:userId`.
-- [ ] UI: Implement "Assign Assessment" modal for individual learners.
-- [ ] UI: View active assignments and attempt status per learner.
+- [x] UI: Create `LearnersPage` to list all users with the `LEARNER` role.
+- [x] BFF: Add proxy routes for `GET /api/users` and `POST /api/cohorts/assignments/users/:userId`.
+- [x] UI: Implement "Assign Assessment" modal for individual learners.
+- [x] UI: View active assignments and attempt status per learner.
 
 **Iteration 16: Rater/Reviewer Experience**
 - Goal: Enable human review and scoring for subjective items (Essays, Scenario Tasks).
 - [ ] UI: Create "Review Queue" for Raters to see pending evaluations.
 - [ ] UI: Implement scoring interface with rubric-based grading.
 - [ ] BFF: Add proxy routes for evaluation submission.
+
+**Iteration 17: Basic User Management**
+- Goal: Enable Tenant Admins to manage the lifecycle of users within their tenant.
+- [x] Headless: Implement lean User CRUD (`/users`) with `tenantId` as partition key.
+- [x] Headless: Enforce `TENANT_USER_ROLES` validation and email uniqueness per tenant.
+- [x] BFF: Implement "Custom Login" persistence and session management.
+- [x] UI: Create User Management dashboard for Tenant Admins to manage roles and access.
+- [x] UI: Implement user creation, editing, and deactivation flows.
 
 

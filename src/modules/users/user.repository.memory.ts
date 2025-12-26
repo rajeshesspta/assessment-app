@@ -36,5 +36,13 @@ export function createInMemoryUserRepository(): UserRepository {
         .filter(user => user.tenantId === tenantId && (!role || user.roles.includes(role)))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
+    delete(tenantId, id) {
+      const key = keyOf(tenantId, id);
+      const user = store.get(key);
+      if (user) {
+        emailIndex.delete(emailKeyOf(tenantId, user.email));
+        store.delete(key);
+      }
+    },
   };
 }

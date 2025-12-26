@@ -98,5 +98,9 @@ export function createSQLiteUserRepository(client: SQLiteTenantClient): UserRepo
       const users = rows.map(mapRow).filter((user): user is User => Boolean(user));
       return role ? users.filter(user => user.roles.includes(role)) : users;
     },
+    delete(tenantId, id) {
+      const db = client.getConnection(tenantId);
+      db.prepare('DELETE FROM users WHERE tenant_id = ? AND id = ?').run(tenantId, id);
+    },
   };
 }

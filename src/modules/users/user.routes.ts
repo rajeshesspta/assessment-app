@@ -25,6 +25,12 @@ const legacyBodySchema = z.object({
 
 const createSchema = z.union([createBodySchema, legacyBodySchema]);
 
+const updateBodySchema = z.object({
+  displayName: z.string().min(1).max(120).optional(),
+  roles: z.array(z.enum(TENANT_USER_ROLES)).nonempty().optional(),
+  status: z.enum(allowedStatuses).optional(),
+});
+
 type CreateUserPayload = z.infer<typeof createSchema>;
 
 function extractRoles(payload: CreateUserPayload): TenantUserRole[] {
@@ -35,6 +41,7 @@ function extractRoles(payload: CreateUserPayload): TenantUserRole[] {
 }
 
 const createUserBodySchema = toJsonSchema(createBodySchema, 'CreateUserRequest');
+const updateUserBodySchema = toJsonSchema(updateBodySchema, 'UpdateUserRequest');
 const listRolesResponseSchema = toJsonSchema(
   z.object({
     roles: z.array(z.enum(TENANT_USER_ROLES)),
@@ -115,5 +122,79 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     repository.save(user);
     reply.code(201);
     return user;
+  });
+
+  app.get('/', {
+    schema: {
+      tags: ['Users'],
+      summary: 'List users in the tenant',
+    },
+  }, async (req, reply) => {
+    if (forbidSuperAdmin(req, reply)) return;
+    if (!ensureTenantScope(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const role = (req.query as any).role as TenantUserRole | undefined;
+    return repository.listByRole(tenantId, role);
+  });
+
+  app.get('/:id', {
+    schema: {
+      tags: ['Users'],
+      summary: 'Get user by ID',
+    },
+  }, async (req, reply) => {
+    if (forbidSuperAdmin(req, reply)) return;
+    if (!ensureTenantScope(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const { id } = req.params as { id: string };
+    const user = repository.getById(tenantId, id);
+    if (!user) {
+      reply.code(404);
+      return { error: 'User not found' };
+    }
+    return user;
+  });
+
+  app.put('/:id', {
+    schema: {
+      tags: ['Users'],
+      summary: 'Update user',
+      body: updateUserBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
+    if (forbidSuperAdmin(req, reply)) return;
+    if (!ensureTenantScope(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const { id } = req.params as { id: string };
+    const existing = repository.getById(tenantId, id);
+    if (!existing) {
+      reply.code(404);
+      return { error: 'User not found' };
+    }
+    const parsed = updateBodySchema.parse(req.body);
+    const updated: any = {
+      ...existing,
+      ...parsed,
+      updatedAt: new Date().toISOString(),
+    };
+    repository.save(updated);
+    return updated;
+  });
+
+  app.delete('/:id', {
+    schema: {
+      tags: ['Users'],
+      summary: 'Delete user',
+    },
+  }, async (req, reply) => {
+    if (forbidSuperAdmin(req, reply)) return;
+    if (!ensureTenantScope(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const { id } = req.params as { id: string };
+    repository.delete(tenantId, id);
+    reply.code(204);
+    return;
   });
 }

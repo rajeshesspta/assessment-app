@@ -5,6 +5,7 @@ export interface UserRepository {
   getById(tenantId: string, id: string): User | undefined;
   getByEmail(tenantId: string, email: string): User | undefined;
   listByRole(tenantId: string, role?: UserRole): User[];
+  delete(tenantId: string, id: string): void;
 }
 
 export { createInMemoryUserRepository } from './user.repository.memory.js';
