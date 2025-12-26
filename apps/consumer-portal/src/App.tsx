@@ -9,6 +9,7 @@ import { ItemBankPage } from './components/ItemBankPage';
 import { AssessmentsPage } from './components/AssessmentsPage';
 import { LearnersPage } from './components/LearnersPage';
 import { CohortsPage } from './components/CohortsPage';
+import { UsersPage } from './components/UsersPage';
 import { AssessmentPlayer } from './components/AssessmentPlayer';
 import { AttemptResult } from './components/AttemptResult';
 import { useTenantSession } from './hooks/useTenantSession';
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'item-bank', label: 'Item Bank', path: '/item-bank', requiresContentAuthor: true },
   { id: 'learners', label: 'Learners', path: '/learners', requiresContentAuthor: true },
   { id: 'cohorts', label: 'Cohorts', path: '/cohorts', requiresContentAuthor: true },
+  { id: 'users', label: 'Users', path: '/users', requiresTenantAdmin: true },
   { id: 'overview', label: 'Overview', path: '/overview' },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
   { id: 'resources', label: 'Resources', path: '/resources' },
@@ -494,6 +496,10 @@ export default function App() {
             <Route
               path="/cohorts"
               element={(isContentAuthor || isTenantAdmin) ? <CohortsPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
+            />
+            <Route
+              path="/users"
+              element={isTenantAdmin ? <UsersPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/resources" element={<ResourcesPage />} />

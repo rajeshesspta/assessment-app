@@ -73,8 +73,9 @@ export interface Assessment {
 export interface User {
   id: string;
   email: string;
-  name: string;
+  displayName?: string;
   roles: string[];
+  status: string;
   createdAt: string;
 }
 
@@ -214,6 +215,26 @@ export function createApiClient(session: TenantSession) {
     },
     async fetchUsers(): Promise<User[]> {
       return request<User[]>('/users');
+    },
+    async createUser(user: Partial<User>): Promise<User> {
+      return request<User>('/users', {
+        method: 'POST',
+        body: JSON.stringify(user),
+      });
+    },
+    async updateUser(id: string, user: Partial<User>): Promise<User> {
+      return request<User>(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(user),
+      });
+    },
+    async deleteUser(id: string): Promise<void> {
+      return request<void>(`/users/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    async fetchUserRoles(): Promise<{ roles: string[] }> {
+      return request<{ roles: string[] }>('/users/roles');
     },
     async assignToUser(userId: string, assignment: { assessmentId: string; allowedAttempts?: number; dueDate?: string }): Promise<any> {
       return request(`/cohorts/assignments/users/${userId}`, {

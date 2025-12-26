@@ -118,8 +118,8 @@ export function CohortsPage({ api, brandPrimary }: CohortsPageProps) {
                   {cohort.learnerIds.slice(0, 5).map((id) => {
                     const user = users.find(u => u.id === id);
                     return (
-                      <div key={id} className="inline-block h-8 w-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600" title={user?.name || id}>
-                        {user?.name?.[0] || '?'}
+                      <div key={id} className="inline-block h-8 w-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600" title={user?.displayName || id}>
+                        {user?.displayName?.[0] || '?'}
                       </div>
                     );
                   })}
@@ -171,7 +171,7 @@ function CohortModal({ isOpen, onClose, cohort, users, api, onSaved, brandPrimar
   const [userSearch, setUserSearch] = useState('');
 
   const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
+    (u.displayName?.toLowerCase() || '').includes(userSearch.toLowerCase()) || 
     u.email.toLowerCase().includes(userSearch.toLowerCase())
   );
 
@@ -273,7 +273,7 @@ function CohortModal({ isOpen, onClose, cohort, users, api, onSaved, brandPrimar
                         <User className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                        <p className="text-sm font-semibold text-slate-900">{user.displayName || 'Unknown User'}</p>
                         <p className="text-xs text-slate-500">{user.email}</p>
                       </div>
                     </div>

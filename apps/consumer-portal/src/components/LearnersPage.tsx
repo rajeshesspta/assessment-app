@@ -41,7 +41,7 @@ export function LearnersPage({ api, brandPrimary }: LearnersPageProps) {
 
   const learners = users.filter(u => 
     u.roles.includes('LEARNER') && 
-    (u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
+    ((u.displayName?.toLowerCase() || '').includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
   );
 
   if (loading) {
@@ -102,7 +102,7 @@ export function LearnersPage({ api, brandPrimary }: LearnersPageProps) {
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-600" style={{ backgroundColor: `${brandPrimary}15`, color: brandPrimary }}>
                         <User className="h-4 w-4" />
                       </div>
-                      <div className="font-medium text-slate-900">{user.name}</div>
+                      <div className="font-medium text-slate-900">{user.displayName || 'Unknown Learner'}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
