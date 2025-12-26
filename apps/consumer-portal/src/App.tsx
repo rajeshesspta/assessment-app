@@ -141,10 +141,6 @@ export default function App() {
     }
   }, [user, session, saveSession]);
 
-  const canSendInvite = inviteForm.name.trim().length > 0
-    && inviteForm.email.trim().length > 0
-    && inviteForm.email.includes('@');
-
   const ensureApi = useCallback(() => {
     if (!api) {
       throw new Error('Configure tenant session first.');
