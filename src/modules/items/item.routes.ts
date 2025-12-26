@@ -460,6 +460,10 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         reply.code(400);
         return { error: 'Target ids must be unique' };
       }
+      if (parsed.targets.length < parsed.prompts.length) {
+        reply.code(400);
+        return { error: 'Targets must include at least as many entries as prompts' };
+      }
       const invalidReference = parsed.prompts.find(prompt => !targetIds.has(prompt.correctTargetId));
       if (invalidReference) {
         reply.code(400);

@@ -271,6 +271,67 @@ describe('itemRoutes', () => {
     expect(saveMock).not.toHaveBeenCalled();
   });
 
+  it('creates a matching item with prompts and distractor targets', async () => {
+    uuidMock.mockReturnValueOnce('matching-item-id').mockReturnValueOnce('event-id-match');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'MATCHING',
+        prompt: 'Match the author to their book',
+        prompts: [
+          { id: 'p-1', text: 'Orwell', correctTargetId: 't-1' },
+          { id: 'p-2', text: 'Austen', correctTargetId: 't-2' },
+        ],
+        targets: [
+          { id: 't-1', text: '1984' },
+          { id: 't-2', text: 'Pride and Prejudice' },
+          { id: 't-3', text: 'Moby Dick' },
+        ],
+        scoring: { mode: 'partial' },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: 'matching-item-id',
+      kind: 'MATCHING',
+      prompts: [
+        { id: 'p-1', text: 'Orwell', correctTargetId: 't-1' },
+        { id: 'p-2', text: 'Austen', correctTargetId: 't-2' },
+      ],
+      targets: [
+        { id: 't-1', text: '1984' },
+        { id: 't-2', text: 'Pride and Prejudice' },
+        { id: 't-3', text: 'Moby Dick' },
+      ],
+      scoring: { mode: 'partial' },
+    });
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'MATCHING', id: 'matching-item-id' }));
+    expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({ payload: { itemId: 'matching-item-id' } }));
+  });
+
+  it('rejects matching payloads when there are fewer targets than prompts', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/items',
+      payload: {
+        kind: 'MATCHING',
+        prompt: 'Match items',
+        prompts: [
+          { id: 'p-1', text: 'One', correctTargetId: 't-1' },
+          { id: 'p-2', text: 'Two', correctTargetId: 't-2' },
+        ],
+        targets: [{ id: 't-1', text: 'Alpha' }],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Targets must include at least as many entries as prompts' });
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
   it('creates an ordering item with validation', async () => {
     uuidMock.mockReturnValueOnce('ordering-item-id').mockReturnValueOnce('event-id-4');
 

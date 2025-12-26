@@ -16,6 +16,7 @@ import type {
   ScenarioScoringRule,
   ScenarioWorkspaceTemplate,
 } from '../../common/types.js';
+import { scoreMatchingItem, scoreOrderingItem } from '../scoring/scoring.service.js';
 import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
@@ -353,61 +354,15 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
         continue;
       }
       if (item.kind === 'MATCHING') {
-        const prompts = item.prompts ?? [];
-        if (item.scoring.mode === 'partial') {
-          maxScore += prompts.length;
-        } else {
-          maxScore += 1;
-        }
-        const provided = response?.matchingAnswers ?? [];
-        const correctByPrompt = new Map(prompts.map(prompt => [prompt.id, prompt.correctTargetId] as const));
-        const matches = provided.reduce((total, pair) => {
-          const expected = correctByPrompt.get(pair.promptId);
-          return expected && expected === pair.targetId ? total + 1 : total;
-        }, 0);
-        if (item.scoring.mode === 'partial') {
-          score += matches;
-        } else if (matches === prompts.length && prompts.length > 0) {
-          score += 1;
-        }
+        const matchingResult = scoreMatchingItem(item, response?.matchingAnswers);
+        maxScore += matchingResult.maxScore;
+        score += matchingResult.score;
         continue;
       }
       if (item.kind === 'ORDERING') {
-        const totalPairs = item.correctOrder.length * (item.correctOrder.length - 1) / 2;
-        if (item.scoring.mode === 'partial_pairs') {
-          maxScore += totalPairs;
-        } else {
-          maxScore += 1;
-        }
-        if (item.scoring.customEvaluatorId) {
-          continue;
-        }
-        const provided = response?.orderingAnswer ?? [];
-        if (item.scoring.mode === 'all') {
-          const isCorrect = provided.length === item.correctOrder.length
-            && item.correctOrder.every((value, index) => value === provided[index]);
-          if (isCorrect && item.correctOrder.length > 0) {
-            score += 1;
-          }
-          continue;
-        }
-        const providedIndex = new Map(provided.map((optionId, index) => [optionId, index] as const));
-        let correctPairs = 0;
-        for (let i = 0; i < item.correctOrder.length; i += 1) {
-          for (let j = i + 1; j < item.correctOrder.length; j += 1) {
-            const first = item.correctOrder[i];
-            const second = item.correctOrder[j];
-            const posFirst = providedIndex.get(first);
-            const posSecond = providedIndex.get(second);
-            if (posFirst === undefined || posSecond === undefined) {
-              continue;
-            }
-            if (posFirst < posSecond) {
-              correctPairs += 1;
-            }
-          }
-        }
-        score += correctPairs;
+        const orderingResult = scoreOrderingItem(item, response?.orderingAnswer);
+        maxScore += orderingResult.maxScore;
+        score += orderingResult.score;
         continue;
       }
       if (item.kind === 'SHORT_ANSWER') {
