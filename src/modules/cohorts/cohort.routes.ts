@@ -307,4 +307,11 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     const saved = repository.save(personalCohort);
     return saved;
   });
+
+  app.get('/learner/:userId', async (req, reply) => {
+    if (!ensureCohortManager(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const userId = (req.params as any).userId as string;
+    return repository.listByLearner(tenantId, userId);
+  });
 }

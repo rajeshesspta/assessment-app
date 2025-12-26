@@ -250,6 +250,9 @@ export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | Sh
 export interface Assessment extends BaseEntity {
 	title: string;
 	description?: string;
+	collectionId?: string;
+	tags?: string[];
+	metadata?: Record<string, any>;
 	itemIds: string[];
 	allowedAttempts: number;
 	timeLimitMinutes?: number;

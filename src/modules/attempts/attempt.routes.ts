@@ -465,4 +465,11 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     if (!attempt) { reply.code(404); return { error: 'Not found' }; }
     return attempt;
   });
+
+  app.get('/user/:userId', async (req, reply) => {
+    if (!ensureAttemptAccess(req, reply)) return;
+    const userId = (req.params as any).userId as string;
+    const tenantId = (req as any).tenantId as string;
+    return attemptRepository.listByUser(tenantId, userId);
+  });
 }

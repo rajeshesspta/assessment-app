@@ -28,6 +28,9 @@ function ensureAssessmentManager(request: any, reply: FastifyReply): boolean {
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
+  collectionId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
   itemIds: z.array(z.string()).min(1),
   allowedAttempts: z.number().int().min(1).max(100).optional(),
   timeLimitMinutes: z.number().int().min(1).optional(),

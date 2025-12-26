@@ -7,6 +7,7 @@ import { AttemptList } from './components/AttemptList';
 import { LoadingState } from './components/LoadingState';
 import { ItemBankPage } from './components/ItemBankPage';
 import { AssessmentsPage } from './components/AssessmentsPage';
+import { LearnersPage } from './components/LearnersPage';
 import { AssessmentPlayer } from './components/AssessmentPlayer';
 import { AttemptResult } from './components/AttemptResult';
 import { useTenantSession } from './hooks/useTenantSession';
@@ -29,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'my-assessments', label: 'My Assessments', path: '/my-assessments' },
   { id: 'manage-assessments', label: 'Assessments', path: '/manage-assessments', requiresContentAuthor: true },
   { id: 'item-bank', label: 'Item Bank', path: '/item-bank', requiresContentAuthor: true },
+  { id: 'learners', label: 'Learners', path: '/learners', requiresContentAuthor: true },
   { id: 'overview', label: 'Overview', path: '/overview' },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
   { id: 'manage-learners', label: 'Manage Learners', path: '/manage-learners', requiresTenantAdmin: true },
@@ -654,6 +656,10 @@ export default function App() {
             <Route
               path="/manage-assessments"
               element={(isContentAuthor || isTenantAdmin) ? <AssessmentsPage api={api} brandPrimary={brandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
+            />
+            <Route
+              path="/learners"
+              element={(isContentAuthor || isTenantAdmin) ? <LearnersPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route

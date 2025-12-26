@@ -14,6 +14,8 @@ interface CreateAssessmentModalProps {
 export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessment, api, brandPrimary }: CreateAssessmentModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [collectionId, setCollectionId] = useState('');
+  const [tags, setTags] = useState('');
   const [allowedAttempts, setAllowedAttempts] = useState(1);
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>(undefined);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -28,12 +30,16 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
       if (initialAssessment) {
         setTitle(initialAssessment.title);
         setDescription(initialAssessment.description || '');
+        setCollectionId(initialAssessment.collectionId || '');
+        setTags(initialAssessment.tags?.join(', ') || '');
         setAllowedAttempts(initialAssessment.allowedAttempts);
         setTimeLimitMinutes(initialAssessment.timeLimitMinutes);
         setSelectedItemIds(initialAssessment.itemIds);
       } else {
         setTitle('');
         setDescription('');
+        setCollectionId('');
+        setTags('');
         setAllowedAttempts(1);
         setTimeLimitMinutes(undefined);
         setSelectedItemIds([]);
@@ -73,6 +79,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
       await onSave({
         title,
         description,
+        collectionId: collectionId || undefined,
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         allowedAttempts: isNaN(allowedAttempts) ? 1 : allowedAttempts,
         timeLimitMinutes: timeLimitMinutes && isNaN(timeLimitMinutes) ? undefined : timeLimitMinutes,
         itemIds: selectedItemIds,
@@ -81,6 +89,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
       // Reset form
       setTitle('');
       setDescription('');
+      setCollectionId('');
+      setTags('');
       setAllowedAttempts(1);
       setTimeLimitMinutes(undefined);
       setSelectedItemIds([]);
@@ -138,6 +148,29 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">Collection ID</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                      placeholder="e.g., course-101"
+                      value={collectionId}
+                      onChange={e => setCollectionId(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">Tags</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                      placeholder="math, quiz, hard"
+                      value={tags}
+                      onChange={e => setTags(e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

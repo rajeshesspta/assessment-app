@@ -600,6 +600,38 @@ app.put('/api/assessments/:id', async (request, reply) => {
   }
 });
 
+app.get('/api/users', async (request, reply) => {
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/users', undefined, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.post('/api/cohorts/assignments/users/:userId', async (request, reply) => {
+  const { userId } = request.params as { userId: string };
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/cohorts/assignments/users/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
 app.get('/api/cohorts', async (request, reply) => {
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
   const tenant = request.tenant;
@@ -613,7 +645,35 @@ app.get('/api/cohorts', async (request, reply) => {
     throw error;
   }
 });
+app.get('/api/cohorts/learner/:userId', async (request, reply) => {
+  const { userId } = request.params as { userId: string };
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/cohorts/learner/${userId}`, undefined, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
 
+app.get('/api/attempts/user/:userId', async (request, reply) => {
+  const { userId } = request.params as { userId: string };
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/attempts/user/${userId}`, undefined, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
 app.post('/api/cohorts/:id/assessments', async (request, reply) => {
   const id = (request.params as { id: string }).id;
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();

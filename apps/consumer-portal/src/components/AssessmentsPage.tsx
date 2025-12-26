@@ -19,6 +19,7 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
+  const [selectedCollection, setSelectedCollection] = useState<string>('all');
 
   const loadAssessments = async () => {
     setLoading(true);
@@ -46,10 +47,17 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
     await loadAssessments();
   };
 
-  const filteredAssessments = assessments.filter(a => 
-    a.title.toLowerCase().includes(search.toLowerCase()) || 
-    a.description?.toLowerCase().includes(search.toLowerCase())
-  );
+  const collections = Array.from(new Set(assessments.map(a => a.collectionId).filter(Boolean))) as string[];
+
+  const filteredAssessments = assessments.filter(a => {
+    const matchesSearch = a.title.toLowerCase().includes(search.toLowerCase()) || 
+      a.description?.toLowerCase().includes(search.toLowerCase()) ||
+      a.tags?.some(t => t.toLowerCase().includes(search.toLowerCase()));
+    
+    const matchesCollection = selectedCollection === 'all' || a.collectionId === selectedCollection;
+    
+    return matchesSearch && matchesCollection;
+  });
 
   if (loading) {
     return <LoadingState label="Loading assessments..." />;
@@ -104,12 +112,24 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search assessments..."
+            placeholder="Search assessments or tags..."
             className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+        {collections.length > 0 && (
+          <select
+            value={selectedCollection}
+            onChange={e => setSelectedCollection(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+          >
+            <option value="all">All Collections</option>
+            {collections.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {error && (
@@ -140,7 +160,16 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
                 </div>
                 <div>
                   <p className="font-medium text-slate-900">{assessment.title}</p>
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                  {assessment.tags && assessment.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {assessment.tags.map(tag => (
+                        <span key={tag} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-medium uppercase tracking-wider">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                     <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       <span>{assessment.timeLimitMinutes ? `${assessment.timeLimitMinutes}m` : 'No limit'}</span>

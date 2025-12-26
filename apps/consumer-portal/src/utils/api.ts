@@ -60,11 +60,22 @@ export interface Assessment {
   tenantId: string;
   title: string;
   description?: string;
+  collectionId?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
   itemIds: string[];
   allowedAttempts: number;
   timeLimitMinutes?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  roles: string[];
+  createdAt: string;
 }
 
 export interface Cohort {
@@ -182,6 +193,21 @@ export function createApiClient(session: TenantSession) {
     },
     async fetchCohorts(): Promise<Cohort[]> {
       return request<Cohort[]>('/cohorts');
+    },
+    async fetchLearnerCohorts(userId: string): Promise<Cohort[]> {
+      return request<Cohort[]>(`/cohorts/learner/${userId}`);
+    },
+    async fetchUserAttempts(userId: string): Promise<AttemptResponse[]> {
+      return request<AttemptResponse[]>(`/attempts/user/${userId}`);
+    },
+    async fetchUsers(): Promise<User[]> {
+      return request<User[]>('/users');
+    },
+    async assignToUser(userId: string, assignment: { assessmentId: string; allowedAttempts?: number; dueDate?: string }): Promise<any> {
+      return request(`/cohorts/assignments/users/${userId}`, {
+        method: 'POST',
+        body: JSON.stringify(assignment),
+      });
     },
     async assignAssessmentToCohort(cohortId: string, assessmentId: string, options?: { allowedAttempts?: number }): Promise<Cohort> {
       return request<Cohort>(`/cohorts/${cohortId}/assessments`, {

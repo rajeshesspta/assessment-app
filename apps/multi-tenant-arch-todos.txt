@@ -297,4 +297,25 @@ Assessment Module Iteration Checklist
 - [x] UI: View active assignments per cohort in the Assessments dashboard.
 - [x] BFF: Update `POST /cohorts/:id/assignments` to handle overrides.
 
+**Iteration 14: Generic Grouping & Metadata**
+- Goal: Enable domain-agnostic organization of assessments using collections, tags, and metadata.
+- [ ] Schema: Add `collection_id`, `tags_json`, and `metadata_json` to the `assessments` table.
+- [ ] Types: Update `Assessment` interface in `src/common/types.ts`.
+- [ ] Repository: Update `AssessmentRepository` to persist and retrieve new fields.
+- [ ] UI: Update `CreateAssessmentModal` to include fields for Collection ID and Tags.
+- [ ] UI: Update `AssessmentsPage` to display and filter by Collection/Tags.
+
+**Iteration 15: Learner Management & Individual Assignments**
+- Goal: Provide a dedicated interface for managing learners and assigning assessments directly to individuals.
+- [ ] UI: Create `LearnersPage` to list all users with the `LEARNER` role.
+- [ ] BFF: Add proxy routes for `GET /api/users` and `POST /api/cohorts/assignments/users/:userId`.
+- [ ] UI: Implement "Assign Assessment" modal for individual learners.
+- [ ] UI: View active assignments and attempt status per learner.
+
+**Iteration 16: Rater/Reviewer Experience**
+- Goal: Enable human review and scoring for subjective items (Essays, Scenario Tasks).
+- [ ] UI: Create "Review Queue" for Raters to see pending evaluations.
+- [ ] UI: Implement scoring interface with rubric-based grading.
+- [ ] BFF: Add proxy routes for evaluation submission.
+
 
