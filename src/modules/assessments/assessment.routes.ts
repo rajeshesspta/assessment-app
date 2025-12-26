@@ -29,7 +29,7 @@ const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   itemIds: z.array(z.string()).min(1),
-  allowedAttempts: z.number().int().min(1).max(10).optional(),
+  allowedAttempts: z.number().int().min(1).max(100).optional(),
   timeLimitMinutes: z.number().int().min(1).optional(),
 });
 

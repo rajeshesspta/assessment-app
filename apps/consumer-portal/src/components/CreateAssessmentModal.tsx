@@ -73,8 +73,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
       await onSave({
         title,
         description,
-        allowedAttempts,
-        timeLimitMinutes,
+        allowedAttempts: isNaN(allowedAttempts) ? 1 : allowedAttempts,
+        timeLimitMinutes: timeLimitMinutes && isNaN(timeLimitMinutes) ? undefined : timeLimitMinutes,
         itemIds: selectedItemIds,
       });
       onClose();
@@ -149,6 +149,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                     <input
                       type="number"
                       min={1}
+                      max={100}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
                       value={allowedAttempts}
                       onChange={e => setAllowedAttempts(parseInt(e.target.value))}
@@ -161,7 +162,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                     </label>
                     <input
                       type="number"
-                      min={0}
+                      min={1}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
                       placeholder="No limit"
                       value={timeLimitMinutes || ''}
@@ -218,7 +219,9 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
               className="rounded-xl bg-brand-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-200 transition hover:bg-brand-600 disabled:opacity-50"
               style={{ backgroundColor: brandPrimary }}
             >
-              {isSubmitting ? 'Creating...' : 'Create Assessment'}
+              {isSubmitting 
+                ? (initialAssessment ? 'Updating...' : 'Creating...') 
+                : (initialAssessment ? 'Update Assessment' : 'Create Assessment')}
             </button>
           </div>
         </form>
