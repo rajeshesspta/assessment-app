@@ -8,6 +8,7 @@ import { LoadingState } from './components/LoadingState';
 import { ItemBankPage } from './components/ItemBankPage';
 import { AssessmentsPage } from './components/AssessmentsPage';
 import { LearnersPage } from './components/LearnersPage';
+import { CohortsPage } from './components/CohortsPage';
 import { AssessmentPlayer } from './components/AssessmentPlayer';
 import { AttemptResult } from './components/AttemptResult';
 import { useTenantSession } from './hooks/useTenantSession';
@@ -31,9 +32,9 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'manage-assessments', label: 'Assessments', path: '/manage-assessments', requiresContentAuthor: true },
   { id: 'item-bank', label: 'Item Bank', path: '/item-bank', requiresContentAuthor: true },
   { id: 'learners', label: 'Learners', path: '/learners', requiresContentAuthor: true },
+  { id: 'cohorts', label: 'Cohorts', path: '/cohorts', requiresContentAuthor: true },
   { id: 'overview', label: 'Overview', path: '/overview' },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
-  { id: 'manage-learners', label: 'Manage Learners', path: '/manage-learners', requiresTenantAdmin: true },
   { id: 'resources', label: 'Resources', path: '/resources' },
 ];
 
@@ -54,16 +55,6 @@ function withAlpha(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-type LearnerStatus = 'Active' | 'Invited';
-
-interface LearnerRosterEntry {
-  id: string;
-  name: string;
-  email: string;
-  cohort: string;
-  status: LearnerStatus;
-}
-
 export default function App() {
   const { user, loginWithProvider, loginCustom, logout, checkingSession } = usePortalAuth();
   const { session, saveSession, clearSession } = useTenantSession();
@@ -79,30 +70,6 @@ export default function App() {
   const [viewingAttemptId, setViewingAttemptId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(false);
-  const [learnerRoster, setLearnerRoster] = useState<LearnerRosterEntry[]>(() => ([
-    {
-      id: 'learner-101',
-      name: 'Mia Chen',
-      email: 'mia.chen@example.com',
-      cohort: 'Northwind Analytics',
-      status: 'Active',
-    },
-    {
-      id: 'learner-203',
-      name: 'Evan Patel',
-      email: 'evan.patel@example.com',
-      cohort: 'Retail Ops',
-      status: 'Invited',
-    },
-    {
-      id: 'learner-305',
-      name: 'Priya Rao',
-      email: 'priya.rao@example.com',
-      cohort: 'Healthcare Pilot',
-      status: 'Active',
-    },
-  ]));
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', cohort: '' });
 
   const tenantName = config?.name ?? 'Assessment App';
   const supportEmail = config?.supportEmail ?? 'support@example.com';
@@ -297,139 +264,6 @@ export default function App() {
     <section className="rounded-2xl border border-brand-50 bg-white p-6">
       <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
       <p className="mt-2 text-sm text-slate-600">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
-    </section>
-  );
-
-  const ManageLearnersPage = () => (
-    <section className="space-y-6">
-      <div className="rounded-3xl border border-brand-50 bg-white p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Tenant Admin</p>
-            <h2 className="text-2xl font-semibold text-slate-900">Invite learners</h2>
-            <p className="text-sm text-slate-600">Provision cohorts in the BFF and fan out invites via the tenant API.</p>
-          </div>
-        </div>
-        <form
-          className="mt-6 grid gap-4 md:grid-cols-3"
-          onSubmit={event => {
-            event.preventDefault();
-            if (!canSendInvite) {
-              return;
-            }
-            setLearnerRoster(prev => [
-              {
-                id: `learner-${Date.now()}`,
-                name: inviteForm.name.trim(),
-                email: inviteForm.email.trim(),
-                cohort: inviteForm.cohort.trim() || 'Unassigned Cohort',
-                status: 'Invited',
-              },
-              ...prev,
-            ]);
-            setInviteForm({ name: '', email: '', cohort: '' });
-          }}
-        >
-          <label className="text-sm font-medium text-slate-700">
-            Full name
-            <input
-              className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
-              type="text"
-              placeholder="Ada Lovelace"
-              value={inviteForm.name}
-              onChange={event => setInviteForm(prev => ({ ...prev, name: event.target.value }))}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Email
-            <input
-              className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
-              type="email"
-              placeholder="ada@example.com"
-              value={inviteForm.email}
-              onChange={event => setInviteForm(prev => ({ ...prev, email: event.target.value }))}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Cohort tag
-            <input
-              className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
-              type="text"
-              placeholder="APAC Growth Sprint"
-              value={inviteForm.cohort}
-              onChange={event => setInviteForm(prev => ({ ...prev, cohort: event.target.value }))}
-            />
-          </label>
-          <div className="md:col-span-3 flex justify-end">
-            <button
-              type="submit"
-              disabled={!canSendInvite}
-              className="inline-flex items-center rounded-full bg-brand-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Send invite
-            </button>
-          </div>
-        </form>
-      </div>
-      <div className="rounded-3xl border border-brand-50 bg-white p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-500">Roster</p>
-            <h3 className="text-xl font-semibold text-slate-900">Learner directory</h3>
-            <p className="text-sm text-slate-600">Keep cohorts synchronized with the headless API before releasing new assessments.</p>
-          </div>
-        </div>
-        <div className="mt-6 overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-            <thead className="text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 font-medium">Name</th>
-                <th className="py-2 pr-4 font-medium">Email</th>
-                <th className="py-2 pr-4 font-medium">Cohort</th>
-                <th className="py-2 pr-4 font-medium">Status</th>
-                <th className="py-2 pr-4" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {learnerRoster.map(entry => (
-                <tr key={entry.id} className="text-slate-900">
-                  <td className="py-3 pr-4 font-medium">{entry.name}</td>
-                  <td className="py-3 pr-4 text-slate-500">{entry.email}</td>
-                  <td className="py-3 pr-4 text-slate-500">{entry.cohort}</td>
-                  <td className="py-3 pr-4">
-                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      entry.status === 'Active'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-amber-50 text-amber-700'
-                    }`}
-                    >
-                      {entry.status}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 text-right text-xs font-semibold">
-                    {entry.status === 'Invited' && (
-                      <button
-                        type="button"
-                        className="mr-2 rounded-full border border-emerald-200 px-3 py-1 text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-900"
-                        onClick={() => setLearnerRoster(prev => prev.map(item => (item.id === entry.id ? { ...item, status: 'Active' } : item)))}
-                      >
-                        Mark active
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="rounded-full border border-slate-200 px-3 py-1 text-slate-600 transition hover:border-rose-200 hover:text-rose-600"
-                      onClick={() => setLearnerRoster(prev => prev.filter(item => item.id !== entry.id))}
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </section>
   );
 
@@ -661,11 +495,11 @@ export default function App() {
               path="/learners"
               element={(isContentAuthor || isTenantAdmin) ? <LearnersPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
-            <Route path="/analytics" element={<AnalyticsPage />} />
             <Route
-              path="/manage-learners"
-              element={isTenantAdmin ? <ManageLearnersPage /> : <Navigate to={LANDING_PATH} replace />}
+              path="/cohorts"
+              element={(isContentAuthor || isTenantAdmin) ? <CohortsPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
+            <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/resources" element={<ResourcesPage />} />
             <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
           </Routes>

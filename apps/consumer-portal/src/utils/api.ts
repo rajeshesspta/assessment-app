@@ -194,6 +194,18 @@ export function createApiClient(session: TenantSession) {
     async fetchCohorts(): Promise<Cohort[]> {
       return request<Cohort[]>('/cohorts');
     },
+    async createCohort(cohort: Partial<Cohort>): Promise<Cohort> {
+      return request<Cohort>('/cohorts', {
+        method: 'POST',
+        body: JSON.stringify(cohort),
+      });
+    },
+    async updateCohort(id: string, cohort: Partial<Cohort>): Promise<Cohort> {
+      return request<Cohort>(`/cohorts/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(cohort),
+      });
+    },
     async fetchLearnerCohorts(userId: string): Promise<Cohort[]> {
       return request<Cohort[]>(`/cohorts/learner/${userId}`);
     },

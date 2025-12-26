@@ -645,6 +645,42 @@ app.get('/api/cohorts', async (request, reply) => {
     throw error;
   }
 });
+
+app.post('/api/cohorts', async (request, reply) => {
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/cohorts', {
+      method: 'POST',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.put('/api/cohorts/:id', async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/cohorts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
 app.get('/api/cohorts/learner/:userId', async (request, reply) => {
   const { userId } = request.params as { userId: string };
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
