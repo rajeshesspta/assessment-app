@@ -567,6 +567,39 @@ app.post('/api/assessments', async (request, reply) => {
   }
 });
 
+app.get('/api/assessments/:id', async (request, reply) => {
+  const id = (request.params as { id: string }).id;
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/assessments/${id}`, undefined, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.put('/api/assessments/:id', async (request, reply) => {
+  const id = (request.params as { id: string }).id;
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/assessments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
 app.get('/api/cohorts', async (request, reply) => {
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
   const tenant = request.tenant;

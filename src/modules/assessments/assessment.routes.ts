@@ -6,7 +6,7 @@ import type { AssessmentRepository } from './assessment.repository.js';
 import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
-import type { UserRole } from '../../common/types.js';
+import type { UserRole, Assessment } from '../../common/types.js';
 
 const ASSESSMENT_MANAGER_ROLES: UserRole[] = ['CONTENT_AUTHOR', 'TENANT_ADMIN'];
 

@@ -14,6 +14,7 @@ import type {
   OrderingItem,
   ScenarioTaskItem,
   ShortAnswerItem,
+  Item,
 } from '../../common/types.js';
 import type { UserRole } from '../../common/types.js';
 import { eventBus } from '../../common/event-bus.js';
