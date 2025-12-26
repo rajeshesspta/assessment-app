@@ -14,6 +14,7 @@ export function ScheduleAssessmentModal({ isOpen, onClose, assessment, api, bran
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const [allowedAttempts, setAllowedAttempts] = useState(1);
+  const [availableFrom, setAvailableFrom] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function ScheduleAssessmentModal({ isOpen, onClose, assessment, api, bran
       for (const cohortId of selectedCohortIds) {
         await api.assignAssessmentToCohort(cohortId, assessment.id, { 
           allowedAttempts,
+          availableFrom: availableFrom || undefined,
           dueDate: dueDate || undefined
         });
       }
@@ -107,6 +109,17 @@ export function ScheduleAssessmentModal({ isOpen, onClose, assessment, api, bran
                 className="mt-1 block w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-brand-500 focus:ring-brand-500"
               />
               <p className="mt-1 text-xs text-slate-500">Override the default attempt limit for these cohorts.</p>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Available From (Optional)</span>
+              <input
+                type="datetime-local"
+                value={availableFrom}
+                onChange={(e) => setAvailableFrom(e.target.value)}
+                className="mt-1 block w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-brand-500 focus:ring-brand-500"
+              />
+              <p className="mt-1 text-xs text-slate-500">Set a start time for this assessment.</p>
             </label>
 
             <label className="block">

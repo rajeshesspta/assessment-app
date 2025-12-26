@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { Pin, PinOff } from 'lucide-react';
 import { TenantSessionForm } from './components/TenantSessionForm';
 import { AssessmentPanel } from './components/AssessmentPanel';
+import { AssignedAssessmentsList } from './components/AssignedAssessmentsList';
 import { AttemptList } from './components/AttemptList';
 import { LoadingState } from './components/LoadingState';
 import { ItemBankPage } from './components/ItemBankPage';
@@ -237,6 +238,12 @@ export default function App() {
         onLookup={lookupAssessment}
         onStartAttempt={startAttempt}
         disabled={!session || !api}
+      />
+      <AssignedAssessmentsList
+        api={api}
+        userId={user.id}
+        onStartAttempt={startAttempt}
+        attempts={attempts}
       />
       <AttemptList
         attempts={attempts}

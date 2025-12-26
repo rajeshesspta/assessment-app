@@ -326,4 +326,18 @@ Assessment Module Iteration Checklist
 - [x] UI: Create User Management dashboard for Tenant Admins to manage roles and access.
 - [x] UI: Implement user creation, editing, and deactivation flows.
 
+**Iteration 18: Assessment Availability & Scheduling Enforcement**
+- Goal: Enforce `availableFrom` and `dueDate` constraints during attempt creation and in the UI.
+- [x] Headless: Update `POST /attempts` to validate current time against assignment availability.
+- [x] UI: Disable "Start" button in `AssignedAssessmentsList` if the assessment is not yet available or has expired.
+- [x] UI: Show "Available on [Date]" or "Expired" status in the learner dashboard.
+- [x] BFF: Ensure assignment metadata (dates) is surfaced to the portal.
+
+**Iteration 19: Multi-tenant BFF & Portal Plan (Phase 1)**
+- Goal: Transition from hardcoded tenant configs to a dynamic registry-backed architecture.
+- [ ] BFF: Implement runtime config loader that fetches tenant metadata from the Control Plane.
+- [ ] BFF: Add tenant-aware auth flow (subdomain/hint selection).
+- [ ] Portal: Implement branding injection from dynamic config (CSS variables).
+- [ ] Portal: Add tenant switcher for users with multiple memberships.
+
 

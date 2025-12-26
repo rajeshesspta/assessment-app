@@ -248,6 +248,115 @@ describe('attemptRoutes', () => {
     expect(response.json()).toEqual({ error: 'Learner is not assigned to this assessment' });
   });
 
+  it('blocks attempt if assessment is not yet available', async () => {
+    const now = new Date();
+    const future = new Date(now.getTime() + 100000).toISOString();
+    
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: [],
+      allowedAttempts: 1,
+    });
+
+    mocks.cohortListByLearnerMock.mockReturnValueOnce([{
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Cohort 1',
+      learnerIds: ['user-1'],
+      assessmentIds: ['assessment-1'],
+      assignments: [{
+        assessmentId: 'assessment-1',
+        availableFrom: future
+      }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'user-1' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Assessment is not yet available' });
+  });
+
+  it('blocks attempt if assessment has expired', async () => {
+    const now = new Date();
+    const past = new Date(now.getTime() - 100000).toISOString();
+    
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: [],
+      allowedAttempts: 1,
+    });
+
+    mocks.cohortListByLearnerMock.mockReturnValueOnce([{
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Cohort 1',
+      learnerIds: ['user-1'],
+      assessmentIds: ['assessment-1'],
+      assignments: [{
+        assessmentId: 'assessment-1',
+        dueDate: past
+      }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'user-1' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Assessment has expired' });
+  });
+
+  it('allows attempt if within availability window', async () => {
+    const now = new Date();
+    const past = new Date(now.getTime() - 100000).toISOString();
+    const future = new Date(now.getTime() + 100000).toISOString();
+    
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: [],
+      allowedAttempts: 1,
+    });
+
+    mocks.cohortListByLearnerMock.mockReturnValueOnce([{
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Cohort 1',
+      learnerIds: ['user-1'],
+      assessmentIds: ['assessment-1'],
+      assignments: [{
+        assessmentId: 'assessment-1',
+        availableFrom: past,
+        dueDate: future
+      }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }]);
+
+    mocks.uuidMock.mockReturnValue('attempt-1');
+    mocks.listByLearnerMock.mockReturnValueOnce([]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/attempts',
+      payload: { assessmentId: 'assessment-1', userId: 'user-1' },
+    });
+
+    expect(response.statusCode).toBe(201);
+  });
+
   it('rejects start when learner reached allowed attempts', async () => {
     mocks.assessmentGetByIdMock.mockReturnValueOnce({
       id: 'assessment-1',

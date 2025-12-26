@@ -113,6 +113,17 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     }
 
     const assignment = cohortWithAssessment.assignments?.find(a => a.assessmentId === assessment.id);
+    
+    const now = new Date();
+    if (assignment?.availableFrom && new Date(assignment.availableFrom) > now) {
+      reply.code(403);
+      return { error: 'Assessment is not yet available' };
+    }
+    if (assignment?.dueDate && new Date(assignment.dueDate) < now) {
+      reply.code(403);
+      return { error: 'Assessment has expired' };
+    }
+
     const learnerAttempts = attemptRepository.listByLearner(tenantId, assessment.id, learner.id);
     const allowedAttempts = assignment?.allowedAttempts ?? assessment.allowedAttempts ?? 1;
 

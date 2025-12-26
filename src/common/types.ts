@@ -261,6 +261,8 @@ export interface Assessment extends BaseEntity {
 export interface CohortAssignment {
 	assessmentId: string;
 	allowedAttempts?: number;
+	availableFrom?: string;
+	dueDate?: string;
 }
 
 export interface Cohort extends BaseEntity {
