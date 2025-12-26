@@ -26,5 +26,8 @@ export function createInMemoryCohortRepository(): CohortRepository {
         cohort => cohort.tenantId === tenantId && cohort.learnerIds.includes(learnerId),
       );
     },
+    delete(tenantId, id) {
+      store.delete(keyOf(tenantId, id));
+    },
   };
 }

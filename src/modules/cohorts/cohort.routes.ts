@@ -105,6 +105,25 @@ const createCohortSchema = z.object({
 
 const createCohortBodySchema = toJsonSchema(createCohortSchema, 'CreateCohortRequest');
 
+const updateCohortSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  description: z.string().max(500).optional(),
+  learnerIds: z.array(z.string().min(1)).optional(),
+  assessmentIds: z.array(z.string().min(1)).optional(),
+  assignments: z
+    .array(
+      z.object({
+        assessmentId: z.string().min(1),
+        allowedAttempts: z.number().int().min(1).max(100).optional(),
+        availableFrom: z.string().optional(),
+        dueDate: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+const updateCohortBodySchema = toJsonSchema(updateCohortSchema, 'UpdateCohortRequest');
+
 const assignAssessmentsSchema = z.object({
   assessmentIds: z.array(z.string().min(1)).optional(),
   assignments: z
@@ -179,6 +198,95 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     const saved = repository.save(cohort);
     reply.code(201);
     return saved;
+  });
+
+  app.put('/:id', {
+    schema: {
+      tags: ['Cohorts'],
+      summary: 'Update a cohort',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      body: updateCohortBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
+    if (!ensureCohortManager(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const id = (req.params as any).id as string;
+    const cohort = repository.getById(tenantId, id);
+    if (!cohort) {
+      reply.code(404);
+      return { error: 'Cohort not found' };
+    }
+
+    const parsed = updateCohortSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'Validation error', issues: parsed.error.issues };
+    }
+
+    let learnerIds = cohort.learnerIds;
+    if (parsed.data.learnerIds) {
+      const validated = validateLearnerIds(tenantId, parsed.data.learnerIds, userRepository, reply);
+      if (!validated) return;
+      learnerIds = validated;
+    }
+
+    let assessmentIds = cohort.assessmentIds;
+    if (parsed.data.assessmentIds) {
+      const validated = validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository, reply);
+      if (validated === undefined) return;
+      assessmentIds = validated;
+    }
+
+    const assignments = parsed.data.assignments;
+    if (assignments) {
+      for (const assignment of assignments) {
+        const assessment = assessmentRepository.getById(tenantId, assignment.assessmentId);
+        if (!assessment) {
+          reply.code(400);
+          return { error: `Assessment ${assignment.assessmentId} does not exist` };
+        }
+      }
+    }
+
+    const updated = updateCohort(cohort, {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      learnerIds,
+      assessmentIds,
+      assignments,
+    });
+    const saved = repository.save(updated);
+    return saved;
+  });
+
+  app.delete('/:id', {
+    schema: {
+      tags: ['Cohorts'],
+      summary: 'Delete a cohort',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (req, reply) => {
+    if (!ensureCohortManager(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const id = (req.params as any).id as string;
+    const cohort = repository.getById(tenantId, id);
+    if (!cohort) {
+      reply.code(404);
+      return { error: 'Cohort not found' };
+    }
+    repository.delete(tenantId, id);
+    reply.code(204);
+    return;
   });
 
   app.post('/:id/assessments', {

@@ -332,6 +332,8 @@ Assessment Module Iteration Checklist
 - [x] UI: Disable "Start" button in `AssignedAssessmentsList` if the assessment is not yet available or has expired.
 - [x] UI: Show "Available on [Date]" or "Expired" status in the learner dashboard.
 - [x] BFF: Ensure assignment metadata (dates) is surfaced to the portal.
+- [x] Headless: Implement `PUT /cohorts/:id` and `DELETE /cohorts/:id` with proper 404 handling.
+- [x] UI: Add delete option for cohorts in `CohortsPage`.
 
 **Iteration 19: Multi-tenant BFF & Portal Plan (Phase 1)**
 - Goal: Transition from hardcoded tenant configs to a dynamic registry-backed architecture.

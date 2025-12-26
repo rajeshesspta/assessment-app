@@ -8,6 +8,7 @@ const cohortRepository = {
   list: vi.fn(),
   getById: vi.fn(),
   listByLearner: vi.fn(),
+  delete: vi.fn(),
 };
 
 const userRepository = {
@@ -245,5 +246,76 @@ describe('cohortRoutes', () => {
 
     expect(response.statusCode).toBe(403);
     expect(cohortRepository.list).not.toHaveBeenCalled();
+  });
+
+  it('updates a cohort', async () => {
+    const cohort: Cohort = {
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Alpha',
+      learnerIds: ['learner-1'],
+      assessmentIds: [],
+      createdAt: 'now',
+      updatedAt: 'now',
+    };
+    cohortRepository.getById.mockReturnValueOnce(cohort);
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/cohorts/cohort-1',
+      payload: { name: 'Beta' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(cohortRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'cohort-1',
+      name: 'Beta',
+    }));
+  });
+
+  it('returns 404 when updating missing cohort', async () => {
+    cohortRepository.getById.mockReturnValueOnce(undefined);
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/cohorts/missing',
+      payload: { name: 'Beta' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'Cohort not found' });
+  });
+
+  it('deletes a cohort', async () => {
+    const cohort: Cohort = {
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Alpha',
+      learnerIds: ['learner-1'],
+      assessmentIds: [],
+      createdAt: 'now',
+      updatedAt: 'now',
+    };
+    cohortRepository.getById.mockReturnValueOnce(cohort);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/cohorts/cohort-1',
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(cohortRepository.delete).toHaveBeenCalledWith('tenant-1', 'cohort-1');
+  });
+
+  it('returns 404 when deleting missing cohort', async () => {
+    cohortRepository.getById.mockReturnValueOnce(undefined);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/cohorts/missing',
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'Cohort not found' });
   });
 });

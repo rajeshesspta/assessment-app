@@ -82,5 +82,9 @@ export function createSQLiteCohortRepository(client: SQLiteTenantClient): Cohort
       `).all(tenantId);
       return rows.map(rowToCohort).filter(cohort => cohort.learnerIds.includes(learnerId));
     },
+    delete(tenantId, id) {
+      const db = client.getConnection(tenantId);
+      db.prepare('DELETE FROM cohorts WHERE id = ? AND tenant_id = ?').run(id, tenantId);
+    },
   };
 }

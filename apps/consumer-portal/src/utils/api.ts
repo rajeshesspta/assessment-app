@@ -209,6 +209,11 @@ export function createApiClient(session: TenantSession) {
         body: JSON.stringify(cohort),
       });
     },
+    async deleteCohort(id: string): Promise<void> {
+      return request<void>(`/cohorts/${id}`, {
+        method: 'DELETE',
+      });
+    },
     async fetchLearnerCohorts(userId: string): Promise<Cohort[]> {
       return request<Cohort[]>(`/cohorts/learner/${userId}`);
     },

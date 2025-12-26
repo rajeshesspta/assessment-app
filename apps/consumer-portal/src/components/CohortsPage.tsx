@@ -98,15 +98,32 @@ export function CohortsPage({ api, brandPrimary }: CohortsPageProps) {
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600" style={{ backgroundColor: `${brandPrimary}15`, color: brandPrimary }}>
                   <Users className="h-6 w-6" />
                 </div>
-                <button
-                  onClick={() => {
-                    setEditingCohort(cohort);
-                    setIsModalOpen(true);
-                  }}
-                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      setEditingCohort(cohort);
+                      setIsModalOpen(true);
+                    }}
+                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm(`Are you sure you want to delete the cohort "${cohort.name}"?`)) {
+                        try {
+                          await api.deleteCohort(cohort.id);
+                          loadData();
+                        } catch (err) {
+                          alert((err as Error).message);
+                        }
+                      }
+                    }}
+                    className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <h3 className="text-lg font-bold text-slate-900">{cohort.name}</h3>
               <p className="mt-1 text-sm text-slate-500 line-clamp-2">

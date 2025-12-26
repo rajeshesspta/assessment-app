@@ -118,6 +118,31 @@ describe('server routes', () => {
     });
   });
 
+  it('forwards cohort delete requests to headless API', async () => {
+    const tenant = createTenantConfig({ hosts: ['tenant.test'] });
+    app = await setupServer([tenant]);
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/cohorts/cohort-123',
+      headers: { host: 'tenant.test' },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [urlArg, initArg] = fetchMock.mock.calls[0];
+    expect(String(urlArg)).toContain('/cohorts/cohort-123');
+    expect(initArg?.method).toBe('DELETE');
+    expect(initArg?.headers).toMatchObject({
+      'x-api-key': tenant.headless.apiKey,
+      'x-tenant-id': tenant.headless.tenantId,
+    });
+  });
+
   it('returns 401 for /auth/session when no cookie is present', async () => {
     app = await setupServer();
     const response = await app.inject({
