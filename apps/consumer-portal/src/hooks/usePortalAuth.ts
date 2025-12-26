@@ -4,6 +4,7 @@ import { buildBffUrl, getBffBaseUrl, isBffEnabled } from '../utils/bff';
 export type PortalAuthProvider = 'google' | 'microsoft' | 'enterprise' | 'custom';
 
 export interface PortalUser {
+  id: string;
   name: string;
   email: string;
   provider: PortalAuthProvider;
@@ -75,12 +76,13 @@ export function usePortalAuth() {
           throw new Error('Not authenticated');
         }
         const data = (await response.json()) as {
-          user: { email: string; name?: string; picture?: string; provider: PortalAuthProvider };
+          user: { sub: string; email: string; name?: string; picture?: string; provider: PortalAuthProvider };
         };
         if (cancelled) {
           return;
         }
         persist({
+          id: data.user.sub,
           provider: data.user.provider ?? 'google',
           name: data.user.name ?? data.user.email,
           email: data.user.email,
@@ -123,6 +125,7 @@ export function usePortalAuth() {
     const trimmedName = profile?.name?.trim();
     const trimmedEmail = profile?.email?.trim();
     persist({
+      id: trimmedEmail || `user-${now.getTime()}`,
       provider,
       name: trimmedName && trimmedName.length > 0 ? trimmedName : fallbackName,
       email: trimmedEmail && trimmedEmail.length > 0 ? trimmedEmail : fallbackEmail,
@@ -132,6 +135,7 @@ export function usePortalAuth() {
 
   const loginCustom = useCallback((name: string, email: string, roles: string[] = DEFAULT_ROLES) => {
     persist({
+      id: email,
       provider: 'custom',
       name,
       email,

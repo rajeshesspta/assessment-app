@@ -11,6 +11,7 @@ import type { AssessmentAnalytics, AttemptResponse } from './utils/api';
 import { usePortalAuth } from './hooks/usePortalAuth';
 import { LoginPage } from './components/LoginPage';
 import { useTenantConfig } from './context/TenantConfigContext';
+import { buildBffUrl, isBffEnabled } from './utils/bff';
 
 type NavItem = {
   id: string;
@@ -136,6 +137,16 @@ export default function App() {
       navigate(LANDING_PATH, { replace: true });
     }
   }, [user, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (user && !session && isBffEnabled()) {
+      saveSession({
+        apiBaseUrl: buildBffUrl('/api'),
+        actorRoles: user.roles,
+        userId: user.id,
+      });
+    }
+  }, [user, session, saveSession]);
 
   const canSendInvite = inviteForm.name.trim().length > 0
     && inviteForm.email.trim().length > 0

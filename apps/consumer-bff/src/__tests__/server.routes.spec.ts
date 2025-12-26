@@ -117,4 +117,41 @@ describe('server routes', () => {
       'x-actor-roles': 'TENANT_ADMIN',
     });
   });
+
+  it('returns 401 for /auth/session when no cookie is present', async () => {
+    app = await setupServer();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/auth/session',
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('redirects to google for /auth/google/login', async () => {
+    const tenant = createTenantConfig({ hosts: ['tenant.test'] });
+    app = await setupServer([tenant]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/auth/google/login',
+      headers: { host: 'tenant.test' },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toContain('accounts.google.com');
+    expect(response.headers.location).toContain('client_id=' + tenant.auth.google.clientId);
+  });
+
+  it('clears cookie on /auth/logout', async () => {
+    app = await setupServer();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const cookies = response.cookies;
+    const sessionCookie = cookies.find(c => c.name === 'consumer_portal_session');
+    expect(sessionCookie?.value).toBe('');
+  });
 });
