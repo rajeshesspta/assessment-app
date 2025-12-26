@@ -536,12 +536,93 @@ app.get('/api/items', async (request, reply) => {
   }
 });
 
+app.get('/api/assessments', async (request, reply) => {
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/assessments', undefined, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.post('/api/assessments', async (request, reply) => {
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/assessments', {
+      method: 'POST',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/cohorts', async (request, reply) => {
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/cohorts', undefined, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.post('/api/cohorts/:id/assessments', async (request, reply) => {
+  const id = (request.params as { id: string }).id;
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/cohorts/${id}/assessments`, {
+      method: 'POST',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
 app.post('/api/items', async (request, reply) => {
   const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
   const tenant = request.tenant;
   try {
     return await callHeadless(tenant, '/items', {
       method: 'POST',
+      body: JSON.stringify(request.body),
+    }, actorRoles);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.put('/api/items/:id', async (request, reply) => {
+  const id = (request.params as { id: string }).id;
+  const actorRoles = (request.headers['x-actor-roles'] as string | undefined)?.trim();
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/items/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(request.body),
     }, actorRoles);
   } catch (error) {
