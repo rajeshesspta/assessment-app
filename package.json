@@ -16,6 +16,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "dev:full": "npm-run-all --parallel dev dev:consumer:bff dev:consumer",
     "dev:control-plane:api": "npm run dev --workspace control-plane-api",
     "dev:control-plane:proxy": "npm run dev --workspace control-plane-console-proxy",
     "dev:control-plane:console": "npm run dev --workspace control-plane-console",

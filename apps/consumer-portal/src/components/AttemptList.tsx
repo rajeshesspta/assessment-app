@@ -3,9 +3,11 @@ import type { AttemptResponse } from '../utils/api';
 interface AttemptListProps {
   attempts: AttemptResponse[];
   onRefresh: (attemptId: string) => Promise<void> | void;
+  onContinue: (attemptId: string) => void;
+  onViewResults: (attemptId: string) => void;
 }
 
-export function AttemptList({ attempts, onRefresh }: AttemptListProps) {
+export function AttemptList({ attempts, onRefresh, onContinue, onViewResults }: AttemptListProps) {
   if (!attempts.length) {
     return (
       <section className="rounded-2xl bg-white/90 p-6 ring-1 ring-slate-100 backdrop-blur">
@@ -33,7 +35,25 @@ export function AttemptList({ attempts, onRefresh }: AttemptListProps) {
               <ListRow label="Learner" value={attempt.userId} />
               <ListRow label="Updated" value={new Date(attempt.updatedAt).toLocaleString()} />
             </dl>
-            <div className="mt-4">
+            <div className="mt-4 flex gap-2">
+              {attempt.status === 'in_progress' && (
+                <button
+                  type="button"
+                  onClick={() => onContinue(attempt.id)}
+                  className="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+                >
+                  Continue
+                </button>
+              )}
+              {(attempt.status === 'submitted' || attempt.status === 'scored') && (
+                <button
+                  type="button"
+                  onClick={() => onViewResults(attempt.id)}
+                  className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  View Results
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onRefresh(attempt.id)}

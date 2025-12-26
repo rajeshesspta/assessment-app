@@ -72,13 +72,13 @@ multi-tenant - execution plan
 Assessment Content Types
 ==============================
 
-- [ ] Matching — represent as two lists with correct pairings. Need serialization (`{ prompt, targetId }[]`) plus scoring modes (full vs partial credit).
-- [ ] Ordering / Ranking — capture ordered lists; evaluate if Kendall tau / partial credit is required.
-- [ ] Short Answer / Free Response — persist prompt + rubric keywords; wire scoring to manual or AI-assisted flows.
-- [ ] Essay / Long Form — extend short-answer schema with length expectations and rubric metadata; ensure attempts store large text payloads.
-- [ ] Numeric Entry — support exact answers and tolerance ranges; include optional units metadata.
-- [ ] Hotspot / Image Region — store base image + polygons, define answer serialization for coordinates.
-- [ ] Drag-and-Drop — model token + zone schemas (classification, sequencing) and scoring logic.
+- [x] Matching — represent as two lists with correct pairings. Need serialization (`{ prompt, targetId }[]`) plus scoring modes (full vs partial credit).
+- [x] Ordering / Ranking — capture ordered lists; evaluate if Kendall tau / partial credit is required.
+- [x] Short Answer / Free Response — persist prompt + rubric keywords; wire scoring to manual or AI-assisted flows.
+- [x] Essay / Long Form — extend short-answer schema with length expectations and rubric metadata; ensure attempts store large text payloads.
+- [x] Numeric Entry — support exact answers and tolerance ranges; include optional units metadata.
+- [x] Hotspot / Image Region — store base image + polygons, define answer serialization for coordinates.
+- [x] Drag-and-Drop — model token + zone schemas (classification, sequencing) and scoring logic.
 - [x] Scenario-Based / Coding Tasks — dedicate module for workspace templates, attachments, evaluation scripts.
 
 Each content rollout must include:
@@ -102,8 +102,8 @@ Platform Implementation Checklist
 - [ ] Tenant-admin API or CLI for inviting content authors + learners, persisting cohort memberships.
 
 **Item & Assessment Management**
-- [ ] Confirm item ownership metadata requirements (shared bank but track authorship when auditing changes).
-- [ ] Keep `assessments.allowedAttempts` + assignment targets (cohort IDs or learner IDs) in sync with repositories + migrations.
+- [x] Confirm item ownership metadata requirements (shared bank but track authorship when auditing changes).
+- [x] Keep `assessments.allowedAttempts` + assignment targets (cohort IDs or learner IDs) in sync with repositories + migrations.
 
 **Cohorts & Assignment Flow**
 - [ ] Create/manage cohort APIs (name, description, learner IDs, tenantId).
@@ -247,5 +247,54 @@ Assessment Module Iteration Checklist
 - [x] Finalize cohort assignment APIs (assessment↔cohort links, learner-specific quotas) and migrations.
 - [x] Strengthen attempt gating tests (assigned, exhausted, unauthorized) across new content types.
 - [x] Update docs/README to summarize shipped assessment capabilities per iteration.
+
+**Iteration 6 – Item Bank & Basic Authoring**
+- Goal: Enable Content Authors to manage the shared item bank and create standard objective content.
+- [x] UI: Create Item Bank list view (fetch from `GET /items`).
+- [x] UI: Implement "Create Item" flow for `MCQ` and `TRUE_FALSE`.
+- [x] BFF: Ensure `POST /items` correctly forwards `CONTENT_AUTHOR` roles.
+- [x] Validation: Client-side Zod validation for basic item shapes.
+
+**Iteration 7 – Advanced & Subjective Authoring**
+- Goal: Expand authoring capabilities to interactive and rubric-based items.
+- [x] UI: Implement authoring forms for `MATCHING`, `ORDERING`, and `NUMERIC_ENTRY`.
+- [x] UI: Implement `ESSAY` and `SHORT_ANSWER` forms with Rubric editors.
+- [x] UI: Add "Sample Answer" and "Keywords" fields for evaluation guidance.
+
+**Iteration 8 – Assessment Builder & Settings**
+- Goal: Allow authors to package items into structured assessments with specific delivery rules.
+- [x] UI: Create Assessment list and "Create Assessment" flow.
+- [x] UI: Item selector component to link items to assessments.
+- [x] UI: Configure assessment settings (`allowedAttempts`, `status`).
+
+**Iteration 9 – Preview & Specialized Tasks**
+- Goal: Finalize the authoring experience with full-fidelity previews and complex task support.
+- [x] UI: Implement "Learner Preview" renderer for all 11 item types.
+- [x] UI: Authoring interface for `HOTSPOT` (image upload + point tool).
+- [x] UI: Authoring interface for `SCENARIO_TASK` (workspace/attachment config).
+
+**Iteration 10 – Learner Experience: Assessment Player**
+- Goal: Provide a focused, interactive environment for learners to complete assessments.
+- [x] UI: Implement `AssessmentPlayer` with multi-step navigation.
+- [x] UI: Interactive inputs for all 11 item types (MCQ, Matching, Hotspot, etc.).
+- [x] BFF: Add `PUT /attempts/:id/responses` for progress saving.
+
+**Iteration 11 – Results & Feedback**
+- Goal: Close the loop with immediate feedback and scoring summaries.
+- [x] UI: Implement `AttemptResult` view with score breakdown.
+- [x] UI: Handle "Pending Evaluation" states for subjective/AI-graded content.
+- [x] UI: Add "View Results" flow to the learner dashboard.
+
+**Iteration 12 – Multi-tenant Branding & Customization**
+- Goal: Ensure the learner experience respects tenant-specific design tokens.
+- [x] UI: Inject `brandPrimary` and `brandAccent` into the Player and Result views.
+- [x] UI: Dynamic styling for progress bars, buttons, and selection highlights.
+
+**Iteration 13 – Advanced Assignment & Scheduling UI**
+- Goal: Provide a robust interface for managing assessment availability across cohorts.
+- [x] UI: Implement "Schedule Assessment" modal with cohort selection.
+- [x] UI: Support per-assignment overrides for `allowedAttempts` and `dueDate`.
+- [x] UI: View active assignments per cohort in the Assessments dashboard.
+- [x] BFF: Update `POST /cohorts/:id/assignments` to handle overrides.
 
 

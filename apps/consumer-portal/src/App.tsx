@@ -5,6 +5,10 @@ import { TenantSessionForm } from './components/TenantSessionForm';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import { AttemptList } from './components/AttemptList';
 import { LoadingState } from './components/LoadingState';
+import { ItemBankPage } from './components/ItemBankPage';
+import { AssessmentsPage } from './components/AssessmentsPage';
+import { AssessmentPlayer } from './components/AssessmentPlayer';
+import { AttemptResult } from './components/AttemptResult';
 import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
 import type { AssessmentAnalytics, AttemptResponse } from './utils/api';
@@ -18,10 +22,13 @@ type NavItem = {
   label: string;
   path: string;
   requiresTenantAdmin?: boolean;
+  requiresContentAuthor?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'my-assessments', label: 'My Assessments', path: '/my-assessments' },
+  { id: 'manage-assessments', label: 'Assessments', path: '/manage-assessments', requiresContentAuthor: true },
+  { id: 'item-bank', label: 'Item Bank', path: '/item-bank', requiresContentAuthor: true },
   { id: 'overview', label: 'Overview', path: '/overview' },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
   { id: 'manage-learners', label: 'Manage Learners', path: '/manage-learners', requiresTenantAdmin: true },
@@ -66,6 +73,8 @@ export default function App() {
   const [attempts, setAttempts] = useState<AttemptResponse[]>([]);
   const [busyState, setBusyState] = useState<'idle' | 'loading' | 'submitting'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
+  const [viewingAttemptId, setViewingAttemptId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(false);
   const [learnerRoster, setLearnerRoster] = useState<LearnerRosterEntry[]>(() => ([
@@ -115,6 +124,12 @@ export default function App() {
     return Boolean(sessionHas || userHas);
   }, [session, user]);
 
+  const isContentAuthor = useMemo(() => {
+    const sessionHas = session?.actorRoles?.some(role => role.toUpperCase() === 'CONTENT_AUTHOR');
+    const userHas = user?.roles?.some(role => role.toUpperCase() === 'CONTENT_AUTHOR');
+    return Boolean(sessionHas || userHas);
+  }, [session, user]);
+
   const normalizedPath = location.pathname.length > 1 && location.pathname.endsWith('/')
     ? location.pathname.replace(/\/+/g, '/').replace(/\/+$/, '')
     : location.pathname;
@@ -125,8 +140,12 @@ export default function App() {
   const activeNav = currentNav?.id ?? LANDING_NAV_ID;
 
   const visibleNavItems = useMemo(
-    () => NAV_ITEMS.filter(item => !item.requiresTenantAdmin || isTenantAdmin),
-    [isTenantAdmin],
+    () => NAV_ITEMS.filter(item => {
+      if (item.requiresTenantAdmin && !isTenantAdmin) return false;
+      if (item.requiresContentAuthor && !isContentAuthor && !isTenantAdmin) return false;
+      return true;
+    }),
+    [isTenantAdmin, isContentAuthor],
   );
 
   useEffect(() => {
@@ -139,12 +158,17 @@ export default function App() {
   }, [user, location.pathname, navigate]);
 
   useEffect(() => {
-    if (user && !session && isBffEnabled()) {
-      saveSession({
-        apiBaseUrl: buildBffUrl('/api'),
-        actorRoles: user.roles,
-        userId: user.id,
-      });
+    if (user && isBffEnabled()) {
+      const rolesChanged = JSON.stringify(session?.actorRoles) !== JSON.stringify(user.roles);
+      const userChanged = session?.userId !== user.id;
+      
+      if (!session || rolesChanged || userChanged) {
+        saveSession({
+          apiBaseUrl: buildBffUrl('/api'),
+          actorRoles: user.roles,
+          userId: user.id,
+        });
+      }
     }
   }, [user, session, saveSession]);
 
@@ -190,6 +214,7 @@ export default function App() {
     try {
       const attempt = await client.startAttempt(assessmentId);
       setAttempts(prev => [attempt, ...prev.filter(item => item.id !== attempt.id)]);
+      setActiveAttemptId(attempt.id);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -246,7 +271,12 @@ export default function App() {
         onStartAttempt={startAttempt}
         disabled={!session || !api}
       />
-      <AttemptList attempts={attempts} onRefresh={refreshAttempt} />
+      <AttemptList
+        attempts={attempts}
+        onRefresh={refreshAttempt}
+        onContinue={(id) => setActiveAttemptId(id)}
+        onViewResults={(id) => setViewingAttemptId(id)}
+      />
     </>
   );
 
@@ -436,6 +466,26 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-sunrise-50 via-white to-sunrise-100 text-slate-900">
+      {activeAttemptId && (
+        <AssessmentPlayer
+          attemptId={activeAttemptId}
+          api={api}
+          brandPrimary={brandPrimary}
+          onComplete={(attempt) => {
+            setAttempts(prev => prev.map(a => a.id === attempt.id ? attempt : a));
+            setActiveAttemptId(null);
+          }}
+          onExit={() => setActiveAttemptId(null)}
+        />
+      )}
+      {viewingAttemptId && (
+        <AttemptResult
+          attemptId={viewingAttemptId}
+          api={api}
+          brandPrimary={brandPrimary}
+          onExit={() => setViewingAttemptId(null)}
+        />
+      )}
       <aside
         id="portal-sidebar"
         aria-hidden={!isSidebarVisible}
@@ -597,6 +647,14 @@ export default function App() {
             <Route path="/" element={<Navigate to={LANDING_PATH} replace />} />
             <Route path={LANDING_PATH} element={<MyAssessmentsPage />} />
             <Route path="/overview" element={<OverviewPage />} />
+            <Route
+              path="/item-bank"
+              element={(isContentAuthor || isTenantAdmin) ? <ItemBankPage api={api} brandPrimary={brandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
+            />
+            <Route
+              path="/manage-assessments"
+              element={(isContentAuthor || isTenantAdmin) ? <AssessmentsPage api={api} brandPrimary={brandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
+            />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route
               path="/manage-learners"
