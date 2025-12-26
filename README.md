@@ -102,9 +102,10 @@ For deeper implementation details (role lifecycle, APIs, data model), see `docs/
 - Cohort: a logical group of learners (class, onboarding batch, pilot program) used for assessment assignments, accommodations, and analytics rollups.
 - Cohort assignments let Super Admins or Tenant Admins (often partnering with Authors) schedule assessments once and deliver them to every learner in that cohort, while analytics surfaces completion/performance per cohort. Content Authors can also target specific cohorts when scheduling an assessment.
 - Tenant Admins or Content Authors create cohorts via `POST /cohorts`, providing a name, optional description, and at least one learner id (only users with the `LEARNER` role are accepted). Optional assessment ids can be included at creation time.
-- Use `POST /cohorts/:id/assessments` to add additional assessments later. The service validates that every referenced assessment exists before persisting the assignment.
+- Use `POST /cohorts/:id/assessments` to add additional assessments later. The service validates that every referenced assessment exists before persisting the assignment. You can optionally provide `allowedAttempts` in the `assignments` array to override the assessment's default limit for that cohort.
+- Use `POST /cohorts/assignments/users/:userId` to assign assessments directly to an individual learner. This creates or updates a personal cohort for the user.
 - `GET /cohorts` returns the tenant’s cohorts so portals can display membership and assignment data. Super Admin callers are blocked from these routes to reinforce tenant-managed ownership.
-- Learners can only launch attempts for assessments assigned to at least one of their cohorts, and `POST /attempts` enforces both cohort membership and the per-assessment `allowedAttempts` limit (defaults to `1`).
+- Learners can only launch attempts for assessments assigned to at least one of their cohorts (directly or via group membership), and `POST /attempts` enforces both cohort membership and the per-assignment `allowedAttempts` limit (falling back to the assessment default).
 
 ## Running
 

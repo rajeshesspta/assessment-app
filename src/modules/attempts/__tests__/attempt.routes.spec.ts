@@ -713,6 +713,54 @@ describe('attemptRoutes', () => {
     expect(attemptScoredCall).toBeUndefined();
   });
 
+  it('emits ScenarioEvaluationRequested for manual evaluation mode', async () => {
+    const attempt = {
+      id: 'attempt-manual-scenario',
+      tenantId: 'tenant-1',
+      assessmentId: 'assessment-manual-scenario',
+      userId: 'user-1',
+      status: 'in_progress',
+      responses: [
+        {
+          itemId: 'manual-scenario-item',
+          scenarioAnswer: {
+            submissionNotes: 'Manual submission',
+          },
+        },
+      ],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    };
+    mocks.attemptStore.set('attempt-manual-scenario', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValueOnce({
+      id: 'assessment-manual-scenario',
+      tenantId: 'tenant-1',
+      itemIds: ['manual-scenario-item'],
+    });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'manual-scenario-item',
+      tenantId: 'tenant-1',
+      kind: 'SCENARIO_TASK',
+      prompt: 'Design a system',
+      brief: 'Design a scalable system for...',
+      evaluation: { mode: 'manual' },
+      scoring: { maxScore: 50 },
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+
+    const response = await app.inject({ method: 'POST', url: '/attempts/attempt-manual-scenario/submit' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().status).toBe('submitted');
+    const scenarioEventCall = mocks.publishMock.mock.calls.find(call => call[0].type === 'ScenarioEvaluationRequested');
+    expect(scenarioEventCall).toBeDefined();
+    expect(scenarioEventCall?.[0].payload).toMatchObject({
+      evaluation: { mode: 'manual' },
+      response: { submissionNotes: 'Manual submission' },
+    });
+  });
+
   it('scores hotspot responses with all-or-nothing grading', async () => {
     const attempt = {
       id: 'attempt-hotspot',
@@ -938,7 +986,7 @@ describe('attemptRoutes', () => {
           tenantId: 'tenant-1',
           kind: 'SHORT_ANSWER' as const,
           prompt: 'Explain why seasons change.',
-          rubric: { keywords: ['tilt'], guidance: 'Mention Earth tilt' },
+          rubric: { keywords: ['tilt'], guidance: 'Mention Earth tilt', sampleAnswer: 'The tilt of the Earth causes seasons.' },
           scoring: { mode: 'manual', maxScore: 3 },
           createdAt: 'now',
           updatedAt: 'now',
@@ -961,6 +1009,7 @@ describe('attemptRoutes', () => {
         itemKind: 'SHORT_ANSWER',
         mode: 'manual',
         maxScore: 3,
+        sampleAnswer: 'The tilt of the Earth causes seasons.',
         responseText: 'Earth tilt drives the seasons.',
       }),
     }));
@@ -992,6 +1041,7 @@ describe('attemptRoutes', () => {
       prompt: 'Describe urban planning shifts.',
       rubric: {
         guidance: 'Mention transit and zoning.',
+        sampleAnswer: 'Urban planning shifted from car-centric to transit-oriented development.',
         sections: [{ id: 'analysis', title: 'Analysis', maxScore: 5 }],
       },
       length: { minWords: 300, maxWords: 900 },
@@ -1012,6 +1062,7 @@ describe('attemptRoutes', () => {
         itemId: 'item-essay',
         itemKind: 'ESSAY',
         rubricSections: [{ id: 'analysis', title: 'Analysis', maxScore: 5 }],
+        sampleAnswer: 'Urban planning shifted from car-centric to transit-oriented development.',
         lengthExpectation: { minWords: 300, maxWords: 900 },
         responseText: 'Industrialization reshaped transit and housing.',
       }),

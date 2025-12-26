@@ -105,6 +105,7 @@ const shortAnswerSchema = z.object({
     .object({
       keywords: z.array(z.string().min(1).max(80)).max(10).optional(),
       guidance: z.string().min(1).max(500).optional(),
+      sampleAnswer: z.string().min(1).max(1000).optional(),
     })
     .optional(),
   scoring: z
@@ -142,6 +143,7 @@ const essaySchema = z.object({
     .object({
       keywords: z.array(z.string().min(1).max(120)).max(20).optional(),
       guidance: z.string().min(1).max(2000).optional(),
+      sampleAnswer: z.string().min(1).max(5000).optional(),
       sections: z.array(z.object({
         id: z.string().min(1),
         title: z.string().min(1),
@@ -531,7 +533,8 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       const keywords = parsed.rubric?.keywords
         ?.map(keyword => keyword.trim())
         .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index);
-      const rubric = parsed.rubric ? { ...parsed.rubric, keywords } : undefined;
+      const sampleAnswer = parsed.rubric?.sampleAnswer?.trim() || undefined;
+      const rubric = parsed.rubric ? { ...parsed.rubric, keywords, sampleAnswer } : undefined;
       const item = createItem<ShortAnswerItem>({
         id,
         tenantId,
@@ -554,13 +557,14 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       const keywords = parsed.rubric?.keywords
         ?.map(keyword => keyword.trim())
         .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index);
+      const sampleAnswer = parsed.rubric?.sampleAnswer?.trim() || undefined;
       const sections = parsed.rubric?.sections?.map(section => ({
         ...section,
         keywords: section.keywords
           ?.map(keyword => keyword.trim())
           .filter((keyword, index, array) => keyword.length > 0 && array.indexOf(keyword) === index),
       }));
-      const rubric = parsed.rubric ? { ...parsed.rubric, keywords, sections } : undefined;
+      const rubric = parsed.rubric ? { ...parsed.rubric, keywords, sections, sampleAnswer } : undefined;
       const item = createItem<EssayItem>({
         id,
         tenantId,

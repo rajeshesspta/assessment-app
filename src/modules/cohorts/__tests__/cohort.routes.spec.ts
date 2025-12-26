@@ -186,6 +186,24 @@ describe('cohortRoutes', () => {
     expect(response.json().assessmentIds).toEqual(['assessment-1', 'assessment-2']);
   });
 
+  it('assigns assessments to a user directly by creating a personal cohort', async () => {
+    userRepository.getById.mockReturnValueOnce({ id: 'learner-1', roles: ['LEARNER'] });
+    cohortRepository.listByLearner.mockReturnValueOnce([]); // No existing personal cohort
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/cohorts/assignments/users/learner-1',
+      payload: { assessmentIds: ['assessment-1'] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(cohortRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Personal: learner-1',
+      learnerIds: ['learner-1'],
+      assessmentIds: ['assessment-1'],
+    }));
+  });
+
   it('rejects assessment assignment when an assessment does not exist', async () => {
     const cohort: Cohort = {
       id: 'cohort-1',

@@ -381,6 +381,7 @@ describe('itemRoutes', () => {
         rubric: {
           keywords: [' gravity ', 'mass', 'gravity'],
           guidance: 'Mention mass and attraction.',
+          sampleAnswer: 'Gravity is a force of attraction between masses.',
         },
         scoring: { mode: 'ai_rubric', maxScore: 4, aiEvaluatorId: 'azure-ai' },
       },
@@ -391,7 +392,11 @@ describe('itemRoutes', () => {
       id: 'sa-item-id',
       tenantId: 'tenant-1',
       kind: 'SHORT_ANSWER',
-      rubric: { keywords: ['gravity', 'mass'], guidance: 'Mention mass and attraction.' },
+      rubric: {
+        keywords: ['gravity', 'mass'],
+        guidance: 'Mention mass and attraction.',
+        sampleAnswer: 'Gravity is a force of attraction between masses.',
+      },
       scoring: { mode: 'ai_rubric', maxScore: 4, aiEvaluatorId: 'azure-ai' },
     });
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'SHORT_ANSWER' }));
@@ -425,6 +430,7 @@ describe('itemRoutes', () => {
         rubric: {
           keywords: ['ethics', 'privacy', 'ethics'],
           guidance: 'Address privacy and fairness.',
+          sampleAnswer: 'AI ethics involves ensuring fairness, accountability, and transparency.',
           sections: [
             { id: 'intro', title: 'Introduction', maxScore: 3, keywords: ['intro', 'hook', 'intro'] },
             { id: 'analysis', title: 'Analysis', maxScore: 5 },
@@ -441,6 +447,7 @@ describe('itemRoutes', () => {
       length: { minWords: 300, maxWords: 800, recommendedWords: 500 },
       rubric: {
         keywords: ['ethics', 'privacy'],
+        sampleAnswer: 'AI ethics involves ensuring fairness, accountability, and transparency.',
         sections: [
           { id: 'intro', title: 'Introduction', maxScore: 3, keywords: ['intro', 'hook'] },
           { id: 'analysis', title: 'Analysis', maxScore: 5 },

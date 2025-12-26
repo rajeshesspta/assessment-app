@@ -79,7 +79,7 @@ Assessment Content Types
 - [ ] Numeric Entry — support exact answers and tolerance ranges; include optional units metadata.
 - [ ] Hotspot / Image Region — store base image + polygons, define answer serialization for coordinates.
 - [ ] Drag-and-Drop — model token + zone schemas (classification, sequencing) and scoring logic.
-- [ ] Scenario-Based / Coding Tasks — dedicate module for workspace templates, attachments, evaluation scripts.
+- [x] Scenario-Based / Coding Tasks — dedicate module for workspace templates, attachments, evaluation scripts.
 
 Each content rollout must include:
 - types.ts updates
@@ -225,28 +225,27 @@ Assessment Module Iteration Checklist
 
 **Iteration 1 – Matching + Ordering foundations**
 - Goal: unblock authors with two high-frequency objective item types while exercising the full stack (types → migrations → validation → scoring) before we add heavier free-form tasks. Learners should be able to submit pairs or ordered lists, and the scoring service must support both all-or-nothing and partial-credit modes to cover common classroom rubrics.
-- [ ] Extend `src/common/types.ts` + migrations for matching/ordering schemas (prompts/targets, canonical order arrays).
-- [ ] Update item validation/routes + seeds/tests so these types can be authored and fetched per tenant.
-- [ ] Add scoring helpers (full vs partial for matching, binary + optional partial pairs for ordering) plus unit tests.
+- [x] Extend `src/common/types.ts` + migrations for matching/ordering schemas (prompts/targets, canonical order arrays).
+- [x] Update item validation/routes + seeds/tests so these types can be authored and fetched per tenant.
+- [x] Add scoring helpers (full vs partial for matching, binary + optional partial pairs for ordering) plus unit tests.
 
 **Iteration 2 – Short Answer + Essay**
-- [ ] Introduce rubric metadata + length expectations in types/migrations and expose via routes.
-- [ ] Persist attempt text blobs and emit manual scoring/deferred evaluation events.
-- [ ] Provide seed data + Vitest coverage for rubric presence and scoring workflow.
+- [x] Introduce rubric metadata + length expectations in types/migrations and expose via routes.
+- [x] Persist attempt text blobs and emit manual scoring/deferred evaluation events.
+- [x] Provide seed data + Vitest coverage for rubric presence and scoring workflow.
 
-**Iteration 3 – Numeric Entry + Hotspot**
-- [ ] Numeric: support exact/range answers with tolerance + units metadata; extend scoring logic.
-- [ ] Hotspot: store image refs + polygon coordinates; validate attempt payloads (point-in-polygon checks).
-- [ ] Refresh seeds/tests to cover tolerance + hotspot evaluation cases.
+**Iteration 3 – Numeric + Hotspot + Drag-and-Drop**
+- [x] Implement Numeric Entry validation (exact/range) and units metadata support.
+- [x] Implement Hotspot scoring (polygon intersection) and selection limits.
+- [x] Implement Drag-and-Drop scoring (per-zone/per-token) and ordering evaluation.
 
-**Iteration 4 – Drag-and-Drop + Scenario Tasks**
-- [ ] Model token/zone schemas (classification, sequencing) with persistence + validation.
-- [ ] Scenario tasks: capture workspace templates, attachments, evaluator metadata, scenario answers; emit deferred scoring events.
-- [ ] Expand scoring/tests to cover drag-drop correctness + scenario workflow expectations.
+**Iteration 4 – Scenario Tasks**
+- [x] Scenario tasks: capture workspace templates, attachments, evaluator metadata, scenario answers; emit deferred scoring events.
+- [x] Expand scoring/tests to cover scenario workflow expectations.
 
 **Iteration 5 – Cohort Assignments & Attempt polish**
-- [ ] Finalize cohort assignment APIs (assessment↔cohort links, learner-specific quotas) and migrations.
-- [ ] Strengthen attempt gating tests (assigned, exhausted, unauthorized) across new content types.
-- [ ] Update docs/README to summarize shipped assessment capabilities per iteration.
+- [x] Finalize cohort assignment APIs (assessment↔cohort links, learner-specific quotas) and migrations.
+- [x] Strengthen attempt gating tests (assigned, exhausted, unauthorized) across new content types.
+- [x] Update docs/README to summarize shipped assessment capabilities per iteration.
 
 

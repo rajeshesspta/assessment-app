@@ -16,7 +16,16 @@ import type {
   ScenarioScoringRule,
   ScenarioWorkspaceTemplate,
 } from '../../common/types.js';
-import { scoreMatchingItem, scoreOrderingItem } from '../scoring/scoring.service.js';
+import {
+  scoreDragDropItem,
+  scoreFillBlankItem,
+  scoreHotspotItem,
+  scoreMatchingItem,
+  scoreMcqItem,
+  scoreNumericEntryItem,
+  scoreOrderingItem,
+  scoreTrueFalseItem,
+} from '../scoring/scoring.service.js';
 import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
@@ -79,40 +88,6 @@ function normalizeTextAnswers(textAnswer?: string, textAnswers?: string[]): stri
   return undefined;
 }
 
-function matchesFillBlankAnswer(value: string, matcher: FillBlankMatcher): boolean {
-  if (matcher.type === 'exact') {
-    if (matcher.caseSensitive) {
-      return value === matcher.value;
-    }
-    return value.localeCompare(matcher.value, undefined, { sensitivity: 'accent' }) === 0;
-  }
-  try {
-    const regex = new RegExp(matcher.pattern, matcher.flags ?? 'i');
-    return regex.test(value);
-  } catch {
-    return false;
-  }
-}
-
-function isPointInPolygon(point: HotspotPoint, polygon: HotspotPoint[]): boolean {
-  if (!polygon || polygon.length < 3) {
-    return false;
-  }
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
-    const intersects = ((yi > point.y) !== (yj > point.y))
-      && (point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
-    if (intersects) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
 export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
   const { attemptRepository, assessmentRepository, itemRepository, cohortRepository, userRepository } = options;
   app.post('/', { schema: { body: startBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
@@ -131,14 +106,17 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       return { error: 'User is not a learner' };
     }
     const cohorts = cohortRepository.listByLearner(tenantId, learner.id);
-    const isAssigned = cohorts.some(cohort => cohort.assessmentIds.includes(assessment.id));
-    if (!isAssigned) {
+    const cohortWithAssessment = cohorts.find(cohort => cohort.assessmentIds.includes(assessment.id));
+    if (!cohortWithAssessment) {
       reply.code(403);
       return { error: 'Learner is not assigned to this assessment' };
     }
+
+    const assignment = cohortWithAssessment.assignments?.find(a => a.assessmentId === assessment.id);
     const learnerAttempts = attemptRepository.listByLearner(tenantId, assessment.id, learner.id);
-    const allowedAttempts = Math.max(1, assessment.allowedAttempts ?? 1);
-    if (learnerAttempts.length >= allowedAttempts) {
+    const allowedAttempts = assignment?.allowedAttempts ?? assessment.allowedAttempts ?? 1;
+
+    if (learnerAttempts.length >= Math.max(1, allowedAttempts)) {
       reply.code(409);
       return { error: 'Attempt limit reached' };
     }
@@ -298,6 +276,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       rubricKeywords?: string[];
       rubricGuidance?: string;
       rubricSections?: { id: string; title: string; description?: string; maxScore: number; keywords?: string[] }[];
+      sampleAnswer?: string;
       lengthExpectation?: { minWords?: number; maxWords?: number; recommendedWords?: number };
       responseText?: string;
     }> = [];
@@ -316,25 +295,9 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       const item = itemRepository.getById(tenantId, itemId); if (!item) continue;
       const response = attempt.responses.find(r => r.itemId === itemId);
       if (item.kind === 'FILL_IN_THE_BLANK') {
-        const blanks = item.blanks ?? [];
-        const provided = response?.textAnswers ?? [];
-        const blanksCorrect = blanks.reduce((total, blank, index) => {
-          const candidate = provided[index]?.trim();
-          if (!candidate) {
-            return total;
-          }
-          const isMatch = blank.acceptableAnswers.some(matcher => matchesFillBlankAnswer(candidate, matcher));
-          return isMatch ? total + 1 : total;
-        }, 0);
-        if (item.scoring.mode === 'partial') {
-          maxScore += blanks.length;
-          score += blanksCorrect;
-        } else {
-          maxScore += 1;
-          if (blanksCorrect === blanks.length && blanks.length > 0) {
-            score += 1;
-          }
-        }
+        const result = scoreFillBlankItem(item, response?.textAnswers);
+        score += result.score;
+        maxScore += result.maxScore;
         continue;
       }
       if (item.kind === 'SCENARIO_TASK') {
@@ -368,6 +331,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       if (item.kind === 'SHORT_ANSWER') {
         const shortAnswerScore = item.scoring?.maxScore ?? 1;
         maxScore += shortAnswerScore;
+        const responseText = (response?.essayAnswer?.trim() || response?.textAnswers?.[0]?.trim()) ?? '';
         pendingFreeResponseEvaluations.push({
           attemptId: attempt.id,
           itemId: item.id,
@@ -378,7 +342,8 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
           aiEvaluatorId: item.scoring.aiEvaluatorId,
           rubricKeywords: item.rubric?.keywords,
           rubricGuidance: item.rubric?.guidance,
-          responseText: response?.textAnswers?.[0]?.trim(),
+          sampleAnswer: item.rubric?.sampleAnswer,
+          responseText,
         });
         continue;
       }
@@ -396,153 +361,41 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
           rubricKeywords: item.rubric?.keywords,
           rubricGuidance: item.rubric?.guidance,
           rubricSections: item.rubric?.sections,
+          sampleAnswer: item.rubric?.sampleAnswer,
           lengthExpectation: item.length,
           responseText: response?.essayAnswer?.trim(),
         });
         continue;
       }
       if (item.kind === 'NUMERIC_ENTRY') {
-        maxScore += 1;
-        const provided = response?.numericAnswer?.value;
-        if (typeof provided === 'number' && Number.isFinite(provided)) {
-          let isCorrect = false;
-          if (item.validation.mode === 'exact') {
-            const tolerance = item.validation.tolerance ?? 0;
-            isCorrect = Math.abs(provided - item.validation.value) <= tolerance;
-          } else {
-            isCorrect = provided >= item.validation.min && provided <= item.validation.max;
-          }
-          if (isCorrect) {
-            score += 1;
-          }
-        }
+        const result = scoreNumericEntryItem(item, response?.numericAnswer);
+        score += result.score;
+        maxScore += result.maxScore;
         continue;
       }
       if (item.kind === 'HOTSPOT') {
-        const hotspotCount = item.hotspots.length;
-        if (hotspotCount === 0) {
-          continue;
-        }
-        const selectionLimit = item.scoring.maxSelections ?? hotspotCount;
-        const selectionBudget = Math.min(hotspotCount, Math.max(1, selectionLimit));
-        if (item.scoring.mode === 'partial') {
-          maxScore += selectionBudget;
-        } else {
-          maxScore += 1;
-        }
-        const provided = (response?.hotspotAnswers ?? []).slice(0, selectionBudget);
-        if (provided.length === 0) {
-          continue;
-        }
-        const matched = new Set<string>();
-        for (const answer of provided) {
-          const region = item.hotspots.find(hotspot => isPointInPolygon(answer, hotspot.points));
-          if (region) {
-            matched.add(region.id);
-          }
-        }
-        if (item.scoring.mode === 'partial') {
-          score += matched.size;
-        } else if (matched.size === hotspotCount && hotspotCount > 0) {
-          score += 1;
-        }
+        const result = scoreHotspotItem(item, response?.hotspotAnswers);
+        score += result.score;
+        maxScore += result.maxScore;
         continue;
       }
       if (item.kind === 'DRAG_AND_DROP') {
-        const zones = item.zones ?? [];
-        if (zones.length === 0) {
-          continue;
-        }
-        const totalTokenCredit = zones.reduce((total, zone) => total + zone.correctTokenIds.length, 0);
-        if (item.scoring.mode === 'per_zone') {
-          maxScore += zones.length;
-        } else if (item.scoring.mode === 'per_token') {
-          maxScore += totalTokenCredit;
-        } else {
-          maxScore += 1;
-        }
-        const provided = response?.dragDropAnswers ?? [];
-        if (provided.length === 0) {
-          continue;
-        }
-        const zoneIds = new Set(zones.map(zone => zone.id));
-        const allowedTokenIds = new Set(item.tokens.map(token => token.id));
-        const placementsByZone = new Map<string, { tokenId: string; position?: number }[]>();
-        for (const placement of provided) {
-          if (!zoneIds.has(placement.dropZoneId) || !allowedTokenIds.has(placement.tokenId)) {
-            continue;
-          }
-          const list = placementsByZone.get(placement.dropZoneId) ?? [];
-          list.push({ tokenId: placement.tokenId, position: placement.position });
-          placementsByZone.set(placement.dropZoneId, list);
-        }
-        let correctZoneCount = 0;
-        let correctTokenCount = 0;
-        for (const zone of zones) {
-          const placements = placementsByZone.get(zone.id) ?? [];
-          const sortedPlacements = zone.evaluation === 'ordered'
-            ? placements
-                .slice()
-                .sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER))
-            : placements;
-          const limitedPlacements = zone.maxTokens
-            ? sortedPlacements.slice(0, zone.maxTokens)
-            : sortedPlacements;
-          if (zone.evaluation === 'ordered') {
-            const providedOrder = limitedPlacements.map(p => p.tokenId);
-            const expected = zone.correctTokenIds;
-            const isZoneCorrect = providedOrder.length === expected.length
-              && expected.every((tokenId, index) => tokenId === providedOrder[index]);
-            if (isZoneCorrect) {
-              correctZoneCount += 1;
-              correctTokenCount += expected.length;
-            } else if (item.scoring.mode === 'per_token') {
-              for (let i = 0; i < expected.length && i < providedOrder.length; i += 1) {
-                if (providedOrder[i] === expected[i]) {
-                  correctTokenCount += 1;
-                }
-              }
-            }
-            continue;
-          }
-          const providedSet = new Set(limitedPlacements.map(p => p.tokenId));
-          const expectedSet = new Set(zone.correctTokenIds);
-          const missing = zone.correctTokenIds.find(tokenId => !providedSet.has(tokenId));
-          const extra = providedSet.size > expectedSet.size
-            ? Array.from(providedSet).find(tokenId => !expectedSet.has(tokenId))
-            : undefined;
-          if (!missing && !extra && expectedSet.size === providedSet.size) {
-            correctZoneCount += 1;
-          }
-          if (item.scoring.mode === 'per_token') {
-            for (const tokenId of zone.correctTokenIds) {
-              if (providedSet.has(tokenId)) {
-                correctTokenCount += 1;
-              }
-            }
-          }
-        }
-        if (item.scoring.mode === 'all') {
-          if (correctZoneCount === zones.length && zones.length > 0) {
-            score += 1;
-          }
-        } else if (item.scoring.mode === 'per_zone') {
-          score += correctZoneCount;
-        } else {
-          score += correctTokenCount;
-        }
+        const result = scoreDragDropItem(item, response?.dragDropAnswers);
+        score += result.score;
+        maxScore += result.maxScore;
         continue;
       }
-      maxScore += 1;
-      const correct = new Set(item.correctIndexes);
-      const answers = response?.answerIndexes ? Array.from(new Set(response.answerIndexes)).sort((a, b) => a - b) : [];
-      const expected = [...correct].sort((a, b) => a - b);
-      if (item.answerMode === 'single') {
-        if (answers.length === 1 && answers[0] === expected[0]) score++;
+      if (item.kind === 'MCQ') {
+        const result = scoreMcqItem(item, response?.answerIndexes);
+        score += result.score;
+        maxScore += result.maxScore;
         continue;
       }
-      if (answers.length === expected.length && expected.every((value, idx) => value === answers[idx])) {
-        score++;
+      if (item.kind === 'TRUE_FALSE') {
+        const result = scoreTrueFalseItem(item, response?.answerIndexes);
+        score += result.score;
+        maxScore += result.maxScore;
+        continue;
       }
     }
     attempt.score = score; attempt.maxScore = maxScore;
@@ -570,6 +423,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
             rubricKeywords: evaluation.rubricKeywords,
             rubricGuidance: evaluation.rubricGuidance,
             rubricSections: evaluation.rubricSections,
+            sampleAnswer: evaluation.sampleAnswer,
             lengthExpectation: evaluation.lengthExpectation,
             responseText: evaluation.responseText,
           },

@@ -85,6 +85,7 @@ export interface OrderingItem extends BaseItemEntity {
 export interface ShortAnswerRubric {
 	keywords?: string[];
 	guidance?: string;
+	sampleAnswer?: string;
 }
 
 export interface ShortAnswerScoringRule {
@@ -248,11 +249,17 @@ export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | Sh
 
 export interface Assessment extends BaseEntity { title: string; itemIds: string[]; allowedAttempts: number; }
 
+export interface CohortAssignment {
+	assessmentId: string;
+	allowedAttempts?: number;
+}
+
 export interface Cohort extends BaseEntity {
 	name: string;
 	description?: string;
 	learnerIds: string[];
-	assessmentIds: string[];
+	assessmentIds: string[]; // Deprecated: use assignments
+	assignments?: CohortAssignment[];
 }
 
 export interface AttemptResponse {

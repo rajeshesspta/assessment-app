@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import type { Cohort } from '../../common/types.js';
+import type { Cohort, CohortAssignment } from '../../common/types.js';
 
 export interface CohortInput {
   id?: string;
@@ -8,6 +8,7 @@ export interface CohortInput {
   description?: string;
   learnerIds: string[];
   assessmentIds?: string[];
+  assignments?: CohortAssignment[];
 }
 
 function requireName(name: string): string {
@@ -45,13 +46,16 @@ function normalizeDescription(description?: string): string | undefined {
 
 export function createCohort(input: CohortInput): Cohort {
   const now = new Date().toISOString();
+  const assessmentIds = dedupeIds(input.assessmentIds ?? []);
+  const assignments = input.assignments ?? assessmentIds.map(id => ({ assessmentId: id }));
   return {
     id: input.id ?? uuid(),
     tenantId: input.tenantId,
     name: requireName(input.name),
     description: normalizeDescription(input.description),
     learnerIds: dedupeIds(input.learnerIds, true),
-    assessmentIds: dedupeIds(input.assessmentIds ?? []),
+    assessmentIds: assignments.map(a => a.assessmentId),
+    assignments,
     createdAt: now,
     updatedAt: now,
   };
@@ -68,8 +72,12 @@ export function updateCohort(existing: Cohort, patch: Partial<Omit<CohortInput, 
   if (patch.learnerIds) {
     next.learnerIds = dedupeIds(patch.learnerIds, true);
   }
-  if (patch.assessmentIds) {
+  if (patch.assignments) {
+    next.assignments = patch.assignments;
+    next.assessmentIds = patch.assignments.map(a => a.assessmentId);
+  } else if (patch.assessmentIds) {
     next.assessmentIds = dedupeIds(patch.assessmentIds);
+    next.assignments = next.assessmentIds.map(id => ({ assessmentId: id }));
   }
   next.updatedAt = new Date().toISOString();
   return next;

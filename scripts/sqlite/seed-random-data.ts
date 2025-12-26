@@ -453,14 +453,17 @@ const shortAnswerTemplates = [
   {
     prompt: 'Explain how photosynthesis converts sunlight into chemical energy.',
     keywords: ['sunlight', 'chlorophyll', 'glucose'],
+    sampleAnswer: 'Photosynthesis uses sunlight, water, and carbon dioxide to create oxygen and energy in the form of sugar (glucose).',
   },
   {
     prompt: 'Describe a mitigation strategy for distributed denial-of-service attacks.',
     keywords: ['rate limit', 'cdn', 'filtering'],
+    sampleAnswer: 'DDoS mitigation strategies include rate limiting, using a CDN to absorb traffic, and filtering malicious requests at the edge.',
   },
   {
     prompt: 'Summarize the causes of the American Civil War.',
     keywords: ['slavery', 'states rights', 'secession'],
+    sampleAnswer: 'The American Civil War was primarily caused by long-standing tensions over slavery, states rights, and the secession of Southern states.',
   },
 ];
 
@@ -475,6 +478,7 @@ function buildRandomShortAnswerItem(tenantId: string): Item {
   } satisfies ShortAnswerItem['scoring'];
   const rubric = {
     keywords: template.keywords,
+    sampleAnswer: template.sampleAnswer,
   } satisfies ShortAnswerItem['rubric'];
   return {
     id: `random-short-item-${randomUUID()}`,
@@ -492,14 +496,17 @@ const essayTemplates = [
   {
     prompt: 'Discuss the societal implications of ubiquitous AI assistants.',
     keywords: ['ethics', 'privacy', 'productivity'],
+    sampleAnswer: 'AI assistants offer productivity gains but raise concerns about privacy, data security, and the ethical use of personal information.',
   },
   {
     prompt: 'Explain how climate change affects coastal urban planning over 50 years.',
     keywords: ['sea level', 'infrastructure', 'migration'],
+    sampleAnswer: 'Rising sea levels necessitate infrastructure upgrades, managed retreat from vulnerable areas, and long-term migration planning.',
   },
   {
     prompt: 'Evaluate the impact of social media on political discourse.',
     keywords: ['polarization', 'engagement', 'misinformation'],
+    sampleAnswer: 'Social media increases political engagement but also contributes to polarization and the spread of misinformation.',
   },
 ];
 
@@ -518,7 +525,7 @@ function buildRandomEssayItem(tenantId: string): Item {
     tenantId,
     kind: 'ESSAY',
     prompt: template.prompt,
-    rubric: { keywords: template.keywords, sections: rubricSections },
+    rubric: { keywords: template.keywords, sections: rubricSections, sampleAnswer: template.sampleAnswer },
     length,
     scoring: { mode: 'manual', maxScore },
     createdAt: now,
@@ -597,6 +604,7 @@ function buildRandomAssessment(tenantId: string, items: Item[], index: number): 
     tenantId,
     title: `Math Drill ${index + 1}`,
     itemIds: picked,
+    allowedAttempts: randomInt(3) + 1,
     createdAt: now,
     updatedAt: now,
   };
