@@ -57,6 +57,7 @@ export interface Item {
 
 export interface Assessment {
   id: string;
+  tenantId: string;
   title: string;
   description?: string;
   itemIds: string[];
@@ -156,6 +157,12 @@ export function createApiClient(session: TenantSession) {
     async createAssessment(assessment: Partial<Assessment>): Promise<Assessment> {
       return request<Assessment>('/assessments', {
         method: 'POST',
+        body: JSON.stringify(assessment),
+      });
+    },
+    async updateAssessment(id: string, assessment: Partial<Assessment>): Promise<Assessment> {
+      return request<Assessment>(`/assessments/${id}`, {
+        method: 'PUT',
         body: JSON.stringify(assessment),
       });
     },

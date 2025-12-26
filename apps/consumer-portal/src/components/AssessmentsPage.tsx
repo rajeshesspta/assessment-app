@@ -37,8 +37,12 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
     loadAssessments();
   }, [api]);
 
-  const handleCreateAssessment = async (assessmentData: any) => {
-    await api.createAssessment(assessmentData);
+  const handleSaveAssessment = async (assessmentData: any) => {
+    if (selectedAssessment) {
+      await api.updateAssessment(selectedAssessment.id, assessmentData);
+    } else {
+      await api.createAssessment(assessmentData);
+    }
     await loadAssessments();
   };
 
@@ -60,7 +64,10 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
         </div>
         <button
           type="button"
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => {
+            setSelectedAssessment(null);
+            setIsCreateModalOpen(true);
+          }}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
           style={{ backgroundColor: brandPrimary }}
         >
@@ -71,8 +78,12 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
 
       <CreateAssessmentModal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSave={handleCreateAssessment}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setSelectedAssessment(null);
+        }}
+        onSave={handleSaveAssessment}
+        initialAssessment={selectedAssessment}
         api={api}
         brandPrimary={brandPrimary}
       />
@@ -148,6 +159,10 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => {
+                    setSelectedAssessment(assessment);
+                    setIsCreateModalOpen(true);
+                  }}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
                 >
                   Edit

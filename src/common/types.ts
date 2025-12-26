@@ -247,7 +247,13 @@ export interface ScenarioTaskItem extends BaseItemEntity {
 
 export type Item = ChoiceItem | FillBlankItem | MatchingItem | OrderingItem | ShortAnswerItem | EssayItem | NumericEntryItem | HotspotItem | DragDropItem | ScenarioTaskItem;
 
-export interface Assessment extends BaseEntity { title: string; itemIds: string[]; allowedAttempts: number; }
+export interface Assessment extends BaseEntity {
+	title: string;
+	description?: string;
+	itemIds: string[];
+	allowedAttempts: number;
+	timeLimitMinutes?: number;
+}
 
 export interface CohortAssignment {
 	assessmentId: string;

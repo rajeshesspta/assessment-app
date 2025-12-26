@@ -6,11 +6,12 @@ interface CreateAssessmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (assessment: any) => Promise<void>;
+  initialAssessment?: Assessment | null;
   api: any;
   brandPrimary?: string;
 }
 
-export function CreateAssessmentModal({ isOpen, onClose, onSave, api, brandPrimary }: CreateAssessmentModalProps) {
+export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessment, api, brandPrimary }: CreateAssessmentModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [allowedAttempts, setAllowedAttempts] = useState(1);
@@ -24,8 +25,21 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, api, brandPrima
   useEffect(() => {
     if (isOpen) {
       loadItems();
+      if (initialAssessment) {
+        setTitle(initialAssessment.title);
+        setDescription(initialAssessment.description || '');
+        setAllowedAttempts(initialAssessment.allowedAttempts);
+        setTimeLimitMinutes(initialAssessment.timeLimitMinutes);
+        setSelectedItemIds(initialAssessment.itemIds);
+      } else {
+        setTitle('');
+        setDescription('');
+        setAllowedAttempts(1);
+        setTimeLimitMinutes(undefined);
+        setSelectedItemIds([]);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialAssessment]);
 
   const loadItems = async () => {
     try {
@@ -85,7 +99,9 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, api, brandPrima
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-4xl rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h3 className="text-xl font-bold text-slate-900">Create New Assessment</h3>
+          <h3 className="text-xl font-bold text-slate-900">
+            {initialAssessment ? 'Edit Assessment' : 'Create New Assessment'}
+          </h3>
           <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600">
             <X className="h-5 w-5" />
           </button>

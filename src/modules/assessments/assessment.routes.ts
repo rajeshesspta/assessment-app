@@ -27,8 +27,10 @@ function ensureAssessmentManager(request: any, reply: FastifyReply): boolean {
 
 const createSchema = z.object({
   title: z.string().min(1),
+  description: z.string().optional(),
   itemIds: z.array(z.string()).min(1),
   allowedAttempts: z.number().int().min(1).max(10).optional(),
+  timeLimitMinutes: z.number().int().min(1).optional(),
 });
 
 const createAssessmentBodySchema = toJsonSchema(createSchema, 'CreateAssessmentRequest');
@@ -39,6 +41,18 @@ export interface AssessmentRoutesOptions {
 
 export async function assessmentRoutes(app: FastifyInstance, options: AssessmentRoutesOptions) {
   const { repository } = options;
+
+  app.get('/', {
+    schema: {
+      tags: ['Assessments'],
+      summary: 'List assessments',
+    }
+  }, async (req, reply) => {
+    if (!ensureAssessmentManager(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    return repository.list(tenantId);
+  });
+
   app.post('/', {
     schema: {
       tags: ['Assessments'],
@@ -57,6 +71,35 @@ export async function assessmentRoutes(app: FastifyInstance, options: Assessment
     eventBus.publish({ id: uuid(), type: 'AssessmentCreated', occurredAt: new Date().toISOString(), tenantId, payload: { assessmentId: id } });
     reply.code(201);
     return assessment;
+  });
+
+  app.put('/:id', {
+    schema: {
+      tags: ['Assessments'],
+      summary: 'Update an assessment',
+      body: createAssessmentBodySchema,
+    },
+    attachValidation: true,
+    validatorCompiler: passThroughValidator,
+  }, async (req, reply) => {
+    if (!ensureAssessmentManager(req, reply)) return;
+    const id = (req.params as any).id as string;
+    const tenantId = (req as any).tenantId as string;
+    const existing = repository.getById(tenantId, id);
+    if (!existing) {
+      reply.code(404);
+      return { error: 'Not found' };
+    }
+
+    const parsed = createSchema.parse(req.body);
+    const updated: Assessment = {
+      ...existing,
+      ...parsed,
+      updatedAt: new Date().toISOString(),
+    };
+    repository.save(updated);
+    eventBus.publish({ id: uuid(), type: 'AssessmentUpdated', occurredAt: new Date().toISOString(), tenantId, payload: { assessmentId: id } });
+    return updated;
   });
 
   app.get('/:id', async (req, reply) => {

@@ -1,9 +1,10 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { saveMock, getByIdMock, publishMock, uuidMock } = vi.hoisted(() => ({
+const { saveMock, getByIdMock, listMock, publishMock, uuidMock } = vi.hoisted(() => ({
   saveMock: vi.fn(),
   getByIdMock: vi.fn(),
+  listMock: vi.fn(),
   publishMock: vi.fn(),
   uuidMock: vi.fn(),
 }));
@@ -35,6 +36,7 @@ async function buildTestApp() {
     repository: {
       save: saveMock,
       getById: getByIdMock,
+      list: listMock,
     },
   });
   return app;
@@ -53,6 +55,23 @@ describe('assessmentRoutes', () => {
 
   afterEach(async () => {
     await app.close();
+  });
+
+  it('lists assessments for the tenant', async () => {
+    const mockAssessments = [
+      { id: 'a1', title: 'A1', tenantId: 'tenant-1' },
+      { id: 'a2', title: 'A2', tenantId: 'tenant-1' },
+    ];
+    listMock.mockReturnValue(mockAssessments);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/assessments',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(mockAssessments);
+    expect(listMock).toHaveBeenCalledWith('tenant-1');
   });
 
   it('creates an assessment and emits event', async () => {
@@ -100,6 +119,60 @@ describe('assessmentRoutes', () => {
 
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({ allowedAttempts: 4 });
+  });
+  it('accepts description and timeLimitMinutes', async () => {
+    uuidMock.mockReturnValueOnce('assessment-id-3').mockReturnValueOnce('event-id-3');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/assessments',
+      payload: {
+        title: 'Timed Assessment',
+        description: 'This is a timed test',
+        itemIds: ['item-1'],
+        timeLimitMinutes: 60,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body.description).toBe('This is a timed test');
+    expect(body.timeLimitMinutes).toBe(60);
+  });
+
+  it('updates an assessment', async () => {
+    const existing = {
+      id: 'a1',
+      tenantId: 'tenant-1',
+      title: 'Old Title',
+      itemIds: ['i1'],
+      allowedAttempts: 1,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z',
+    };
+    getByIdMock.mockReturnValue(existing);
+    uuidMock.mockReturnValue('event-id-update');
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/assessments/a1',
+      payload: {
+        title: 'New Title',
+        itemIds: ['i1', 'i2'],
+        allowedAttempts: 2,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.title).toBe('New Title');
+    expect(body.itemIds).toEqual(['i1', 'i2']);
+    expect(body.allowedAttempts).toBe(2);
+    expect(body.updatedAt).not.toBe(existing.updatedAt);
+    expect(saveMock).toHaveBeenCalled();
+    expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'AssessmentUpdated',
+      payload: { assessmentId: 'a1' },
+    }));
   });
 
   it('returns assessment when found', async () => {
