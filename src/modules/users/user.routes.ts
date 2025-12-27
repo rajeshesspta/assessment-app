@@ -147,7 +147,10 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     if (!ensureTenantScope(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const { id } = req.params as { id: string };
-    const user = repository.getById(tenantId, id);
+    let user = repository.getById(tenantId, id);
+    if (!user && id.includes('@')) {
+      user = repository.getByEmail(tenantId, id);
+    }
     if (!user) {
       reply.code(404);
       return { error: 'User not found' };
@@ -196,5 +199,28 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
     repository.delete(tenantId, id);
     reply.code(204);
     return;
+  });
+
+  app.get('/by-email/:email', {
+    schema: {
+      tags: ['Users'],
+      summary: 'Get user by email',
+      params: {
+        type: 'object',
+        required: ['email'],
+        properties: { email: { type: 'string' } },
+      },
+    },
+  }, async (req, reply) => {
+    if (forbidSuperAdmin(req, reply)) return;
+    if (!ensureTenantScope(req, reply)) return;
+    const tenantId = (req as any).tenantId as string;
+    const { email } = req.params as { email: string };
+    const user = repository.getByEmail(tenantId, email);
+    if (!user) {
+      reply.code(404);
+      return { error: 'User not found' };
+    }
+    return user;
   });
 }

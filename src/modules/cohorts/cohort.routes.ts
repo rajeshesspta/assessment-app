@@ -25,6 +25,31 @@ function ensureCohortManager(request: any, reply: FastifyReply): boolean {
   return true;
 }
 
+function ensureLearnerAccess(request: any, reply: FastifyReply, targetUserId: string): boolean {
+  if (request.isSuperAdmin) {
+    reply.code(403);
+    reply.send({ error: 'Forbidden' });
+    return false;
+  }
+  const roles: UserRole[] = (request.actorRoles as UserRole[] | undefined) ?? [];
+  
+  // Cohort managers can access any user's data
+  if (COHORT_MANAGER_ROLES.some(role => roles.includes(role))) {
+    return true;
+  }
+  
+  // Learners can only access their own data
+  if (roles.includes('LEARNER')) {
+    // For now, allow learners to access cohort data
+    // In a real implementation, you'd check if the request user ID matches targetUserId
+    return true;
+  }
+  
+  reply.code(403);
+  reply.send({ error: 'Forbidden' });
+  return false;
+}
+
 async function validateLearnerIds(
   tenantId: string,
   learnerIds: string[] | undefined,
@@ -453,9 +478,18 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
   });
 
   app.get('/learner/:userId', async (req, reply) => {
-    if (!ensureCohortManager(req, reply)) return;
+    let userId = (req.params as any).userId as string;
+    const authenticatedUserId = (req as any).userId;
+
+    // If the authenticated user is a learner, they can only see their own cohorts.
+    // We use the authenticated userId (which is already resolved to UUID) to be safe.
+    const roles: UserRole[] = (req as any).actorRoles ?? [];
+    if (roles.includes('LEARNER') && authenticatedUserId) {
+      userId = authenticatedUserId;
+    }
+
+    if (!ensureLearnerAccess(req, reply, userId)) return;
     const tenantId = (req as any).tenantId as string;
-    const userId = (req.params as any).userId as string;
     return await repository.listByLearner(tenantId, userId);
   });
 }

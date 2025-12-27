@@ -122,4 +122,37 @@ describe('registerAuth middleware', () => {
     await expect(registerAuth(req, reply)).resolves.toBeUndefined();
     expect((req as any).actorRoles).toEqual(['LEARNER', 'CONTENT_AUTHOR']);
   });
+
+  it('resolves email to UUID if x-actor-id is an email', async () => {
+    getMock.mockResolvedValueOnce({ key: 'good', tenantId: 'tenant-1' });
+    const req = createRequest({
+      'x-api-key': 'good',
+      'x-tenant-id': 'tenant-1',
+      'x-actor-id': 'user@example.com',
+    });
+    const reply = createReply();
+    const userRepository = {
+      getByEmail: vi.fn().mockReturnValue({ id: 'uuid-123', email: 'user@example.com' }),
+    } as any;
+
+    await expect(registerAuth(req, reply, userRepository)).resolves.toBeUndefined();
+    expect(userRepository.getByEmail).toHaveBeenCalledWith('tenant-1', 'user@example.com');
+    expect((req as any).userId).toBe('uuid-123');
+  });
+
+  it('falls back to original actor-id if email resolution fails', async () => {
+    getMock.mockResolvedValueOnce({ key: 'good', tenantId: 'tenant-1' });
+    const req = createRequest({
+      'x-api-key': 'good',
+      'x-tenant-id': 'tenant-1',
+      'x-actor-id': 'missing@example.com',
+    });
+    const reply = createReply();
+    const userRepository = {
+      getByEmail: vi.fn().mockReturnValue(undefined),
+    } as any;
+
+    await expect(registerAuth(req, reply, userRepository)).resolves.toBeUndefined();
+    expect((req as any).userId).toBe('missing@example.com');
+  });
 });

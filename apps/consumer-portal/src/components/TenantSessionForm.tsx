@@ -14,11 +14,13 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
     apiBaseUrl: '/api',
     actorRoles: ['LEARNER'],
     userId: '',
+    tenantId: '',
   });
 
   const canSubmit = useMemo(() => (
     formState.apiBaseUrl.length > 0
     && formState.userId.length > 0
+    && formState.tenantId.length > 0
   ), [formState]);
 
   function handleSubmit(event: FormEvent) {
@@ -64,7 +66,7 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
           </button>
         )}
       </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
         <label className="text-sm font-medium text-slate-700">
           BFF API Base URL
           <input
@@ -73,6 +75,16 @@ export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormP
             placeholder="http://localhost:4000"
             value={formState.apiBaseUrl}
             onChange={event => handleInputChange('apiBaseUrl', event.target.value)}
+          />
+        </label>
+        <label className="text-sm font-medium text-slate-700">
+          Tenant Id
+          <input
+            className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+            type="text"
+            placeholder="tenant-123"
+            value={formState.tenantId}
+            onChange={event => handleInputChange('tenantId', event.target.value)}
           />
         </label>
         <label className="text-sm font-medium text-slate-700">

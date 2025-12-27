@@ -4,6 +4,7 @@ export interface TenantSession {
   apiBaseUrl: string;
   actorRoles: string[];
   userId: string;
+  tenantId: string;
 }
 
 const STORAGE_KEY = 'consumer-portal::session';

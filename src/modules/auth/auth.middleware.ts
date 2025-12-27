@@ -3,6 +3,7 @@ import { AuthError, TenantError } from '../../common/errors.js';
 import { apiKeyStore } from './api-key.store.js';
 import { loadConfig } from '../../config/index.js';
 import { USER_ROLES, type UserRole } from '../../common/types.js';
+import type { UserRepository } from '../users/user.repository.js';
 
 const { auth: { superAdminTenantId } } = loadConfig();
 
@@ -24,7 +25,7 @@ function parseActorRoles(value: string | string[] | undefined): UserRole[] {
   return normalized;
 }
 
-export async function registerAuth(req: FastifyRequest, reply: FastifyReply) {
+export async function registerAuth(req: FastifyRequest, reply: FastifyReply, userRepository?: UserRepository) {
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || typeof apiKey !== 'string') {
     reply.code(401);
@@ -54,8 +55,25 @@ export async function registerAuth(req: FastifyRequest, reply: FastifyReply) {
   }
   const actorRolesHeader = req.headers['x-actor-roles'];
   const actorRoles = parseActorRoles(actorRolesHeader);
+  const actorId = req.headers['x-actor-id'];
   (req as any).tenantId = tenantId;
   (req as any).actorTenantId = record.tenantId;
   (req as any).isSuperAdmin = isSuperAdmin;
   (req as any).actorRoles = actorRoles.length > 0 ? actorRoles : [isSuperAdmin ? 'SUPER_ADMIN' : 'TENANT_ADMIN'];
+  
+  let userId = typeof actorId === 'string' ? actorId : undefined;
+  
+  // If userId looks like an email and we have a userRepository, try to resolve it to a UUID
+  if (userId && userId.includes('@') && userRepository) {
+    try {
+      const user = userRepository.getByEmail(tenantId, userId);
+      if (user) {
+        userId = user.id;
+      }
+    } catch (err) {
+      req.log.warn({ err, email: userId }, 'Failed to resolve user by email in auth middleware');
+    }
+  }
+  
+  (req as any).userId = userId;
 }

@@ -342,4 +342,40 @@ Assessment Module Iteration Checklist
 - [ ] Portal: Implement branding injection from dynamic config (CSS variables).
 - [ ] Portal: Add tenant switcher for users with multiple memberships.
 
+**Iteration 20: Learner Dashboard & Overview (MVP)**
+- Goal: Provide learners with a personalized dashboard for assigned assessments and progress.
+- [x] UI: Create learner dashboard showing assigned assessments with status, due dates, and progress indicators.
+- [x] BFF: Add proxy routes for fetching learner assignments and cohort data.
+- [x] UI: Implement status badges (Available, In Progress, Expired) and quick access to assessments.
+
+**Iteration 21: Assessment Player & Attempt History**
+- Goal: Enable learners to take assessments interactively and review past attempts.
+- [ ] UI: Build AssessmentPlayer with timer enforcement, auto-save, and support for all item types.
+- [ ] UI: Implement attempt history view with scores, feedback, and retry options.
+- [ ] BFF: Add routes for attempt creation, progress saving, and history retrieval.
+
+**Iteration 22: Progress Tracking & Notifications**
+- Goal: Enhance learner engagement with visual progress and alerts.
+- [ ] UI: Add progress charts (completion rates, scores over time) using attempt data.
+- [ ] UI: Implement in-app notifications for due dates and new assignments.
+- [ ] BFF: Add notification endpoints and progress aggregation logic.
+
+**Iteration 23: Cohort Insights & Accessibility**
+- Goal: Provide group performance insights and ensure accessibility.
+- [ ] UI: Add cohort insights view with aggregated stats (privacy-compliant).
+- [ ] UI: Implement accessibility features (screen readers, adjustable fonts, keyboard navigation).
+- [ ] UI: Ensure responsive design for mobile/tablet devices.
+
+**Iteration 24: Advanced Learner Features**
+- Goal: Add multi-language support, AI recommendations, and external integrations.
+- [ ] UI: Add multi-language support for UI and assessments based on tenant config.
+- [ ] UI: Implement AI-assisted learning recommendations post-assessment.
+- [ ] BFF: Add external LMS sync for pulling assignments via webhooks.
+
+**Iteration 25: Feedback & Certificates (Backlog)**
+- Goal: Close the feedback loop and provide achievement recognition.
+- [ ] UI: Add feedback submission for assessments.
+- [ ] UI: Implement certificate/badge generation for completions.
+- [ ] BFF: Add feedback storage and certificate generation endpoints.
+
 

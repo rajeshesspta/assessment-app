@@ -9,6 +9,7 @@ import type { CohortRepository } from '../cohorts/cohort.repository.js';
 import type { UserRepository } from '../users/user.repository.js';
 import type {
   AttemptResponse,
+  UserRole,
   FillBlankMatcher,
   HotspotPoint,
   ScenarioAttachment,
@@ -94,9 +95,17 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     if (!ensureAttemptAccess(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const parsed = startSchema.parse(req.body);
+    const authenticatedUserId = (req as any).userId;
+    const roles: UserRole[] = (req as any).actorRoles ?? [];
+
+    let targetUserId = parsed.userId;
+    if (roles.includes('LEARNER') && authenticatedUserId) {
+      targetUserId = authenticatedUserId;
+    }
+
     const assessment = assessmentRepository.getById(tenantId, parsed.assessmentId);
     if (!assessment) { reply.code(400); return { error: 'Invalid assessmentId' }; }
-    const learner = userRepository.getById(tenantId, parsed.userId);
+    const learner = userRepository.getById(tenantId, targetUserId);
     if (!learner) {
       reply.code(400);
       return { error: 'Learner does not exist' };
@@ -479,7 +488,14 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
 
   app.get('/user/:userId', async (req, reply) => {
     if (!ensureAttemptAccess(req, reply)) return;
-    const userId = (req.params as any).userId as string;
+    let userId = (req.params as any).userId as string;
+    const authenticatedUserId = (req as any).userId;
+    const roles: UserRole[] = (req as any).actorRoles ?? [];
+
+    if (roles.includes('LEARNER') && authenticatedUserId) {
+      userId = authenticatedUserId;
+    }
+
     const tenantId = (req as any).tenantId as string;
     return attemptRepository.listByUser(tenantId, userId);
   });

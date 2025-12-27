@@ -12,14 +12,13 @@ import { LearnersPage } from './components/LearnersPage';
 import { CohortsPage } from './components/CohortsPage';
 import { UsersPage } from './components/UsersPage';
 import { AssessmentPlayer } from './components/AssessmentPlayer';
-import { AttemptResult } from './components/AttemptResult';
+import { LearnerDashboard } from './components/LearnerDashboard';
 import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
-import type { AssessmentAnalytics, AttemptResponse } from './utils/api';
 import { usePortalAuth } from './hooks/usePortalAuth';
-import { LoginPage } from './components/LoginPage';
 import { useTenantConfig } from './context/TenantConfigContext';
 import { buildBffUrl, isBffEnabled } from './utils/bff';
+import { LoginPage } from './components/LoginPage';
 
 type NavItem = {
   id: string;
@@ -130,19 +129,21 @@ export default function App() {
   }, [user, location.pathname, navigate]);
 
   useEffect(() => {
-    if (user && isBffEnabled()) {
+    if (user && isBffEnabled() && config?.headlessTenantId) {
       const rolesChanged = JSON.stringify(session?.actorRoles) !== JSON.stringify(user.roles);
       const userChanged = session?.userId !== user.id;
+      const tenantChanged = session?.tenantId !== config.headlessTenantId;
       
-      if (!session || rolesChanged || userChanged) {
+      if (!session || rolesChanged || userChanged || tenantChanged) {
         saveSession({
           apiBaseUrl: buildBffUrl('/api'),
           actorRoles: user.roles,
           userId: user.id,
+          tenantId: config.headlessTenantId,
         });
       }
     }
-  }, [user, session, saveSession]);
+  }, [user, session, saveSession, config?.headlessTenantId]);
 
   const ensureApi = useCallback(() => {
     if (!api) {
@@ -204,11 +205,7 @@ export default function App() {
     }
   }
 
-  const overviewCards = useMemo(() => ([
-    { title: 'Upcoming attempts', body: 'Track scheduled launches across cohorts.' },
-    { title: 'Instructor messages', body: 'Stay aligned with facilitator updates.' },
-    { title: 'Assessment library', body: 'Explore practice sets curated by authors.' },
-  ]), []);
+
 
   const MyAssessmentsPage = () => (
     <>
@@ -254,16 +251,27 @@ export default function App() {
     </>
   );
 
-  const OverviewPage = () => (
-    <section className="grid gap-4 md:grid-cols-3">
-      {overviewCards.map(card => (
-        <article key={card.title} className="rounded-2xl border border-brand-50 bg-white p-5">
-          <p className="text-sm font-semibold text-brand-600">{card.title}</p>
-          <p className="mt-2 text-base text-slate-600">{card.body}</p>
-        </article>
-      ))}
-    </section>
-  );
+  const OverviewPage = () => {
+    if (!api) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600"></div>
+            <p className="mt-2 text-sm text-slate-600">Setting up session...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <LearnerDashboard
+        api={api}
+        userId={user.id}
+        attempts={attempts}
+        onStartAttempt={startAttempt}
+      />
+    );
+  };
 
   const AnalyticsPage = () => (
     <section className="rounded-2xl border border-brand-50 bg-white p-6">

@@ -189,4 +189,24 @@ describe('userRoutes', () => {
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ error: 'Super Admin must manage admins via /tenants/:id/admins' });
   });
+
+  it('allows fetching user by email via GET /users/:id', async () => {
+    repository.save({
+      id: 'uuid-123',
+      tenantId: 'tenant-1',
+      email: 'test@example.com',
+      roles: ['LEARNER'],
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/users/test@example.com',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().id).toBe('uuid-123');
+  });
 });

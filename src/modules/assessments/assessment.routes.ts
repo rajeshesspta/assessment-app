@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import { createAssessment } from './assessment.model.js';
 import type { AssessmentRepository } from './assessment.repository.js';
+import type { CohortRepository } from '../cohorts/cohort.repository.js';
 import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
@@ -25,6 +26,38 @@ function ensureAssessmentManager(request: any, reply: FastifyReply): boolean {
   return false;
 }
 
+function ensureCanAccessAssessment(request: any, reply: FastifyReply, assessmentId: string, cohortRepository: CohortRepository): boolean {
+  if (request.isSuperAdmin) {
+    reply.code(403);
+    reply.send({ error: 'Forbidden' });
+    return false;
+  }
+  const roles: UserRole[] = (request.actorRoles as UserRole[] | undefined) ?? [];
+  const tenantId = (request as any).tenantId as string;
+  const userId = (request as any).userId as string;
+
+  // Assessment managers can access any assessment
+  if (ASSESSMENT_MANAGER_ROLES.some(role => roles.includes(role))) {
+    return true;
+  }
+
+  // Learners can access assessments they're assigned to
+  if (roles.includes('LEARNER')) {
+    const learnerCohorts = cohortRepository.listByLearner(tenantId, userId);
+    const isAssigned = learnerCohorts.some(cohort => 
+      cohort.assessmentIds?.includes(assessmentId) || 
+      cohort.assignments?.some(a => a.assessmentId === assessmentId)
+    );
+    if (isAssigned) {
+      return true;
+    }
+  }
+
+  reply.code(403);
+  reply.send({ error: 'Forbidden' });
+  return false;
+}
+
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
@@ -40,10 +73,11 @@ const createAssessmentBodySchema = toJsonSchema(createSchema, 'CreateAssessmentR
 
 export interface AssessmentRoutesOptions {
   repository: AssessmentRepository;
+  cohortRepository: CohortRepository;
 }
 
 export async function assessmentRoutes(app: FastifyInstance, options: AssessmentRoutesOptions) {
-  const { repository } = options;
+  const { repository, cohortRepository } = options;
 
   app.get('/', {
     schema: {
@@ -106,8 +140,8 @@ export async function assessmentRoutes(app: FastifyInstance, options: Assessment
   });
 
   app.get('/:id', async (req, reply) => {
-    if (!ensureAssessmentManager(req, reply)) return;
     const id = (req.params as any).id as string;
+    if (!ensureCanAccessAssessment(req, reply, id, cohortRepository)) return;
     const tenantId = (req as any).tenantId as string;
     const a = repository.getById(tenantId, id);
     if (!a) { reply.code(404); return { error: 'Not found' }; }

@@ -11,6 +11,7 @@ type TenantBranding = {
 
 type TenantConfig = {
   tenantId: string;
+  headlessTenantId: string;
   name: string;
   supportEmail?: string;
   premiumDeployment: boolean;
@@ -36,6 +37,7 @@ const DEFAULT_BRANDING: TenantBranding = {
 
 const DEFAULT_CONFIG: TenantConfig = {
   tenantId: 'default-tenant',
+  headlessTenantId: 'dev-tenant',
   name: 'Assessment App',
   supportEmail: 'support@example.com',
   premiumDeployment: false,

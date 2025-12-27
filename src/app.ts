@@ -83,12 +83,12 @@ export function buildApp(deps: AppDependencies = {}) {
     if (url.startsWith('/health') || url.startsWith('/docs')) {
       return;
     }
-    await registerAuth(request, reply);
+    await registerAuth(request, reply, repositories.user);
   });
 
   // Routes
   app.register(itemRoutes, { prefix: '/items', repository: repositories.item });
-  app.register(assessmentRoutes, { prefix: '/assessments', repository: repositories.assessment });
+  app.register(assessmentRoutes, { prefix: '/assessments', repository: repositories.assessment, cohortRepository: repositories.cohort });
   app.register(attemptRoutes, {
     prefix: '/attempts',
     attemptRepository: repositories.attempt,
