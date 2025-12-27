@@ -352,6 +352,32 @@ function AssignIndividualModal({ isOpen, onClose, user, assessments, api, brandP
   const [allowedAttempts, setAllowedAttempts] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existingAssignments, setExistingAssignments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedAssessmentId('');
+      setAllowedAttempts(1);
+      setError(null);
+      loadExistingAssignments();
+    }
+  }, [isOpen, user.id, api]);
+
+  const loadExistingAssignments = async () => {
+    setLoading(true);
+    try {
+      const cohorts = await api.fetchLearnerCohorts(user.id);
+      const assignments = cohorts.flatMap(c => (c.assignments ?? []).map(a => ({ ...a, cohortName: c.name })));
+      setExistingAssignments(assignments);
+    } catch (err) {
+      console.error('Failed to load existing assignments', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getAssessmentTitle = (id: string) => assessments.find(a => a.id === id)?.title ?? id;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -366,7 +392,9 @@ function AssignIndividualModal({ isOpen, onClose, user, assessments, api, brandP
         assessmentId: selectedAssessmentId,
         allowedAttempts: Number(allowedAttempts)
       });
-      onClose();
+      await loadExistingAssignments(); // Refresh the list
+      setSelectedAssessmentId(''); // Reset form
+      setAllowedAttempts(1);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -376,7 +404,7 @@ function AssignIndividualModal({ isOpen, onClose, user, assessments, api, brandP
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden">
+      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h3 className="text-xl font-bold text-slate-900">Assign Assessment</h3>
           <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600">
@@ -384,71 +412,102 @@ function AssignIndividualModal({ isOpen, onClose, user, assessments, api, brandP
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {error && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
               {error}
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Learner</label>
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm">
-                <User className="h-4 w-4" />
+          {/* Existing Assignments */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Current Assignments</h4>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="h-6 w-6 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" style={{ borderTopColor: brandPrimary }}></div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{user.name}</p>
-                <p className="text-xs text-slate-500">{user.email}</p>
+            ) : existingAssignments.length === 0 ? (
+              <p className="text-sm text-slate-500 italic">No assignments yet.</p>
+            ) : (
+              <div className="grid gap-3 max-h-48 overflow-y-auto">
+                {existingAssignments.map((assignment, idx) => (
+                  <div key={idx} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div>
+                      <p className="font-semibold text-slate-900">{getAssessmentTitle(assignment.assessmentId)}</p>
+                      <p className="text-xs text-slate-500">via {assignment.cohortName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-slate-700">{assignment.allowedAttempts ?? 1} attempts</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assign New Assessment Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Assign New Assessment</h4>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Learner</label>
+              <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm">
+                  <User className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                  <p className="text-xs text-slate-500">{user.email}</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Select Assessment</label>
-            <select
-              required
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
-              value={selectedAssessmentId}
-              onChange={e => setSelectedAssessmentId(e.target.value)}
-            >
-              <option value="">Choose an assessment...</option>
-              {assessments.map(a => (
-                <option key={a.id} value={a.id}>{a.title}</option>
-              ))}
-            </select>
-          </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Select Assessment</label>
+              <select
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                value={selectedAssessmentId}
+                onChange={e => setSelectedAssessmentId(e.target.value)}
+              >
+                <option value="">Choose an assessment...</option>
+                {assessments.map(a => (
+                  <option key={a.id} value={a.id}>{a.title}</option>
+                ))}
+              </select>
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Allowed Attempts</label>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
-              value={allowedAttempts}
-              onChange={e => setAllowedAttempts(parseInt(e.target.value))}
-            />
-          </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Allowed Attempts</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                value={allowedAttempts}
+                onChange={e => setAllowedAttempts(parseInt(e.target.value))}
+              />
+            </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-xl bg-brand-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-200 transition hover:bg-brand-600 disabled:opacity-50"
-              style={{ backgroundColor: brandPrimary }}
-            >
-              {isSubmitting ? 'Assigning...' : 'Assign Assessment'}
-            </button>
-          </div>
-        </form>
+            <div className="flex items-center justify-end gap-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-xl bg-brand-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-200 transition hover:bg-brand-600 disabled:opacity-50"
+                style={{ backgroundColor: brandPrimary }}
+              >
+                {isSubmitting ? 'Assigning...' : 'Assign Assessment'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

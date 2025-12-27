@@ -246,7 +246,14 @@ export function createApiClient(session: TenantSession) {
     async assignToUser(userId: string, assignment: { assessmentId: string; allowedAttempts?: number; availableFrom?: string; dueDate?: string }): Promise<any> {
       return request(`/cohorts/assignments/users/${userId}`, {
         method: 'POST',
-        body: JSON.stringify(assignment),
+        body: JSON.stringify({
+          assignments: [{
+            assessmentId: assignment.assessmentId,
+            allowedAttempts: assignment.allowedAttempts,
+            availableFrom: assignment.availableFrom,
+            dueDate: assignment.dueDate,
+          }]
+        }),
       });
     },
     async assignAssessmentToCohort(cohortId: string, assessmentId: string, options?: { allowedAttempts?: number; availableFrom?: string; dueDate?: string }): Promise<Cohort> {

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { CohortRepository } from './cohort.repository.js';
 import type { UserRepository } from '../users/user.repository.js';
 import type { AssessmentRepository } from '../assessments/assessment.repository.js';
-import type { UserRole } from '../../common/types.js';
+import type { UserRole, Cohort, CohortAssignment } from '../../common/types.js';
 import { createCohort, updateCohort } from './cohort.model.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
@@ -25,49 +25,44 @@ function ensureCohortManager(request: any, reply: FastifyReply): boolean {
   return true;
 }
 
-function validateLearnerIds(
+async function validateLearnerIds(
   tenantId: string,
-  learnerIds: string[],
+  learnerIds: string[] | undefined,
   userRepository: UserRepository,
-  reply: FastifyReply,
-): string[] | undefined {
+): Promise<{ validated: string[] } | { error: string }> {
+  if (!learnerIds || learnerIds.length === 0) {
+    return { validated: [] };
+  }
   const validated: string[] = [];
   for (const rawId of learnerIds) {
     const id = rawId.trim();
     if (!id) {
       continue;
     }
-    const user = userRepository.getById(tenantId, id);
+    const user = await userRepository.getById(tenantId, id);
     if (!user) {
-      reply.code(400);
-      reply.send({ error: `Learner ${id} does not exist` });
-      return undefined;
+      return { error: `Learner ${id} does not exist` };
     }
-    if (!user.roles.includes('LEARNER')) {
-      reply.code(400);
-      reply.send({ error: `User ${id} is not a learner` });
-      return undefined;
+    if (!user.roles?.includes('LEARNER')) {
+      return { error: `User ${id} is not a learner` };
     }
     if (!validated.includes(id)) {
       validated.push(id);
     }
   }
   if (!validated.length) {
-    reply.code(400);
-    reply.send({ error: 'Cohort must include at least one learner' });
-    return undefined;
+    return { error: 'Cohort must include at least one learner' };
   }
-  return validated;
+  return { validated };
 }
 
-function validateAssessmentIds(
+async function validateAssessmentIds(
   tenantId: string,
   assessmentIds: string[] | undefined,
   assessmentRepository: AssessmentRepository,
-  reply: FastifyReply,
-): string[] | undefined {
+): Promise<{ validated: string[] } | { error: string }> {
   if (!assessmentIds || assessmentIds.length === 0) {
-    return [];
+    return { validated: [] };
   }
   const validated: string[] = [];
   for (const rawId of assessmentIds) {
@@ -75,17 +70,35 @@ function validateAssessmentIds(
     if (!id) {
       continue;
     }
-    const assessment = assessmentRepository.getById(tenantId, id);
+    const assessment = await assessmentRepository.getById(tenantId, id);
     if (!assessment) {
-      reply.code(400);
-      reply.send({ error: `Assessment ${id} does not exist` });
-      return undefined;
+      return { error: `Assessment ${id} does not exist` };
     }
     if (!validated.includes(id)) {
       validated.push(id);
     }
   }
-  return validated;
+  return { validated };
+}
+
+function mergeAssignments(existing: CohortAssignment[], updates: CohortAssignment[]): CohortAssignment[] {
+  const map = new Map(existing.map(a => [a.assessmentId, a]));
+  for (const update of updates) {
+    const existingAssignment = map.get(update.assessmentId);
+    if (existingAssignment) {
+      // Merge: keep existing values if update is undefined
+      map.set(update.assessmentId, {
+        ...existingAssignment,
+        ...update,
+        availableFrom: update.availableFrom ?? existingAssignment.availableFrom,
+        dueDate: update.dueDate ?? existingAssignment.dueDate,
+        allowedAttempts: update.allowedAttempts ?? existingAssignment.allowedAttempts,
+      });
+    } else {
+      map.set(update.assessmentId, update);
+    }
+  }
+  return Array.from(map.values());
 }
 
 const createCohortSchema = z.object({
@@ -98,6 +111,8 @@ const createCohortSchema = z.object({
       z.object({
         assessmentId: z.string().min(1),
         allowedAttempts: z.number().int().min(1).max(100).optional(),
+        availableFrom: z.string().optional(),
+        dueDate: z.string().optional(),
       }),
     )
     .optional(),
@@ -131,6 +146,8 @@ const assignAssessmentsSchema = z.object({
       z.object({
         assessmentId: z.string().min(1),
         allowedAttempts: z.number().int().min(1).max(100).optional(),
+        availableFrom: z.string().optional(),
+        dueDate: z.string().optional(),
       }),
     )
     .optional(),
@@ -168,36 +185,43 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     const tenantId = (req as any).tenantId as string;
     const parsed = createCohortSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      reply.code(400);
-      return { error: 'Validation error', issues: parsed.error.issues };
+      return reply.code(400).send({ error: 'Validation error', issues: parsed.error.issues });
     }
-    const learnerIds = validateLearnerIds(tenantId, parsed.data.learnerIds, userRepository, reply);
-    if (!learnerIds) return;
-    const assessmentIds = validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository, reply);
-    if (assessmentIds === undefined) return;
+    const learnerValidation = await validateLearnerIds(tenantId, parsed.data.learnerIds, userRepository);
+    if ('error' in learnerValidation) {
+      return reply.code(400).send({ error: learnerValidation.error });
+    }
+    const learnerIds = learnerValidation.validated;
+
+    const assessmentValidation = await validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository);
+    if ('error' in assessmentValidation) {
+      return reply.code(400).send({ error: assessmentValidation.error });
+    }
+    const assessmentIds = assessmentValidation.validated;
 
     const assignments = parsed.data.assignments;
     if (assignments) {
       for (const assignment of assignments) {
-        const assessment = assessmentRepository.getById(tenantId, assignment.assessmentId);
+        const assessment = await assessmentRepository.getById(tenantId, assignment.assessmentId);
         if (!assessment) {
-          reply.code(400);
-          return { error: `Assessment ${assignment.assessmentId} does not exist` };
+          return reply.code(400).send({ error: `Assessment ${assignment.assessmentId} does not exist` });
         }
       }
     }
 
-    const cohort = createCohort({
+    const cohort: Cohort = {
+      id: '',
       tenantId,
       name: parsed.data.name,
       description: parsed.data.description,
       learnerIds,
       assessmentIds,
       assignments,
-    });
-    const saved = repository.save(cohort);
-    reply.code(201);
-    return saved;
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await repository.save(cohort);
+    return reply.code(201).send(cohort);
   });
 
   app.put('/:id', {
@@ -217,39 +241,44 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     if (!ensureCohortManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const id = (req.params as any).id as string;
-    const cohort = repository.getById(tenantId, id);
+    const cohort = await repository.getById(tenantId, id);
     if (!cohort) {
-      reply.code(404);
-      return { error: 'Cohort not found' };
+      return reply.code(404).send({ error: 'Cohort not found' });
     }
 
     const parsed = updateCohortSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      reply.code(400);
-      return { error: 'Validation error', issues: parsed.error.issues };
+      return reply.code(400).send({ error: 'Validation error', issues: parsed.error.issues });
     }
 
     let learnerIds = cohort.learnerIds;
     if (parsed.data.learnerIds) {
-      const validated = validateLearnerIds(tenantId, parsed.data.learnerIds, userRepository, reply);
-      if (!validated) return;
-      learnerIds = validated;
+      const validation = await validateLearnerIds(tenantId, parsed.data.learnerIds, userRepository);
+      if ('error' in validation) {
+        return reply.code(400).send({ error: validation.error });
+      }
+      learnerIds = validation.validated;
     }
 
     let assessmentIds = cohort.assessmentIds;
     if (parsed.data.assessmentIds) {
-      const validated = validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository, reply);
-      if (validated === undefined) return;
-      assessmentIds = validated;
+      const validation = await validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository);
+      if ('error' in validation) {
+        return reply.code(400).send({ error: validation.error });
+      }
+      assessmentIds = validation.validated;
     }
 
-    const assignments = parsed.data.assignments;
-    if (assignments) {
-      for (const assignment of assignments) {
-        const assessment = assessmentRepository.getById(tenantId, assignment.assessmentId);
+    let mergedAssignments = cohort.assignments;
+    if (parsed.data.assignments) {
+      mergedAssignments = mergeAssignments(cohort.assignments || [], parsed.data.assignments);
+    }
+
+    if (mergedAssignments) {
+      for (const assignment of mergedAssignments) {
+        const assessment = await assessmentRepository.getById(tenantId, assignment.assessmentId);
         if (!assessment) {
-          reply.code(400);
-          return { error: `Assessment ${assignment.assessmentId} does not exist` };
+          return reply.code(400).send({ error: `Assessment ${assignment.assessmentId} does not exist` });
         }
       }
     }
@@ -259,10 +288,10 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
       description: parsed.data.description,
       learnerIds,
       assessmentIds,
-      assignments,
+      assignments: mergedAssignments,
     });
-    const saved = repository.save(updated);
-    return saved;
+    await repository.save(updated);
+    return reply.send(updated);
   });
 
   app.delete('/:id', {
@@ -279,12 +308,12 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     if (!ensureCohortManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const id = (req.params as any).id as string;
-    const cohort = repository.getById(tenantId, id);
+    const cohort = await repository.getById(tenantId, id);
     if (!cohort) {
       reply.code(404);
       return { error: 'Cohort not found' };
     }
-    repository.delete(tenantId, id);
+    await repository.delete(tenantId, id);
     reply.code(204);
     return;
   });
@@ -306,7 +335,7 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     if (!ensureCohortManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const id = (req.params as any).id as string;
-    const cohort = repository.getById(tenantId, id);
+    const cohort = await repository.getById(tenantId, id);
     if (!cohort) {
       reply.code(404);
       return { error: 'Cohort not found' };
@@ -319,28 +348,33 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
 
     let newAssignments = parsed.data.assignments ?? [];
     if (parsed.data.assessmentIds) {
-      const validatedIds = validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository, reply);
-      if (validatedIds === undefined) return;
-      newAssignments = [...newAssignments, ...validatedIds.map(id => ({ assessmentId: id }))];
+      const validation = await validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository);
+      if ('error' in validation) {
+        return reply.code(400).send({ error: validation.error });
+      }
+      newAssignments = [...newAssignments, ...validation.validated.map(id => ({ assessmentId: id }))];
     }
 
     for (const assignment of newAssignments) {
-      const assessment = assessmentRepository.getById(tenantId, assignment.assessmentId);
+      const assessment = await assessmentRepository.getById(tenantId, assignment.assessmentId);
       if (!assessment) {
-        reply.code(400);
-        return { error: `Assessment ${assignment.assessmentId} does not exist` };
+        return reply.code(400).send({ error: `Assessment ${assignment.assessmentId} does not exist` });
       }
     }
 
     const existingAssignments = cohort.assignments ?? cohort.assessmentIds.map(id => ({ assessmentId: id }));
     const assignmentMap = new Map(existingAssignments.map(a => [a.assessmentId, a]));
     for (const a of newAssignments) {
-      assignmentMap.set(a.assessmentId, a);
+      const existing = assignmentMap.get(a.assessmentId);
+      assignmentMap.set(a.assessmentId, {
+        ...existing,
+        ...a,
+      });
     }
 
     const updated = updateCohort(cohort, { assignments: Array.from(assignmentMap.values()) });
-    const saved = repository.save(updated);
-    return saved;
+    await repository.save(updated);
+    return reply.send(updated);
   });
 
   app.post('/assignments/users/:userId', {
@@ -361,38 +395,36 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     const tenantId = (req as any).tenantId as string;
     const userId = (req.params as any).userId as string;
 
-    const user = userRepository.getById(tenantId, userId);
+    const user = await userRepository.getById(tenantId, userId);
     if (!user) {
-      reply.code(400);
-      return { error: 'User not found' };
+      return reply.code(400).send({ error: 'User not found' });
     }
-    if (!user.roles.includes('LEARNER')) {
-      reply.code(400);
-      return { error: 'User is not a learner' };
+    if (!user.roles?.includes('LEARNER')) {
+      return reply.code(400).send({ error: 'User is not a learner' });
     }
 
     const parsed = assignAssessmentsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      reply.code(400);
-      return { error: 'Validation error', issues: parsed.error.issues };
+      return reply.code(400).send({ error: 'Validation error', issues: parsed.error.issues });
     }
 
     let newAssignments = parsed.data.assignments ?? [];
     if (parsed.data.assessmentIds) {
-      const validatedIds = validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository, reply);
-      if (validatedIds === undefined) return;
-      newAssignments = [...newAssignments, ...validatedIds.map(id => ({ assessmentId: id }))];
+      const validation = await validateAssessmentIds(tenantId, parsed.data.assessmentIds, assessmentRepository);
+      if ('error' in validation) {
+        return reply.code(400).send({ error: validation.error });
+      }
+      newAssignments = [...newAssignments, ...validation.validated.map(id => ({ assessmentId: id }))];
     }
 
     for (const assignment of newAssignments) {
-      const assessment = assessmentRepository.getById(tenantId, assignment.assessmentId);
+      const assessment = await assessmentRepository.getById(tenantId, assignment.assessmentId);
       if (!assessment) {
-        reply.code(400);
-        return { error: `Assessment ${assignment.assessmentId} does not exist` };
+        return reply.code(400).send({ error: `Assessment ${assignment.assessmentId} does not exist` });
       }
     }
 
-    const cohorts = repository.listByLearner(tenantId, userId);
+    const cohorts = await repository.listByLearner(tenantId, userId);
     let personalCohort = cohorts.find(c => c.name === `Personal: ${userId}`);
 
     if (!personalCohort) {
@@ -407,19 +439,23 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
       const existingAssignments = personalCohort.assignments ?? personalCohort.assessmentIds.map(id => ({ assessmentId: id }));
       const assignmentMap = new Map(existingAssignments.map(a => [a.assessmentId, a]));
       for (const a of newAssignments) {
-        assignmentMap.set(a.assessmentId, a);
+        const existing = assignmentMap.get(a.assessmentId);
+        assignmentMap.set(a.assessmentId, {
+          ...existing,
+          ...a,
+        });
       }
       personalCohort = updateCohort(personalCohort, { assignments: Array.from(assignmentMap.values()) });
     }
 
-    const saved = repository.save(personalCohort);
-    return saved;
+    await repository.save(personalCohort);
+    return reply.send(personalCohort);
   });
 
   app.get('/learner/:userId', async (req, reply) => {
     if (!ensureCohortManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
     const userId = (req.params as any).userId as string;
-    return repository.listByLearner(tenantId, userId);
+    return await repository.listByLearner(tenantId, userId);
   });
 }

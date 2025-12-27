@@ -96,6 +96,8 @@ describe('cohortRoutes', () => {
   });
 
   it('creates a cohort with learners and optional assessments', async () => {
+    userRepository.getById.mockReturnValue({ id: 'learner-1', roles: ['LEARNER'] });
+    assessmentRepository.getById.mockReturnValue({ id: 'assessment-1' });
     const response = await app.inject({
       method: 'POST',
       url: '/cohorts',
@@ -194,7 +196,7 @@ describe('cohortRoutes', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/cohorts/assignments/users/learner-1',
-      payload: { assessmentIds: ['assessment-1'] },
+      payload: { assignments: [{ assessmentId: 'assessment-1' }] },
     });
 
     expect(response.statusCode).toBe(200);
@@ -221,7 +223,7 @@ describe('cohortRoutes', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/cohorts/cohort-1/assessments',
-      payload: { assessmentIds: ['missing-assessment'] },
+      payload: { assignments: [{ assessmentId: 'missing-assessment' }] },
     });
 
     expect(response.statusCode).toBe(400);
@@ -236,6 +238,50 @@ describe('cohortRoutes', () => {
 
     expect(response.statusCode).toBe(403);
     expect(cohortRepository.list).not.toHaveBeenCalled();
+  });
+
+  it('persists availableFrom and dueDate when assigning assessments', async () => {
+    const cohort: Cohort = {
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Alpha',
+      learnerIds: ['learner-1'],
+      assessmentIds: [],
+      createdAt: 'now',
+      updatedAt: 'now',
+    };
+    cohortRepository.getById.mockReturnValueOnce(cohort);
+    assessmentRepository.getById.mockReturnValueOnce({ id: 'assessment-1' });
+
+    const availableFrom = '2025-01-01T09:00:00Z';
+    const dueDate = '2025-01-02T17:00:00Z';
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/cohorts/cohort-1/assessments',
+      payload: {
+        assignments: [
+          {
+            assessmentId: 'assessment-1',
+            availableFrom,
+            dueDate,
+            allowedAttempts: 2,
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(cohortRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      assignments: [
+        {
+          assessmentId: 'assessment-1',
+          availableFrom,
+          dueDate,
+          allowedAttempts: 2,
+        },
+      ],
+    }));
   });
 
   it('rejects super admins even when tenant roles are provided', async () => {
@@ -270,6 +316,53 @@ describe('cohortRoutes', () => {
     expect(cohortRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 'cohort-1',
       name: 'Beta',
+    }));
+  });
+
+  it('persists availableFrom and dueDate when updating cohort assignments', async () => {
+    const cohort: Cohort = {
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Alpha',
+      learnerIds: ['learner-1'],
+      assessmentIds: [],
+      createdAt: 'now',
+      updatedAt: 'now',
+    };
+    cohortRepository.getById.mockReturnValueOnce(cohort);
+    userRepository.getById.mockReturnValue({ id: 'learner-1', roles: ['LEARNER'] });
+    assessmentRepository.getById.mockReturnValue({ id: 'assessment-1' });
+
+    const availableFrom = '2025-01-01T09:00:00Z';
+    const dueDate = '2025-01-02T17:00:00Z';
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/cohorts/cohort-1',
+      payload: {
+        name: 'Beta',
+        learnerIds: ['learner-1'],
+        assignments: [
+          {
+            assessmentId: 'assessment-1',
+            availableFrom,
+            dueDate,
+            allowedAttempts: 2,
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(cohortRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      assignments: [
+        {
+          assessmentId: 'assessment-1',
+          availableFrom,
+          dueDate,
+          allowedAttempts: 2,
+        },
+      ],
     }));
   });
 

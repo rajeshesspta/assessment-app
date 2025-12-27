@@ -21,6 +21,9 @@ export function ScheduleAssessmentModal({ isOpen, onClose, assessment, api, bran
 
   useEffect(() => {
     if (isOpen) {
+      setAvailableFrom('');
+      setDueDate('');
+      setSelectedCohortIds([]);
       loadCohorts();
       if (assessment) {
         setAllowedAttempts(assessment.allowedAttempts || 1);
@@ -34,13 +37,40 @@ export function ScheduleAssessmentModal({ isOpen, onClose, assessment, api, bran
       setCohorts(data);
       // Pre-select cohorts that already have this assessment
       if (assessment) {
-        const alreadyScheduled = data
-          .filter((c: Cohort) => c.assessmentIds.includes(assessment.id))
-          .map((c: Cohort) => c.id);
+        const cohortsWithAssessment = data.filter((c: Cohort) => c.assessmentIds.includes(assessment.id));
+        const alreadyScheduled = cohortsWithAssessment.map((c: Cohort) => c.id);
         setSelectedCohortIds(alreadyScheduled);
+
+        // Populate dates from the first cohort that has this assessment
+        if (cohortsWithAssessment.length > 0) {
+          const firstCohort = cohortsWithAssessment[0];
+          const assignment = firstCohort.assignments?.find((a: any) => a.assessmentId === assessment.id);
+          if (assignment) {
+            if (assignment.availableFrom) setAvailableFrom(formatForInput(assignment.availableFrom));
+            if (assignment.dueDate) setDueDate(formatForInput(assignment.dueDate));
+            if (assignment.allowedAttempts !== undefined) setAllowedAttempts(assignment.allowedAttempts);
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to load cohorts', err);
+    }
+  };
+
+  const formatForInput = (dateStr?: string) => {
+    if (!dateStr) return '';
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateStr)) return dateStr;
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch {
+      return '';
     }
   };
 
