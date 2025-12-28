@@ -53,7 +53,7 @@ export function runMigrations(db: SQLiteDatabase, migrationsDir: string): void {
       continue;
     }
     // Skip problematic migrations with encoding issues
-    if (file === '014_users_roles_json.sql' || file === '020_items_taxonomy_fields.sql') {
+    if (file === '014_users_roles_json.sql') {
       db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
       continue;
     }
