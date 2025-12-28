@@ -41,6 +41,68 @@ async function teardownServer(app?: FastifyInstance) {
 describe('server routes', () => {
   let app: FastifyInstance | undefined;
 
+  it('returns assessment overview with item and cohort counts', async () => {
+    const tenant = createTenantConfig({ hosts: ['tenant.test'] });
+    app = await setupServer([tenant]);
+
+    // Mock fetch for /assessments and /cohorts
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify([
+            { id: 'a1', title: 'Assessment 1', itemIds: ['i1', 'i2'], createdAt: '2023-01-01', updatedAt: '2023-01-02' },
+            { id: 'a2', title: 'Assessment 2', itemIds: ['i3'], createdAt: '2023-01-03', updatedAt: '2023-01-04' },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+    );
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify([
+            { id: 'c1', assignments: [{ assessmentId: 'a1' }] },
+            { id: 'c2', assignments: [{ assessmentId: 'a1' }, { assessmentId: 'a2' }] },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+    );
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/assessments/overview',
+      headers: { host: 'tenant.test', 'x-actor-roles': 'CONTENT_AUTHOR' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json();
+    expect(payload.total).toBe(2);
+    expect(payload.assessments).toEqual([
+      {
+        id: 'a1',
+        title: 'Assessment 1',
+        status: 'draft',
+        itemCount: 2,
+        cohortCount: 2,
+        createdAt: '2023-01-01',
+        updatedAt: '2023-01-02',
+      },
+      {
+        id: 'a2',
+        title: 'Assessment 2',
+        status: 'draft',
+        itemCount: 1,
+        cohortCount: 1,
+        createdAt: '2023-01-03',
+        updatedAt: '2023-01-04',
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    fetchMock.mockRestore();
+  });
+
   afterEach(async () => {
     await teardownServer(app);
     app = undefined;

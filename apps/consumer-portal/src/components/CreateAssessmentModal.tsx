@@ -9,9 +9,13 @@ interface CreateAssessmentModalProps {
   initialAssessment?: Assessment | null;
   api: any;
   brandPrimary?: string;
+  readonlyMode?: boolean;
+  onPublish?: () => Promise<void>;
+  loadingPublish?: boolean;
+  onSwitchToEdit?: () => void;
 }
 
-export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessment, api, brandPrimary }: CreateAssessmentModalProps) {
+export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessment, api, brandPrimary, readonlyMode = false, onPublish, loadingPublish, onSwitchToEdit }: CreateAssessmentModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [collectionId, setCollectionId] = useState('');
@@ -19,6 +23,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
   const [allowedAttempts, setAllowedAttempts] = useState(1);
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>(undefined);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [isReadonly, setIsReadonly] = useState(readonlyMode);
   const [availableItems, setAvailableItems] = useState<Item[]>([]);
   const [search, setSearch] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,6 +32,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
   useEffect(() => {
     if (isOpen) {
       loadItems();
+      setIsReadonly(readonlyMode);
       if (initialAssessment) {
         setTitle(initialAssessment.title);
         setDescription(initialAssessment.description || '');
@@ -45,7 +51,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
         setSelectedItemIds([]);
       }
     }
-  }, [isOpen, initialAssessment]);
+  }, [isOpen, initialAssessment, readonlyMode]);
 
   const loadItems = async () => {
     try {
@@ -59,6 +65,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
   if (!isOpen) return null;
 
   const toggleItem = (id: string) => {
+    if (isReadonly) return;
     if (selectedItemIds.includes(id)) {
       setSelectedItemIds(selectedItemIds.filter(i => i !== id));
     } else {
@@ -110,7 +117,9 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
       <div className="w-full max-w-4xl rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h3 className="text-xl font-bold text-slate-900">
-            {initialAssessment ? 'Edit Assessment' : 'Create New Assessment'}
+            {isReadonly
+              ? (initialAssessment ? 'View Assessment' : 'Create New Assessment')
+              : (initialAssessment ? 'Edit Assessment' : 'Create New Assessment')}
           </h3>
           <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600">
             <X className="h-5 w-5" />
@@ -136,6 +145,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                     placeholder="e.g., Mid-term Math Quiz"
                     value={title}
                     onChange={e => setTitle(e.target.value)}
+                    readOnly={isReadonly}
+                    disabled={isReadonly}
                   />
                 </div>
 
@@ -147,6 +158,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                     rows={3}
                     value={description}
                     onChange={e => setDescription(e.target.value)}
+                    readOnly={isReadonly}
+                    disabled={isReadonly}
                   />
                 </div>
 
@@ -159,6 +172,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                       placeholder="e.g., course-101"
                       value={collectionId}
                       onChange={e => setCollectionId(e.target.value)}
+                      readOnly={isReadonly}
+                      disabled={isReadonly}
                     />
                   </div>
                   <div className="space-y-2">
@@ -169,6 +184,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                       placeholder="math, quiz, hard"
                       value={tags}
                       onChange={e => setTags(e.target.value)}
+                      readOnly={isReadonly}
+                      disabled={isReadonly}
                     />
                   </div>
                 </div>
@@ -186,6 +203,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
                       value={allowedAttempts}
                       onChange={e => setAllowedAttempts(parseInt(e.target.value))}
+                      readOnly={isReadonly}
+                      disabled={isReadonly}
                     />
                   </div>
                   <div className="space-y-2">
@@ -200,6 +219,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                       placeholder="No limit"
                       value={timeLimitMinutes || ''}
                       onChange={e => setTimeLimitMinutes(e.target.value ? parseInt(e.target.value) : undefined)}
+                      readOnly={isReadonly}
+                      disabled={isReadonly}
                     />
                   </div>
                 </div>
@@ -222,7 +243,8 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                     <div
                       key={item.id}
                       onClick={() => toggleItem(item.id)}
-                      className={`flex items-center gap-3 p-3 cursor-pointer transition hover:bg-slate-50 ${selectedItemIds.includes(item.id) ? 'bg-brand-50/50' : ''}`}
+                      className={`flex items-center gap-3 p-3 ${isReadonly ? '' : 'cursor-pointer transition hover:bg-slate-50'} ${selectedItemIds.includes(item.id) ? 'bg-brand-50/50' : ''}`}
+                      style={isReadonly ? { cursor: 'default', opacity: 0.7 } : {}}
                     >
                       <div className={`flex h-5 w-5 items-center justify-center rounded border ${selectedItemIds.includes(item.id) ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 bg-white'}`} style={selectedItemIds.includes(item.id) ? { backgroundColor: brandPrimary, borderColor: brandPrimary } : {}}>
                         {selectedItemIds.includes(item.id) && <CheckCircle2 className="h-3 w-3" />}
@@ -246,16 +268,43 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-xl bg-brand-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-200 transition hover:bg-brand-600 disabled:opacity-50"
-              style={{ backgroundColor: brandPrimary }}
-            >
-              {isSubmitting 
-                ? (initialAssessment ? 'Updating...' : 'Creating...') 
-                : (initialAssessment ? 'Update Assessment' : 'Create Assessment')}
-            </button>
+            {isReadonly ? (
+              <>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  style={{ backgroundColor: brandPrimary }}
+                  onClick={() => {
+                    setIsReadonly(false);
+                    if (onSwitchToEdit) onSwitchToEdit();
+                  }}
+                >
+                  Edit
+                </button>
+                {onPublish && (
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
+                    style={{ backgroundColor: brandPrimary }}
+                    onClick={onPublish}
+                    disabled={loadingPublish}
+                  >
+                    {loadingPublish ? 'Publishing…' : 'Publish'}
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-xl bg-brand-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-200 transition hover:bg-brand-600 disabled:opacity-50"
+                style={{ backgroundColor: brandPrimary }}
+              >
+                {isSubmitting 
+                  ? (initialAssessment ? 'Updating...' : 'Creating...') 
+                  : (initialAssessment ? 'Update Assessment' : 'Create Assessment')}
+              </button>
+            )}
           </div>
         </form>
       </div>

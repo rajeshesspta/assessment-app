@@ -1,3 +1,4 @@
+
 import Fastify, { FastifyReply } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -274,7 +275,60 @@ if (refreshTimer) {
   });
 }
 
+
 app.decorateRequest('tenant', null as unknown as TenantRuntime);
+
+// Register assessment overview route after app is defined
+app.get('/api/assessments/overview', async (request, reply) => {
+  const tenant = request.tenant;
+  try {
+    // Fetch all assessments
+    const assessments = await callHeadless(tenant, '/assessments', reply, undefined, request);
+    // Fetch all cohorts
+    const cohorts = await callHeadless(tenant, '/cohorts', reply, undefined, request);
+    // Map assessmentId to cohort count
+    const assessmentIdToCohortCount = {};
+    for (const cohort of cohorts) {
+      if (Array.isArray(cohort.assignments)) {
+        for (const assignment of cohort.assignments) {
+          if (!assessmentIdToCohortCount[assignment.assessmentId]) {
+            assessmentIdToCohortCount[assignment.assessmentId] = 0;
+          }
+          assessmentIdToCohortCount[assignment.assessmentId]++;
+        }
+      } else if (Array.isArray(cohort.assessmentIds)) {
+        for (const id of cohort.assessmentIds) {
+          if (!assessmentIdToCohortCount[id]) {
+            assessmentIdToCohortCount[id] = 0;
+          }
+          assessmentIdToCohortCount[id]++;
+        }
+      }
+    }
+    // Compose overview
+    const overview = {
+      total: Array.isArray(assessments) ? assessments.length : 0,
+      assessments: Array.isArray(assessments)
+        ? assessments.map(a => ({
+            id: a.id,
+            title: a.title,
+            status: a.status || 'draft',
+            itemCount: Array.isArray(a.itemIds) ? a.itemIds.length : 0,
+            cohortCount: assessmentIdToCohortCount[a.id] || 0,
+            createdAt: a.createdAt,
+            updatedAt: a.updatedAt,
+          }))
+        : [],
+    };
+    return overview;
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
 
 app.addHook('onRequest', (request, reply, done) => {
   try {

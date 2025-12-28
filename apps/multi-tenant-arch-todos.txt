@@ -395,11 +395,12 @@ Assessment Module Iteration Checklist
 - [x] UI: Add filters (All, Draft, Published) and edit/preview links.
 - [x] BFF: Proxy GET /items with tenant filtering.
 
-**Iteration 28: Content Author Dashboard - Assessments Overview**
+
+**Iteration 28: Content Author Dashboard - Assessments Overview** [x] COMPLETE
 - Goal: Monitor assessment assembly and publishing progress.
-- [ ] UI: List recent assessments with item count, cohort count, status, and publish controls.
-- [ ] UI: Display total assessments metric.
-- [ ] BFF: Surface assessment metadata via proxy routes.
+- [x] UI: List recent assessments with item count, cohort count, status, and publish controls.
+- [x] UI: Display total assessments metric.
+- [x] BFF: Surface assessment metadata via proxy routes.
 
 **Iteration 29: Content Author Dashboard - Cohorts and Learners Snapshot**
 - Goal: Ensure proper grouping and assignment of learners.
