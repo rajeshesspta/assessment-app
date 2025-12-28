@@ -30,7 +30,8 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [filterKind, setFilterKind] = useState<ItemKind | 'ALL'>('ALL');
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [filterTag, setFilterTag] = useState<string>('ALL');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [previewItem, setPreviewItem] = useState<Item | null>(null);
@@ -71,13 +72,21 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
     setEditingItem(null);
   };
 
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const matchesSearch = item.prompt.toLowerCase().includes(search.toLowerCase());
-      const matchesKind = filterKind === 'ALL' || item.kind === filterKind;
-      return matchesSearch && matchesKind;
+  const allCategories = useMemo(() => {
+    const categories = new Set<string>();
+    items.forEach(item => {
+      item.categories?.forEach(cat => categories.add(cat));
     });
-  }, [items, search, filterKind]);
+    return Array.from(categories).sort();
+  }, [items]);
+
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    items.forEach(item => {
+      item.tags?.forEach(tag => tags.add(tag));
+    });
+    return Array.from(tags).sort();
+  }, [items]);
 
   if (loading) {
     return <LoadingState label="Loading item bank..." />;
@@ -147,6 +156,30 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
             <option value="DRAG_AND_DROP">Drag & Drop</option>
             <option value="SCENARIO_TASK">Scenario Task</option>
           </select>
+          {allCategories.length > 0 && (
+            <select
+              className="rounded-xl border border-slate-200 bg-slate-50 py-2 pl-3 pr-8 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+              value={filterCategory}
+              onChange={e => setFilterCategory(e.target.value)}
+            >
+              <option value="ALL">All Categories</option>
+              {allCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          )}
+          {allTags.length > 0 && (
+            <select
+              className="rounded-xl border border-slate-200 bg-slate-50 py-2 pl-3 pr-8 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+              value={filterTag}
+              onChange={e => setFilterTag(e.target.value)}
+            >
+              <option value="ALL">All Tags</option>
+              {allTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -180,6 +213,18 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
                   <p className="font-medium text-slate-900 line-clamp-1">{item.prompt}</p>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
                     <span className="font-semibold uppercase tracking-wider" style={brandLabelStyle}>{item.kind}</span>
+                    {item.categories && item.categories.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>Categories: {item.categories.join(', ')}</span>
+                      </>
+                    )}
+                    {item.tags && item.tags.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>Tags: {item.tags.join(', ')}</span>
+                      </>
+                    )}
                     <span>•</span>
                     <span>Updated {new Date(item.updatedAt).toLocaleDateString()}</span>
                   </div>

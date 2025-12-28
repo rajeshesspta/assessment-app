@@ -181,6 +181,20 @@ export function ItemPreview({ isOpen, onClose, item, brandPrimary }: ItemPreview
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           <div className="space-y-2">
             <p className="text-lg font-medium text-slate-900">{item.prompt}</p>
+            {(item.categories?.length || item.tags?.length) && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                {item.categories?.map((category) => (
+                  <span key={category} className="rounded-full bg-blue-100 px-2 py-1 text-blue-800">
+                    {category}
+                  </span>
+                ))}
+                {item.tags?.map((tag) => (
+                  <span key={tag} className="rounded-full bg-green-100 px-2 py-1 text-green-800">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="pt-4 border-t border-slate-50">

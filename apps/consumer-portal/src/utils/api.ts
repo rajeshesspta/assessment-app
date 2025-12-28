@@ -27,6 +27,9 @@ export interface Item {
   prompt: string;
   createdAt: string;
   updatedAt: string;
+  categories?: string[];
+  tags?: string[];
+  metadata?: Record<string, any>;
   choices?: { text: string }[];
   answerMode?: 'single' | 'multiple';
   blanks?: { id: string }[];
