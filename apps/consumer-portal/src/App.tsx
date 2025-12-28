@@ -4,6 +4,7 @@ import { Pin, PinOff } from 'lucide-react';
 import { TenantSessionForm } from './components/TenantSessionForm';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import { AssignedAssessmentsList } from './components/AssignedAssessmentsList';
+import { CompletedAssessmentsList } from './components/CompletedAssessmentsList';
 import { LoadingState } from './components/LoadingState';
 import { ItemBankPage } from './components/ItemBankPage';
 import { AssessmentsPage } from './components/AssessmentsPage';
@@ -13,6 +14,7 @@ import { UsersPage } from './components/UsersPage';
 import { AssessmentPlayer } from './components/AssessmentPlayer';
 import { AttemptResult } from './components/AttemptResult';
 import { LearnerDashboard } from './components/LearnerDashboard';
+import { Breadcrumb } from './components/Breadcrumb';
 import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
 import { usePortalAuth } from './hooks/usePortalAuth';
@@ -119,6 +121,38 @@ export default function App() {
     [isTenantAdmin, isContentAuthor],
   );
 
+  // Determine breadcrumb items based on current route
+  const breadcrumbItems = useMemo(() => {
+    const path = location.pathname;
+
+    if (path === '/my-assessments') {
+      return [{ label: 'My Assessments' }];
+    }
+
+    if (path === '/my-assessments/completed') {
+      return [
+        { label: 'My Assessments', path: '/my-assessments' },
+        { label: 'Completed Assessments' }
+      ];
+    }
+
+    if (path.startsWith('/assessment/')) {
+      const assessmentId = path.split('/assessment/')[1];
+      return [
+        { label: 'My Assessments', path: '/my-assessments' },
+        { label: 'Assessment Details' }
+      ];
+    }
+
+    // For other routes, just show the current page name
+    const currentNav = NAV_ITEMS.find(item => item.path === path);
+    if (currentNav) {
+      return [{ label: currentNav.label }];
+    }
+
+    return [];
+  }, [location.pathname]);
+
   useEffect(() => {
     if (!user) {
       return;
@@ -206,6 +240,16 @@ export default function App() {
         userId={user.id}
         onStartAttempt={startAttempt}
         onContinue={(id) => setActiveAttemptId(id)}
+        attempts={attempts}
+      />
+    </>
+  );
+
+  const CompletedAssessmentsPage = () => (
+    <>
+      <CompletedAssessmentsList
+        api={api}
+        userId={user.id}
         attempts={attempts}
       />
     </>
@@ -552,9 +596,15 @@ export default function App() {
               <p className="text-xs text-amber-700">{tenantConfigError}</p>
             </div>
           )}
+
+          {breadcrumbItems.length > 0 && (
+            <Breadcrumb items={breadcrumbItems} />
+          )}
+
           <Routes>
             <Route path="/" element={<Navigate to={LANDING_PATH} replace />} />
             <Route path={LANDING_PATH} element={<MyAssessmentsPage />} />
+            <Route path="/my-assessments/completed" element={<CompletedAssessmentsPage />} />
             <Route path="/overview" element={<OverviewPage />} />
             <Route
               path="/item-bank"

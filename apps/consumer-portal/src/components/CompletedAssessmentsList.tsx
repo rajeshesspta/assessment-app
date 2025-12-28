@@ -1,18 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Play } from 'lucide-react';
 import type { Cohort, Assessment, AttemptResponse } from '../utils/api';
 
-interface AssignedAssessmentsListProps {
+interface CompletedAssessmentsListProps {
   api: any;
   userId: string;
-  onStartAttempt: (assessmentId: string) => void;
-  onContinue: (attemptId: string) => void;
   attempts: AttemptResponse[];
 }
 
-export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinue, attempts }: AssignedAssessmentsListProps) {
-  const navigate = useNavigate();
+export function CompletedAssessmentsList({ api, userId, attempts }: CompletedAssessmentsListProps) {
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [assessments, setAssessments] = useState<Record<string, Assessment>>({});
   const [loading, setLoading] = useState(true);
@@ -39,7 +35,7 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
         }));
         setAssessments(details);
       } catch (error) {
-        console.error('Failed to load assigned assessments', error);
+        console.error('Failed to load completed assessments', error);
       } finally {
         setLoading(false);
       }
@@ -51,43 +47,17 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
   }, [api, userId]);
 
   if (loading) {
-    return <div className="animate-pulse text-sm text-slate-500">Loading assigned assessments...</div>;
+    return <div className="animate-pulse text-sm text-slate-500">Loading completed assessments...</div>;
   }
 
-  const allAssignments = cohorts.flatMap(cohort => 
+  const allAssignments = cohorts.flatMap(cohort =>
     (cohort.assignments || []).map(assignment => ({
       ...assignment,
       cohortName: cohort.name
     }))
   );
 
-  if (allAssignments.length === 0) {
-    return null;
-  }
-
-  // Separate assignments into available and completed
-  const availableAssignments = allAssignments.filter(assignment => {
-    const assessment = assessments[assignment.assessmentId];
-    if (!assessment) return false;
-
-    const now = new Date();
-    const availableFrom = assignment.availableFrom ? new Date(assignment.availableFrom) : null;
-    const dueDate = assignment.dueDate ? new Date(assignment.dueDate) : null;
-    
-    const isNotYetAvailable = availableFrom && now < availableFrom;
-    const isExpired = dueDate && now > dueDate;
-    if (isNotYetAvailable || isExpired) return false;
-
-    const userAttempts = attempts.filter(a => a.assessmentId === assessment.id);
-    const allowedAttempts = assignment.allowedAttempts ?? assessment.allowedAttempts;
-    const attemptsRemaining = Math.max(0, allowedAttempts - userAttempts.length);
-    const isOutOfAttempts = attemptsRemaining <= 0;
-    const inProgressAttempt = userAttempts.find(a => a.status === 'in_progress');
-
-    // Available if not out of attempts or has in-progress attempt
-    return !isOutOfAttempts || inProgressAttempt;
-  });
-
+  // Filter for completed assessments only
   const completedAssignments = allAssignments.filter(assignment => {
     const assessment = assessments[assignment.assessmentId];
     if (!assessment) return false;
@@ -95,7 +65,7 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
     const now = new Date();
     const availableFrom = assignment.availableFrom ? new Date(assignment.availableFrom) : null;
     const dueDate = assignment.dueDate ? new Date(assignment.dueDate) : null;
-    
+
     const isNotYetAvailable = availableFrom && now < availableFrom;
     const isExpired = dueDate && now > dueDate;
     if (isNotYetAvailable || isExpired) return false;
@@ -106,7 +76,7 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
     const isOutOfAttempts = attemptsRemaining <= 0;
     const inProgressAttempt = userAttempts.find(a => a.status === 'in_progress');
 
-    // Completed if out of attempts and no in-progress attempt
+    // Completed if out of attempts and no in-progress attempt and has attempts taken
     return isOutOfAttempts && !inProgressAttempt && userAttempts.length > 0;
   });
 
@@ -117,7 +87,7 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
     const now = new Date();
     const availableFrom = assignment.availableFrom ? new Date(assignment.availableFrom) : null;
     const dueDate = assignment.dueDate ? new Date(assignment.dueDate) : null;
-    
+
     const isNotYetAvailable = availableFrom && now < availableFrom;
     const isExpired = dueDate && now > dueDate;
     const isDisabled = isNotYetAvailable || isExpired;
@@ -138,11 +108,6 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
             {isExpired && (
               <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700">
                 Expired
-              </span>
-            )}
-            {isNotYetAvailable && (
-              <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                Scheduled
               </span>
             )}
           </div>
@@ -168,12 +133,11 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
               Attempts: {userAttempts.length} / {allowedAttempts}
             </span>
             <button
-              onClick={() => isOutOfAttempts && !inProgressAttempt ? navigate(`/assessment/${assessment.id}`) : navigate(`/assessment/${assessment.id}`)}
+              onClick={() => navigate(`/assessment/${assessment.id}`)}
               disabled={isDisabled}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Play className="h-4 w-4" />
-              {inProgressAttempt ? 'Continue' : isNotYetAvailable ? 'Not Available' : isOutOfAttempts ? 'View Results' : 'Start'}
+              View Results
             </button>
           </div>
         </div>
@@ -182,45 +146,30 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
   };
 
   return (
-    <div className="space-y-8">
-      {/* Available Assessments */}
-      {availableAssignments.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900">Available Assessments</h2>
-              <p className="text-sm text-slate-600">Assessments you can start or continue working on.</p>
-            </div>
-            {completedAssignments.length > 0 && (
-              <button
-                onClick={() => navigate('/my-assessments/completed')}
-                className="text-sm font-medium text-brand-600 hover:text-brand-700 transition"
-              >
-                View Completed Assessments →
-              </button>
-            )}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {availableAssignments.map((assignment, index) => renderAssessmentCard(assignment, index))}
-          </div>
-        </section>
-      )}
+    <div className="space-y-6">
+      {/* Completed Assessments */}
+      <section className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Completed Assessments</h1>
+          <p className="text-sm text-slate-600 mt-1">Assessments where you've used all your attempts. You can review your results.</p>
+        </div>
 
-      {/* Show message if no available assessments but has completed ones */}
-      {availableAssignments.length === 0 && completedAssignments.length > 0 && (
-        <section className="space-y-4">
-          <div className="text-center py-8">
-            <h2 className="text-xl font-semibold text-slate-900 mb-2">All Assessments Completed</h2>
-            <p className="text-sm text-slate-600 mb-4">You've completed all your assigned assessments.</p>
+        {completedAssignments.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {completedAssignments.map((assignment, index) => renderAssessmentCard(assignment, index))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-slate-500">No completed assessments yet.</p>
             <button
-              onClick={() => navigate('/my-assessments/completed')}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+              onClick={() => navigate('/my-assessments')}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
             >
-              View Completed Assessments
+              View Available Assessments
             </button>
           </div>
-        </section>
-      )}
+        )}
+      </section>
     </div>
   );
 }
