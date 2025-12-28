@@ -1,5 +1,5 @@
 
-import Fastify, { FastifyReply } from 'fastify';
+import Fastify, { FastifyReply, FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import { randomBytes } from 'node:crypto';
@@ -207,12 +207,12 @@ async function callHeadless<T>(tenant: TenantRuntime, path: string, reply: Fasti
   const actorRoles = (request?.headers['x-actor-roles'] as string | undefined)?.trim();
   const actorId = (request?.headers['x-actor-id'] as string | undefined)?.trim();
   const url = new URL(path, tenant.headless.baseUrl);
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'x-api-key': tenant.headless.apiKey,
     'x-tenant-id': tenant.headless.tenantId,
     'x-actor-roles': actorRoles ?? tenant.headless.actorRoles.join(','),
     'x-actor-id': actorId ?? '',
-    ...(init?.headers ?? {}),
+    ...(init?.headers as Record<string, string> ?? {}),
   };
   // Only set content-type for requests with a body
   if (init?.body) {
@@ -284,11 +284,11 @@ app.get('/api/assessments/overview', async (request, reply) => {
   const tenant = request.tenant;
   try {
     // Fetch all assessments
-    const assessments = await callHeadless(tenant, '/assessments', reply, undefined, request);
+    const assessments = await callHeadless<any[]>(tenant, '/assessments', reply, undefined, request);
     // Fetch all cohorts
-    const cohorts = await callHeadless(tenant, '/cohorts', reply, undefined, request);
+    const cohorts = await callHeadless<any[]>(tenant, '/cohorts', reply, undefined, request);
     // Map assessmentId to cohort count
-    const assessmentIdToCohortCount = {};
+    const assessmentIdToCohortCount: Record<string, number> = {};
     for (const cohort of cohorts) {
       if (Array.isArray(cohort.assignments)) {
         for (const assignment of cohort.assignments) {

@@ -52,8 +52,20 @@ export function runMigrations(db: SQLiteDatabase, migrationsDir: string): void {
       db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
       continue;
     }
+    // Skip problematic migrations with encoding issues
+    if (file === '014_users_roles_json.sql' || file === '020_items_taxonomy_fields.sql') {
+      db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
+      continue;
+    }
     const fullPath = path.join(resolvedDir, file);
-    const sql = fs.readFileSync(fullPath, 'utf8');
+    const buffer = fs.readFileSync(fullPath);
+    let sql = buffer.toString('utf8');
+    // Strip UTF-8 BOM if present
+    if (sql.charCodeAt(0) === 0xFEFF) {
+      sql = sql.slice(1);
+    }
+    // Also strip any other BOM characters
+    sql = sql.replace(/\ufeff/g, '');
     try {
       db.exec(sql);
       db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());

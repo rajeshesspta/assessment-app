@@ -59,8 +59,8 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
     save(item) {
       const db = client.getConnection(item.tenantId);
       db.prepare(`
-        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, drag_drop_schema_json, scenario_schema_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO items (id, tenant_id, kind, prompt, choices_json, answer_mode, correct_indexes_json, blank_schema_json, matching_schema_json, ordering_schema_json, short_answer_schema_json, essay_schema_json, numeric_schema_json, hotspot_schema_json, drag_drop_schema_json, scenario_schema_json, categories_json, tags_json, metadata_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           kind = excluded.kind,
           prompt = excluded.prompt,
@@ -76,6 +76,9 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           hotspot_schema_json = excluded.hotspot_schema_json,
           drag_drop_schema_json = excluded.drag_drop_schema_json,
           scenario_schema_json = excluded.scenario_schema_json,
+          categories_json = excluded.categories_json,
+          tags_json = excluded.tags_json,
+          metadata_json = excluded.metadata_json,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `).run(
@@ -115,6 +118,9 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
               scoring: item.scoring,
             })
           : null,
+        JSON.stringify(item.categories || []),
+        JSON.stringify(item.tags || []),
+        JSON.stringify(item.metadata || {}),
         item.createdAt,
         item.updatedAt,
       );
@@ -123,13 +129,19 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
     getById(tenantId, id) {
       const db = client.getConnection(tenantId);
       const row = db.prepare(`
-        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, scenario_schema_json as scenarioSchemaJson, created_at as createdAt, updated_at as updatedAt
+        SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, scenario_schema_json as scenarioSchemaJson, categories_json as categoriesJson, tags_json as tagsJson, metadata_json as metadataJson, created_at as createdAt, updated_at as updatedAt
         FROM items
         WHERE id = ? AND tenant_id = ?
       `).get(id, tenantId);
       if (!row) {
         return undefined;
       }
+      
+      const taxonomyFields = {
+        categories: row.categoriesJson ? JSON.parse(row.categoriesJson) : [],
+        tags: row.tagsJson ? JSON.parse(row.tagsJson) : [],
+        metadata: row.metadataJson ? JSON.parse(row.metadataJson) : {},
+      };
       if (row.kind === 'FILL_IN_THE_BLANK') {
         const schema = row.blankSchemaJson ? JSON.parse(row.blankSchemaJson) : undefined;
         const blanks = schema?.blanks ?? [];
@@ -141,6 +153,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           prompt: row.prompt,
           blanks,
           scoring,
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -155,6 +168,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           prompts: schema?.prompts ?? [],
           targets: schema?.targets ?? [],
           scoring: schema?.scoring ?? { mode: 'partial' },
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -169,6 +183,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           options: schema?.options ?? [],
           correctOrder: schema?.correctOrder ?? [],
           scoring: schema?.scoring ?? { mode: 'all' },
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -182,6 +197,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           prompt: row.prompt,
           rubric: schema?.rubric,
           scoring: schema?.scoring ?? { mode: 'manual', maxScore: 1 },
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -196,6 +212,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           rubric: schema?.rubric,
           length: schema?.length,
           scoring: schema?.scoring ?? { mode: 'manual', maxScore: 10 },
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -209,6 +226,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           prompt: row.prompt,
           validation: schema?.validation,
           units: schema?.units,
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -223,6 +241,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           image: schema?.image,
           hotspots: schema?.hotspots ?? [],
           scoring: schema?.scoring ?? { mode: 'all' },
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -237,6 +256,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           tokens: schema?.tokens ?? [],
           zones: schema?.zones ?? [],
           scoring: schema?.scoring ?? { mode: 'all' },
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;
@@ -284,13 +304,15 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
         clauses.push('lower(prompt) LIKE ?');
         params.push(`%${options.search.toLowerCase()}%`);
       }
-      // Filtering by categories/tags/metadata (JSON columns)
+      // Filtering by categories/tags (JSON arrays)
       if (options.categories && options.categories.length > 0) {
-        clauses.push('json_extract(metadata_json, "$.categories") IS NOT NULL AND (' + options.categories.map(() => 'json_each.value = ?').join(' OR ') + ')');
+        const categoryConditions = options.categories.map(() => 'EXISTS (SELECT 1 FROM json_each(categories_json) WHERE json_each.value = ?)').join(' OR ');
+        clauses.push(`(${categoryConditions})`);
         params.push(...options.categories);
       }
       if (options.tags && options.tags.length > 0) {
-        clauses.push('json_extract(metadata_json, "$.tags") IS NOT NULL AND (' + options.tags.map(() => 'json_each.value = ?').join(' OR ') + ')');
+        const tagConditions = options.tags.map(() => 'EXISTS (SELECT 1 FROM json_each(tags_json) WHERE json_each.value = ?)').join(' OR ');
+        clauses.push(`(${tagConditions})`);
         params.push(...options.tags);
       }
       // Metadata key-value filtering (simple equality)
@@ -303,14 +325,22 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
       params.push(limit, offset);
       const rows = db
         .prepare(`
-          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, scenario_schema_json as scenarioSchemaJson, created_at as createdAt, updated_at as updatedAt
+          SELECT id, tenant_id as tenantId, kind, prompt, choices_json as choicesJson, answer_mode as answerMode, correct_indexes_json as correctIndexesJson, blank_schema_json as blankSchemaJson, matching_schema_json as matchingSchemaJson, ordering_schema_json as orderingSchemaJson, short_answer_schema_json as shortAnswerSchemaJson, essay_schema_json as essaySchemaJson, numeric_schema_json as numericSchemaJson, hotspot_schema_json as hotspotSchemaJson, drag_drop_schema_json as dragDropSchemaJson, scenario_schema_json as scenarioSchemaJson, categories_json as categoriesJson, tags_json as tagsJson, metadata_json as metadataJson, created_at as createdAt, updated_at as updatedAt
           FROM items
           WHERE ${clauses.join(' AND ')}
           ORDER BY created_at DESC
           LIMIT ? OFFSET ?
         `)
         .all(...params);
+      
+      const parseTaxonomyFields = (row: any) => ({
+        categories: row.categoriesJson ? JSON.parse(row.categoriesJson) : [],
+        tags: row.tagsJson ? JSON.parse(row.tagsJson) : [],
+        metadata: row.metadataJson ? JSON.parse(row.metadataJson) : {},
+      });
+      
       return rows.map(row => {
+        const taxonomyFields = parseTaxonomyFields(row);
         if (row.kind === 'FILL_IN_THE_BLANK') {
           const schema = row.blankSchemaJson ? JSON.parse(row.blankSchemaJson) : undefined;
           return {
@@ -320,6 +350,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             prompt: row.prompt,
             blanks: schema?.blanks ?? [],
             scoring: schema?.scoring ?? { mode: 'all' },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -334,6 +365,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             prompts: schema?.prompts ?? [],
             targets: schema?.targets ?? [],
             scoring: schema?.scoring ?? { mode: 'partial' },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -348,6 +380,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             options: schema?.options ?? [],
             correctOrder: schema?.correctOrder ?? [],
             scoring: schema?.scoring ?? { mode: 'all' },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -361,6 +394,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             prompt: row.prompt,
             rubric: schema?.rubric,
             scoring: schema?.scoring ?? { mode: 'manual', maxScore: 1 },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -375,6 +409,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             rubric: schema?.rubric,
             length: schema?.length,
             scoring: schema?.scoring ?? { mode: 'manual', maxScore: 10 },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -388,6 +423,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             prompt: row.prompt,
             validation: schema?.validation,
             units: schema?.units,
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -402,6 +438,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             image: schema?.image,
             hotspots: schema?.hotspots ?? [],
             scoring: schema?.scoring ?? { mode: 'all' },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -416,6 +453,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             tokens: schema?.tokens ?? [],
             zones: schema?.zones ?? [],
             scoring: schema?.scoring ?? { mode: 'all' },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -432,6 +470,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
             workspace: schema?.workspace,
             evaluation: schema?.evaluation ?? { mode: 'manual' },
             scoring: schema?.scoring ?? { maxScore: 0 },
+            ...taxonomyFields,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           } satisfies Item;
@@ -444,6 +483,7 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
           choices: JSON.parse(row.choicesJson) as ChoiceItem['choices'],
           answerMode: row.answerMode,
           correctIndexes: JSON.parse(row.correctIndexesJson) as ChoiceItem['correctIndexes'],
+          ...taxonomyFields,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         } satisfies Item;

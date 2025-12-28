@@ -36,6 +36,7 @@ function buildTenantRow(overrides: Partial<TenantRow> = {}): TenantRow {
     feature_flags_json: JSON.stringify({ analytics: true }),
     engine_size_id: null,
     engine_size_json: null,
+    taxonomy_config_json: null,
     status: 'active',
     updated_at: '2024-01-01T00:00:00.000Z',
     updated_by: 'system',

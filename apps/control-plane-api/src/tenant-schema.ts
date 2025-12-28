@@ -118,6 +118,7 @@ const tenantRegistryBaseSchema = z.object({
   branding: tenantBrandingSchema,
   featureFlags: tenantFeatureFlagSchema,
   engineSize: tenantEngineSizeSchema.optional(),
+  taxonomy: tenantTaxonomyConfigSchema.optional(),
   status: z.enum(['active', 'paused', 'deleting']).default('active'),
 });
 
