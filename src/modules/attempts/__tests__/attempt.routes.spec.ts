@@ -1440,7 +1440,7 @@ describe('attemptRoutes', () => {
 
     const response = await app.inject({ method: 'POST', url: '/attempts/attempt-1/submit' });
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: 'Already submitted' });
+    expect(response.json()).toEqual({ error: "Cannot submit attempt with status 'scored'" });
   });
 
   it('returns attempt by id with items', async () => {

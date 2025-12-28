@@ -91,6 +91,11 @@ export function AssessmentPlayer({ attemptId, api, brandPrimary = '#f97316', onC
     setSubmitting(true);
     try {
       await saveProgress();
+      // Re-fetch the attempt to ensure it's still in progress
+      const currentAttempt = await api.fetchAttempt(attempt.id);
+      if (currentAttempt.status !== 'in_progress') {
+        throw new Error('Attempt has already been submitted');
+      }
       const finalAttempt = await api.submitAttempt(attempt.id);
       onComplete(finalAttempt);
     } catch (err) {
@@ -205,14 +210,24 @@ export function AssessmentPlayer({ attemptId, api, brandPrimary = '#f97316', onC
             ))}
           </div>
 
-          <button
-            onClick={() => setCurrentIndex(prev => Math.min(items.length - 1, prev + 1))}
-            disabled={currentIndex === items.length - 1}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-30"
-          >
-            Next
-            <ChevronRight className="h-5 w-5" />
-          </button>
+          {currentIndex === items.length - 1 ? (
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || saving}
+              className="flex items-center gap-2 rounded-lg bg-brand-600 px-6 py-2 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+            >
+              <Send className="h-5 w-5" />
+              {submitting ? 'Submitting...' : 'Submit Assessment'}
+            </button>
+          ) : (
+            <button
+              onClick={() => setCurrentIndex(prev => Math.min(items.length - 1, prev + 1))}
+              className="flex items-center gap-2 rounded-lg px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-100"
+            >
+              Next
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </footer>
     </div>

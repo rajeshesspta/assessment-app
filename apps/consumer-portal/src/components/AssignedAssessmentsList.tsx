@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Play } from 'lucide-react';
 import type { Cohort, Assessment, AttemptResponse } from '../utils/api';
 
@@ -11,6 +12,7 @@ interface AssignedAssessmentsListProps {
 }
 
 export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinue, attempts }: AssignedAssessmentsListProps) {
+  const navigate = useNavigate();
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [assessments, setAssessments] = useState<Record<string, Assessment>>({});
   const [loading, setLoading] = useState(true);
@@ -125,7 +127,7 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
                     Attempts: {userAttempts.length} / {allowedAttempts}
                   </span>
                   <button
-                    onClick={inProgressAttempt ? () => onContinue(inProgressAttempt.id) : () => onStartAttempt(assessment.id)}
+                    onClick={() => navigate(`/assessment/${assessment.id}`)}
                     disabled={isDisabled || (isOutOfAttempts && !inProgressAttempt)}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -134,41 +136,10 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
                   </button>
                 </div>
               </div>
-              {userAttempts.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <h4 className="text-sm font-semibold text-slate-700">Your Attempts</h4>
-                  {userAttempts.map(attempt => (
-                    <div key={attempt.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3 bg-slate-50">
-                      <div>
-                        <p className="text-xs text-slate-500">Attempt #{attempt.id}</p>
-                        <p className="text-sm text-slate-700">{new Date(attempt.updatedAt).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {attempt.score !== undefined && <span className="text-sm font-semibold text-slate-900">{attempt.score}/{attempt.maxScore ?? '—'}</span>}
-                        <StatusPill status={attempt.status} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           );
         })}
       </div>
     </section>
-  );
-}
-
-function StatusPill({ status }: { status: AttemptResponse['status'] }) {
-  const palette: Record<AttemptResponse['status'], { label: string; classes: string }> = {
-    in_progress: { label: 'In progress', classes: 'bg-orange-100 text-orange-700' },
-    submitted: { label: 'Submitted', classes: 'bg-sky-100 text-sky-700' },
-    scored: { label: 'Scored', classes: 'bg-emerald-100 text-emerald-700' },
-  };
-  const style = palette[status];
-  return (
-    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${style.classes}`}>
-      {style.label}
-    </span>
   );
 }

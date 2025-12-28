@@ -286,9 +286,17 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     if (!ensureAttemptAccess(req, reply)) return;
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
+    console.log(`Submit attempt ${id} for tenant ${tenantId}`);
     const attempt = attemptRepository.getById(tenantId, id);
-    if (!attempt) { reply.code(404); return { error: 'Not found' }; }
-    if (attempt.status !== 'in_progress') { reply.code(400); return { error: 'Already submitted' }; }
+    if (!attempt) { 
+      console.log(`Attempt ${id} not found in tenant ${tenantId}`);
+      reply.code(404); return { error: 'Not found' }; 
+    }
+    console.log(`Attempt ${id} status: ${attempt.status}`);
+    if (attempt.status !== 'in_progress') { 
+      reply.code(400); 
+      return { error: `Cannot submit attempt with status '${attempt.status}'` }; 
+    }
     const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId)!;
     let score = 0; let maxScore = 0;
     const pendingFreeResponseEvaluations: Array<{

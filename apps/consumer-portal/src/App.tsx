@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Pin, PinOff } from 'lucide-react';
 import { TenantSessionForm } from './components/TenantSessionForm';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import { AssignedAssessmentsList } from './components/AssignedAssessmentsList';
-import { AttemptList } from './components/AttemptList';
 import { LoadingState } from './components/LoadingState';
 import { ItemBankPage } from './components/ItemBankPage';
 import { AssessmentsPage } from './components/AssessmentsPage';
@@ -12,6 +11,7 @@ import { LearnersPage } from './components/LearnersPage';
 import { CohortsPage } from './components/CohortsPage';
 import { UsersPage } from './components/UsersPage';
 import { AssessmentPlayer } from './components/AssessmentPlayer';
+import { AttemptResult } from './components/AttemptResult';
 import { LearnerDashboard } from './components/LearnerDashboard';
 import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
@@ -197,64 +197,16 @@ export default function App() {
     }
   }
 
-  async function refreshAttempt(attemptId: string) {
-    const client = ensureApi();
-    setBusyState('loading');
-    setError(null);
-    try {
-      const attempt = await client.fetchAttempt(attemptId);
-      setAttempts(prev => prev.map(item => (item.id === attempt.id ? attempt : item)));
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusyState('idle');
-    }
-  }
-
 
 
   const MyAssessmentsPage = () => (
     <>
-      <TenantSessionForm
-        value={session}
-        onSave={saveSession}
-        onClear={() => {
-          clearSession();
-          setAnalytics(null);
-          setAttempts([]);
-        }}
-      />
-      {busyState !== 'idle' && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-brand-50 bg-white p-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-          <LoadingState label={busyState === 'loading' ? 'Syncing data' : 'Starting attempt'} />
-          <p className="text-right text-slate-500">Requests fan out to the headless API through the BFF with tenant headers.</p>
-        </div>
-      )}
-      {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
-          <strong className="text-sm font-semibold">Request failed</strong>
-          <p className="text-sm">{error}</p>
-        </div>
-      )}
-      <AssessmentPanel
-        analytics={analytics}
-        onLookup={lookupAssessment}
-        onStartAttempt={startAttempt}
-        disabled={!session || !api}
-      />
       <AssignedAssessmentsList
         api={api}
         userId={user.id}
         onStartAttempt={startAttempt}
         onContinue={(id) => setActiveAttemptId(id)}
         attempts={attempts}
-      />
-      <AttemptList
-        attempts={attempts}
-        api={api}
-        onRefresh={refreshAttempt}
-        onContinue={(id) => setActiveAttemptId(id)}
-        onViewResults={(id) => setViewingAttemptId(id)}
       />
     </>
   );
@@ -278,6 +230,106 @@ export default function App() {
         attempts={attempts}
         onStartAttempt={startAttempt}
       />
+    );
+  };
+
+  const AssessmentDetailPage = () => {
+    const { id } = useParams<{ id: string }>();
+    const [assessment, setAssessment] = useState<any>(null);
+    const [assessmentAttempts, setAssessmentAttempts] = useState<any[]>([]);
+    const [cohorts, setCohorts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      if (!id || !api || !user) return;
+      const load = async () => {
+        try {
+          const a = await api.fetchAssessment(id);
+          setAssessment(a);
+          const cs = await api.fetchLearnerCohorts(user.id);
+          setCohorts(cs);
+          const allAttempts = attempts.filter(att => att.assessmentId === id);
+          setAssessmentAttempts(allAttempts);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setLoading(false);
+        }
+      };
+      load();
+    }, [id, api, attempts, user]);
+
+    if (loading) {
+      return <LoadingState label="Loading assessment..." />;
+    }
+
+    if (!assessment) {
+      return <div>Assessment not found</div>;
+    }
+
+    const assignment = cohorts.flatMap(c => c.assignments || []).find((a: any) => a.assessmentId === id);
+    const allowedAttempts = assignment?.allowedAttempts ?? assessment.allowedAttempts ?? 1;
+    const inProgressAttempt = assessmentAttempts.find(a => a.status === 'in_progress');
+    const canStartNew = assessmentAttempts.length < allowedAttempts && !inProgressAttempt;
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-brand-50 bg-white p-6">
+          <h1 className="text-2xl font-bold text-slate-900">{assessment.title}</h1>
+          <p className="mt-2 text-slate-600">{assessment.description}</p>
+        </div>
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-slate-900">Your Attempts</h2>
+          {assessmentAttempts.length === 0 ? (
+            <p className="text-slate-500">No attempts yet.</p>
+          ) : (
+            assessmentAttempts.map(attempt => (
+              <div key={attempt.id} className="rounded-2xl border border-slate-100 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Attempt #{attempt.id}</p>
+                    <p className="text-xs text-slate-500">{new Date(attempt.updatedAt).toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      attempt.status === 'in_progress' ? 'bg-orange-100 text-orange-700' :
+                      attempt.status === 'submitted' ? 'bg-sky-100 text-sky-700' :
+                      'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {attempt.status === 'in_progress' ? 'In Progress' :
+                       attempt.status === 'submitted' ? 'Submitted' : 'Scored'}
+                    </span>
+                    {attempt.status === 'in_progress' && (
+                      <button
+                        onClick={() => setActiveAttemptId(attempt.id)}
+                        className="px-4 py-2 bg-brand-600 text-white rounded-lg"
+                      >
+                        Continue
+                      </button>
+                    )}
+                    {(attempt.status === 'submitted' || attempt.status === 'scored') && (
+                      <button
+                        onClick={() => setViewingAttemptId(attempt.id)}
+                        className="px-4 py-2 bg-slate-600 text-white rounded-lg"
+                      >
+                        View Results
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+          {canStartNew && (
+            <button
+              onClick={() => startAttempt(id)}
+              className="w-full py-3 bg-brand-600 text-white rounded-lg font-semibold"
+            >
+              Start New Attempt
+            </button>
+          )}
+        </div>
+      </div>
     );
   };
 
@@ -526,6 +578,7 @@ export default function App() {
             />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/resources" element={<ResourcesPage />} />
+            <Route path="/assessment/:id" element={<AssessmentDetailPage />} />
             <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
           </Routes>
         </main>

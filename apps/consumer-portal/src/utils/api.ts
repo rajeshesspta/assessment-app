@@ -104,12 +104,15 @@ export function createApiClient(session: TenantSession) {
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       'x-actor-roles': session.actorRoles.join(',') || 'LEARNER',
       'x-actor-id': session.userId,
       'x-tenant-id': session.tenantId,
       ...init?.headers as Record<string, string> | undefined,
     };
+    // Only set content-type for requests with a body
+    if (init?.body) {
+      headers['Content-Type'] = 'application/json';
+    }
     const response = await fetch(`${baseUrl}${path}`, {
       ...init,
       headers,

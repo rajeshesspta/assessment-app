@@ -206,13 +206,16 @@ async function callHeadless<T>(tenant: TenantRuntime, path: string, reply: Fasti
   const actorId = (request?.headers['x-actor-id'] as string | undefined)?.trim();
   const url = new URL(path, tenant.headless.baseUrl);
   const headers: HeadersInit = {
-    'content-type': 'application/json',
     'x-api-key': tenant.headless.apiKey,
     'x-tenant-id': tenant.headless.tenantId,
     'x-actor-roles': actorRoles ?? tenant.headless.actorRoles.join(','),
     'x-actor-id': actorId ?? '',
     ...(init?.headers ?? {}),
   };
+  // Only set content-type for requests with a body
+  if (init?.body) {
+    headers['content-type'] = 'application/json';
+  }
   const response = await fetch(url, {
     ...init,
     headers,
@@ -560,10 +563,11 @@ app.post('/api/attempts/:id/submit', async (request, reply) => {
   const attemptId = (request.params as { id: string }).id;
   const tenant = request.tenant;
   try {
-    return await callHeadless(tenant, `/attempts/${attemptId}/submit`, reply, {
-      method: 'POST',
-      body: JSON.stringify(request.body),
-    }, request);
+    const init: RequestInit = { method: 'POST' };
+    if (request.body) {
+      init.body = JSON.stringify(request.body);
+    }
+    return await callHeadless(tenant, `/attempts/${attemptId}/submit`, reply, init, request);
   } catch (error) {
     if (error instanceof HeadlessRequestError) {
       reply.code(error.statusCode);
