@@ -30,6 +30,7 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [filterKind, setFilterKind] = useState<string>('ALL');
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [filterTag, setFilterTag] = useState<string>('ALL');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -87,6 +88,28 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
     });
     return Array.from(tags).sort();
   }, [items]);
+
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      // Search filter
+      if (search && !item.prompt.toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
+      // Kind filter
+      if (filterKind !== 'ALL' && item.kind !== filterKind) {
+        return false;
+      }
+      // Category filter
+      if (filterCategory !== 'ALL' && !item.categories?.includes(filterCategory)) {
+        return false;
+      }
+      // Tag filter
+      if (filterTag !== 'ALL' && !item.tags?.includes(filterTag)) {
+        return false;
+      }
+      return true;
+    });
+  }, [items, search, filterKind, filterCategory, filterTag]);
 
   if (loading) {
     return <LoadingState label="Loading item bank..." />;
