@@ -127,12 +127,12 @@ export function AssignedAssessmentsList({ api, userId, onStartAttempt, onContinu
                     Attempts: {userAttempts.length} / {allowedAttempts}
                   </span>
                   <button
-                    onClick={() => navigate(`/assessment/${assessment.id}`)}
-                    disabled={isDisabled || (isOutOfAttempts && !inProgressAttempt)}
+                    onClick={() => isOutOfAttempts && !inProgressAttempt ? navigate(`/assessment/${assessment.id}`) : navigate(`/assessment/${assessment.id}`)}
+                    disabled={isDisabled}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Play className="h-4 w-4" />
-                    {inProgressAttempt ? 'Continue' : isNotYetAvailable ? 'Not Available' : isOutOfAttempts ? 'No Attempts' : 'Start'}
+                    {inProgressAttempt ? 'Continue' : isNotYetAvailable ? 'Not Available' : isOutOfAttempts ? 'View Results' : 'Start'}
                   </button>
                 </div>
               </div>
