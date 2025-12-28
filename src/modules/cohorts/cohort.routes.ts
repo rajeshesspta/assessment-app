@@ -126,6 +126,19 @@ function mergeAssignments(existing: CohortAssignment[], updates: CohortAssignmen
   return Array.from(map.values());
 }
 
+function mergeSingleAssignment(existing: CohortAssignment | undefined, update: CohortAssignment): CohortAssignment {
+  if (!existing) {
+    return update;
+  }
+  return {
+    ...existing,
+    ...update,
+    availableFrom: update.availableFrom ?? existing.availableFrom,
+    dueDate: update.dueDate ?? existing.dueDate,
+    allowedAttempts: update.allowedAttempts ?? existing.allowedAttempts,
+  };
+}
+
 const createCohortSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
@@ -391,10 +404,7 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     const assignmentMap = new Map(existingAssignments.map(a => [a.assessmentId, a]));
     for (const a of newAssignments) {
       const existing = assignmentMap.get(a.assessmentId);
-      assignmentMap.set(a.assessmentId, {
-        ...existing,
-        ...a,
-      });
+      assignmentMap.set(a.assessmentId, mergeSingleAssignment(existing, a));
     }
 
     const updated = updateCohort(cohort, { assignments: Array.from(assignmentMap.values()) });

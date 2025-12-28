@@ -31,17 +31,17 @@ export function AssessmentPlayer({ attemptId, api, brandPrimary = '#f97316', onC
         const assessmentData = await api.fetchAssessment(attemptData.assessmentId);
         setAssessment(assessmentData);
 
-        // Fetch all items for the assessment
-        // Note: In a real app, we might fetch them one by one or in batches
-        // For now, we'll fetch all items from the item bank that match the IDs
-        // But wait, the API doesn't have a "fetchItemsByIds" method.
-        // I'll use fetchItems and filter, or better, I should have added a specific endpoint.
-        // For now, I'll fetch all items and filter.
-        const allItems = await api.fetchItems({ limit: 1000 });
-        const assessmentItems = assessmentData.itemIds
-          .map((id: string) => allItems.find((item: Item) => item.id === id))
-          .filter(Boolean) as Item[];
-        setItems(assessmentItems);
+        // Use items returned with the attempt (sanitized for learners)
+        if (attemptData.items && attemptData.items.length > 0) {
+          setItems(attemptData.items);
+        } else {
+          // Fallback for older attempts or if items weren't included
+          const allItems = await api.fetchItems({ limit: 1000 });
+          const assessmentItems = assessmentData.itemIds
+            .map((id: string) => allItems.find((item: Item) => item.id === id))
+            .filter(Boolean) as Item[];
+          setItems(assessmentItems);
+        }
 
         // Initialize responses from attempt
         const initialResponses: Record<string, any> = {};
@@ -274,7 +274,7 @@ function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; res
       return (
         <div className="space-y-4">
           {blanks.map((blank, idx) => (
-            <div key={blank.key} className="flex items-center gap-4">
+            <div key={blank.id} className="flex items-center gap-4">
               <span className="text-sm font-semibold text-slate-500 w-24">Blank {idx + 1}:</span>
               <input
                 type="text"
@@ -300,25 +300,25 @@ function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; res
 
       return (
         <div className="space-y-6">
-          {prompts.map((prompt, pIdx) => {
-            const match = currentMatches.find((m: any) => m.promptId === `p${pIdx}`);
+          {prompts.map((prompt) => {
+            const match = currentMatches.find((m: any) => m.promptId === prompt.id);
             return (
-              <div key={pIdx} className="flex flex-col gap-2">
-                <p className="text-sm font-semibold text-slate-700">{prompt}</p>
+              <div key={prompt.id} className="flex flex-col gap-2">
+                <p className="text-sm font-semibold text-slate-700">{prompt.text}</p>
                 <select
                   value={match?.targetId || ''}
                   onChange={(e) => {
-                    const next = currentMatches.filter((m: any) => m.promptId !== `p${pIdx}`);
+                    const next = currentMatches.filter((m: any) => m.promptId !== prompt.id);
                     if (e.target.value) {
-                      next.push({ promptId: `p${pIdx}`, targetId: e.target.value });
+                      next.push({ promptId: prompt.id, targetId: e.target.value });
                     }
                     onChange({ matchingAnswers: next });
                   }}
                   className="rounded-lg border border-slate-200 px-4 py-2 focus:border-brand-500 focus:ring-brand-500"
                 >
                   <option value="">Select a match...</option>
-                  {targets.map((target, tIdx) => (
-                    <option key={tIdx} value={`t${tIdx}`}>{target}</option>
+                  {targets.map((target) => (
+                    <option key={target.id} value={target.id}>{target.text}</option>
                   ))}
                 </select>
               </div>
@@ -334,25 +334,25 @@ function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; res
 
       // If no order yet, show options in original order
       const displayOptions = currentOrder.length === options.length
-        ? currentOrder.map((id: string) => options[parseInt(id.replace('opt', ''))])
+        ? currentOrder.map((id: string) => options.find(o => o.id === id)).filter(Boolean)
         : options;
 
       return (
         <div className="space-y-3">
-          <p className="text-sm text-slate-500 italic mb-4">Drag and drop to reorder (Simulated: use buttons to move)</p>
-          {displayOptions.map((opt: string, idx: number) => (
-            <div key={idx} className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 bg-white">
+          <p className="text-sm text-slate-500 italic mb-4">Use buttons to reorder</p>
+          {displayOptions.map((opt: any, idx: number) => (
+            <div key={opt.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 bg-white">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-500">
                 {idx + 1}
               </span>
-              <span className="flex-1 text-slate-700">{opt}</span>
+              <span className="flex-1 text-slate-700">{opt.text}</span>
               <div className="flex gap-1">
                 <button
                   onClick={() => {
-                    const order = currentOrder.length ? [...currentOrder] : options.map((_, i) => `opt${i}`);
+                    const next = [...displayOptions];
                     if (idx > 0) {
-                      [order[idx], order[idx - 1]] = [order[idx - 1], order[idx]];
-                      onChange({ orderingAnswer: order });
+                      [next[idx], next[idx - 1]] = [next[idx - 1], next[idx]];
+                      onChange({ orderingAnswer: next.map((o: any) => o.id) });
                     }
                   }}
                   disabled={idx === 0}
@@ -362,13 +362,13 @@ function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; res
                 </button>
                 <button
                   onClick={() => {
-                    const order = currentOrder.length ? [...currentOrder] : options.map((_, i) => `opt${i}`);
-                    if (idx < options.length - 1) {
-                      [order[idx], order[idx + 1]] = [order[idx + 1], order[idx]];
-                      onChange({ orderingAnswer: order });
+                    const next = [...displayOptions];
+                    if (idx < displayOptions.length - 1) {
+                      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                      onChange({ orderingAnswer: next.map((o: any) => o.id) });
                     }
                   }}
-                  disabled={idx === options.length - 1}
+                  disabled={idx === displayOptions.length - 1}
                   className="p-1 text-slate-400 hover:text-brand-600 disabled:opacity-20"
                 >
                   ↓

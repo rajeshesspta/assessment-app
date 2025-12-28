@@ -14,6 +14,7 @@ export interface AttemptResponse {
   status: 'in_progress' | 'submitted' | 'scored';
   score?: number;
   maxScore?: number;
+  items?: Item[];
   createdAt: string;
   updatedAt: string;
 }
@@ -26,33 +27,16 @@ export interface Item {
   prompt: string;
   createdAt: string;
   updatedAt: string;
-  // Add other fields as needed for specific kinds
   choices?: { text: string }[];
   answerMode?: 'single' | 'multiple';
-  correctIndexes?: number[];
-  answerIsTrue?: boolean;
-  prompts?: string[];
-  targets?: string[];
-  options?: string[];
-  correctOrder?: number[];
-  correctValue?: number;
-  tolerance?: number;
-  units?: string;
-  sampleAnswer?: string;
-  rubric?: {
-    keywords?: string[];
-    sections?: { section: string; points: number }[];
-  };
-  lengthExpectation?: {
-    minWords?: number;
-    maxWords?: number;
-  };
-  blanks?: { key: string; correctValue: string }[];
-  imageUri?: string;
-  polygons?: { id: string; points: { x: number; y: number }[] }[];
-  tokens?: { id: string; text: string }[];
-  zones?: { id: string; label: string; correctTokenIds: string[] }[];
-  workspaceTemplate?: string;
+  blanks?: { id: string }[];
+  prompts?: { id: string; text: string }[];
+  targets?: { id: string; text: string }[];
+  options?: { id: string; text: string }[];
+  image?: { url: string; width: number; height: number; alt?: string };
+  tokens?: { id: string; label: string }[];
+  zones?: { id: string; label?: string }[];
+  brief?: string;
 }
 
 export interface Assessment {
@@ -187,7 +171,7 @@ export function createApiClient(session: TenantSession) {
     },
     async saveAttemptResponses(attemptId: string, responses: any[]): Promise<AttemptResponse> {
       return request<AttemptResponse>(`/attempts/${attemptId}/responses`, {
-        method: 'PUT',
+        method: 'PATCH',
         body: JSON.stringify({ responses }),
       });
     },
@@ -195,6 +179,9 @@ export function createApiClient(session: TenantSession) {
       return request<AttemptResponse>(`/attempts/${attemptId}/submit`, {
         method: 'POST',
       });
+    },
+    async fetchAttempts(): Promise<AttemptResponse[]> {
+      return request<AttemptResponse[]>(`/attempts/user/${session.userId}`);
     },
     async fetchCohorts(): Promise<Cohort[]> {
       return request<Cohort[]>('/cohorts');

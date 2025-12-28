@@ -130,6 +130,14 @@ describe('attemptRoutes', () => {
       itemIds: ['item-1'],
       allowedAttempts: 2,
     });
+    mocks.itemGetByIdMock.mockReturnValueOnce({
+      id: 'item-1',
+      tenantId: 'tenant-1',
+      kind: 'MCQ',
+      prompt: 'What is 2+2?',
+      choices: [{ text: '3' }, { text: '4' }],
+      correctIndexes: [1],
+    });
     mocks.uuidMock.mockReturnValueOnce('attempt-1').mockReturnValueOnce('event-1');
 
     const response = await app.inject({
@@ -150,7 +158,16 @@ describe('attemptRoutes', () => {
       userId: 'user-1',
       status: 'in_progress',
       responses: [],
+      items: [
+        {
+          id: 'item-1',
+          kind: 'MCQ',
+          prompt: 'What is 2+2?',
+          choices: [{ text: '3' }, { text: '4' }],
+        }
+      ]
     });
+    expect(body.items[0].correctIndexes).toBeUndefined();
     expect(body.createdAt).toBeDefined();
     expect(body.updatedAt).toBeDefined();
     expect(mocks.publishMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -1426,7 +1443,7 @@ describe('attemptRoutes', () => {
     expect(response.json()).toEqual({ error: 'Already submitted' });
   });
 
-  it('returns attempt by id', async () => {
+  it('returns attempt by id with items', async () => {
     const attempt = {
       id: 'attempt-1',
       tenantId: 'tenant-1',
@@ -1438,10 +1455,27 @@ describe('attemptRoutes', () => {
       updatedAt: '2025-01-01T00:00:00.000Z',
     };
     mocks.attemptStore.set('attempt-1', attempt);
+    mocks.assessmentGetByIdMock.mockReturnValue({
+      id: 'assessment-1',
+      tenantId: 'tenant-1',
+      itemIds: ['item-1'],
+    });
+    mocks.itemGetByIdMock.mockReturnValue({
+      id: 'item-1',
+      tenantId: 'tenant-1',
+      kind: 'MCQ',
+      prompt: 'What is 2+2?',
+      choices: [{ text: '3' }, { text: '4' }],
+      correctIndexes: [1],
+    });
 
     const response = await app.inject({ method: 'GET', url: '/attempts/attempt-1' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(attempt);
+    const body = response.json();
+    expect(body.id).toBe('attempt-1');
+    expect(body.items).toBeDefined();
+    expect(body.items[0].id).toBe('item-1');
+    expect(body.items[0].correctIndexes).toBeUndefined();
     expect(mocks.getByIdMock).toHaveBeenCalledWith('tenant-1', 'attempt-1');
   });
 

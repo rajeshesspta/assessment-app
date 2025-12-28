@@ -286,7 +286,15 @@ export interface AttemptResponse {
 	scenarioAnswer?: { repositoryUrl?: string; artifactUrl?: string; submissionNotes?: string; files?: { path: string; url?: string }[] };
 }
 
-export interface Attempt extends BaseEntity { assessmentId: string; userId: string; status: 'in_progress' | 'submitted' | 'scored'; responses: AttemptResponse[]; score?: number; maxScore?: number; }
+export interface Attempt extends BaseEntity {
+	assessmentId: string;
+	userId: string;
+	status: 'in_progress' | 'submitted' | 'scored';
+	responses: AttemptResponse[];
+	score?: number;
+	maxScore?: number;
+	items?: Item[];
+}
 
 export interface DomainEvent<TPayload = any> { id: string; type: string; occurredAt: string; tenantId: string; payload: TPayload; }
 

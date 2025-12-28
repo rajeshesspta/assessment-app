@@ -89,12 +89,12 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
   }));
 
   app.post('/', {
-    schema: {
-      tags: ['Users'],
-      summary: 'Invite a Content Author, Learner, or Rater',
-      description: `Available roles: ${TENANT_USER_ROLES.join(', ')}. Call GET /users/roles for the authoritative list.`,
-      body: createUserBodySchema,
-    },
+    // schema: {
+    //   tags: ['Users'],
+    //   summary: 'Invite a Content Author, Learner, or Rater',
+    //   description: `Available roles: ${TENANT_USER_ROLES.join(', ')}. Call GET /users/roles for the authoritative list.`,
+    //   body: createUserBodySchema,
+    // },
     attachValidation: true,
     validatorCompiler: passThroughValidator,
   }, async (req, reply) => {
@@ -105,7 +105,14 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
       return;
     }
     const tenantId = (req as any).tenantId as string;
-    const parsed = createSchema.parse(req.body);
+    let parsed;
+    try {
+      parsed = createSchema.parse(req.body);
+    } catch (e) {
+      req.log.error({ err: e }, 'Zod parse error');
+      reply.code(400);
+      return { error: 'Invalid input' };
+    }
     const roles = extractRoles(parsed);
     const existing = repository.getByEmail(tenantId, parsed.email);
     if (existing) {

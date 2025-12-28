@@ -27,55 +27,55 @@ export interface AppDependencies {
 const apiVersion = typeof pkg?.version === 'string' ? pkg.version : '0.0.0';
 
 export function buildApp(deps: AppDependencies = {}) {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: false });
   const repositories = deps.repositories ?? createInMemoryRepositoryBundle();
   const tenantRepository = deps.tenantRepository ?? createInMemoryTenantRepository();
 
-  app.register(swagger, {
-    openapi: {
-      info: {
-        title: 'Assessment Platform API',
-        description: 'Headless assessment authoring and delivery APIs',
-        version: apiVersion,
-      },
-      servers: [{ url: process.env.API_PUBLIC_URL ?? 'http://localhost:3000', description: 'Local dev server' }],
-      components: {
-        securitySchemes: {
-          ApiKeyHeader: {
-            type: 'apiKey',
-            in: 'header',
-            name: 'x-api-key',
-            description: 'API key issued per tenant or super admin',
-          },
-          TenantHeader: {
-            type: 'apiKey',
-            in: 'header',
-            name: 'x-tenant-id',
-            description: 'Tenant scope for the request',
-          },
-        },
-      },
-      security: [
-        {
-          ApiKeyHeader: [],
-          TenantHeader: [],
-        },
-      ],
-    },
-  });
+  // app.register(swagger, {
+  //   openapi: {
+  //     info: {
+  //       title: 'Assessment Platform API',
+  //       description: 'Headless assessment authoring and delivery APIs',
+  //       version: apiVersion,
+  //     },
+  //     servers: [{ url: process.env.API_PUBLIC_URL ?? 'http://localhost:3000', description: 'Local dev server' }],
+  //     components: {
+  //       securitySchemes: {
+  //         ApiKeyHeader: {
+  //           type: 'apiKey',
+  //           in: 'header',
+  //           name: 'x-api-key',
+  //           description: 'API key issued per tenant or super admin',
+  //         },
+  //         TenantHeader: {
+  //           type: 'apiKey',
+  //           in: 'header',
+  //           name: 'x-tenant-id',
+  //           description: 'Tenant scope for the request',
+  //         },
+  //       },
+  //     },
+  //     security: [
+  //       {
+  //         ApiKeyHeader: [],
+  //         TenantHeader: [],
+  //       },
+  //     ],
+  //   },
+  // });
 
-  app.register(swaggerUi, {
-    routePrefix: '/docs',
-    uiConfig: {
-      docExpansion: 'list',
-      deepLinking: true,
-    },
-    staticCSP: true,
-  });
+  // app.register(swaggerUi, {
+  //   routePrefix: '/docs',
+  //   uiConfig: {
+  //     docExpansion: 'list',
+  //     deepLinking: true,
+  //   },
+  //   staticCSP: true,
+  // });
 
-  app.setValidatorCompiler(() => {
-    return data => ({ value: data });
-  });
+  // app.setValidatorCompiler(() => {
+  //   return data => ({ value: data });
+  // });
 
   // Register auth & tenant enforcement
   app.addHook('onRequest', async (request, reply) => {

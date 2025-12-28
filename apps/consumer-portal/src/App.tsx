@@ -145,6 +145,12 @@ export default function App() {
     }
   }, [user, session, saveSession, config?.headlessTenantId]);
 
+  useEffect(() => {
+    if (user && api) {
+      api.fetchAttempts().then(setAttempts).catch(console.error);
+    }
+  }, [user, api]);
+
   const ensureApi = useCallback(() => {
     if (!api) {
       throw new Error('Configure tenant session first.');
@@ -240,10 +246,12 @@ export default function App() {
         api={api}
         userId={user.id}
         onStartAttempt={startAttempt}
+        onContinue={(id) => setActiveAttemptId(id)}
         attempts={attempts}
       />
       <AttemptList
         attempts={attempts}
+        api={api}
         onRefresh={refreshAttempt}
         onContinue={(id) => setActiveAttemptId(id)}
         onViewResults={(id) => setViewingAttemptId(id)}

@@ -539,6 +539,40 @@ app.get('/api/attempts/:id', async (request, reply) => {
   }
 });
 
+app.patch('/api/attempts/:id/responses', async (request, reply) => {
+  const attemptId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/attempts/${attemptId}/responses`, reply, {
+      method: 'PATCH',
+      body: JSON.stringify(request.body),
+    }, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.post('/api/attempts/:id/submit', async (request, reply) => {
+  const attemptId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/attempts/${attemptId}/submit`, reply, {
+      method: 'POST',
+      body: JSON.stringify(request.body),
+    }, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
 app.get('/api/items', async (request, reply) => {
   const tenant = request.tenant;
   const query = request.query as Record<string, string>;

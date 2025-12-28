@@ -284,6 +284,53 @@ describe('cohortRoutes', () => {
     }));
   });
 
+  it('preserves existing availableFrom and dueDate when updating assignments', async () => {
+    const cohort: Cohort = {
+      id: 'cohort-1',
+      tenantId: 'tenant-1',
+      name: 'Alpha',
+      learnerIds: ['learner-1'],
+      assessmentIds: [],
+      assignments: [
+        {
+          assessmentId: 'assessment-1',
+          availableFrom: '2025-01-01T09:00:00Z',
+          dueDate: '2025-01-02T17:00:00Z',
+          allowedAttempts: 1,
+        },
+      ],
+      createdAt: 'now',
+      updatedAt: 'now',
+    };
+    cohortRepository.getById.mockReturnValueOnce(cohort);
+    assessmentRepository.getById.mockReturnValueOnce({ id: 'assessment-1' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/cohorts/cohort-1/assessments',
+      payload: {
+        assignments: [
+          {
+            assessmentId: 'assessment-1',
+            allowedAttempts: 2, // Only update attempts, preserve dates
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(cohortRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      assignments: [
+        {
+          assessmentId: 'assessment-1',
+          availableFrom: '2025-01-01T09:00:00Z', // Preserved
+          dueDate: '2025-01-02T17:00:00Z', // Preserved
+          allowedAttempts: 2, // Updated
+        },
+      ],
+    }));
+  });
+
   it('rejects super admins even when tenant roles are provided', async () => {
     currentActorRoles = ['TENANT_ADMIN'];
     currentIsSuperAdmin = true;

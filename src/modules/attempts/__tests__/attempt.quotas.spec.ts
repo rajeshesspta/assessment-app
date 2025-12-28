@@ -45,7 +45,7 @@ describe('Attempt Quotas', () => {
 
   it('respects allowedAttempts override in cohort assignment', async () => {
     mocks.userRepository.getById = vi.fn().mockReturnValue({ id: 'learner-1', roles: ['LEARNER'] });
-    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1', allowedAttempts: 1 });
+    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1', allowedAttempts: 1, itemIds: [] });
     mocks.cohortRepository.listByLearner = vi.fn().mockReturnValue([
       {
         id: 'cohort-1',
@@ -66,7 +66,7 @@ describe('Attempt Quotas', () => {
 
   it('blocks attempt when override limit is reached', async () => {
     mocks.userRepository.getById = vi.fn().mockReturnValue({ id: 'learner-1', roles: ['LEARNER'] });
-    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1', allowedAttempts: 1 });
+    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1', allowedAttempts: 1, itemIds: [] });
     mocks.cohortRepository.listByLearner = vi.fn().mockReturnValue([
       {
         id: 'cohort-1',
@@ -88,7 +88,7 @@ describe('Attempt Quotas', () => {
 
   it('rejects attempt when learner is not assigned to the assessment', async () => {
     mocks.userRepository.getById = vi.fn().mockReturnValue({ id: 'learner-1', roles: ['LEARNER'] });
-    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1', allowedAttempts: 1 });
+    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1', allowedAttempts: 1, itemIds: [] });
     mocks.cohortRepository.listByLearner = vi.fn().mockReturnValue([
       {
         id: 'cohort-1',
@@ -108,7 +108,7 @@ describe('Attempt Quotas', () => {
 
   it('rejects attempt when user is not a learner', async () => {
     mocks.userRepository.getById = vi.fn().mockReturnValue({ id: 'author-1', roles: ['CONTENT_AUTHOR'] });
-    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1' });
+    mocks.assessmentRepository.getById = vi.fn().mockReturnValue({ id: 'assessment-1', itemIds: [] });
 
     const response = await app.inject({
       method: 'POST',

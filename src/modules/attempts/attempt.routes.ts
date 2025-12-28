@@ -10,6 +10,7 @@ import type { UserRepository } from '../users/user.repository.js';
 import type {
   AttemptResponse,
   UserRole,
+  Item,
   FillBlankMatcher,
   HotspotPoint,
   ScenarioAttachment,
@@ -27,6 +28,7 @@ import {
   scoreOrderingItem,
   scoreTrueFalseItem,
 } from '../scoring/scoring.service.js';
+import { sanitizeItemForLearner } from '../items/item.utils.js';
 import { eventBus } from '../../common/event-bus.js';
 import { toJsonSchema } from '../../common/zod-json-schema.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
@@ -144,8 +146,12 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     const attempt = createAttempt({ id, tenantId, assessmentId: assessment.id, userId: learner.id });
     attemptRepository.save(attempt);
     eventBus.publish({ id: uuid(), type: 'AttemptStarted', occurredAt: new Date().toISOString(), tenantId, payload: { attemptId: id } });
+    
+    const items = assessment.itemIds.map(itemId => itemRepository.getById(tenantId, itemId)).filter((item): item is Item => !!item);
+    const sanitizedItems = items.map(sanitizeItemForLearner);
+    
     reply.code(201);
-    return attempt;
+    return { ...attempt, items: sanitizedItems };
   });
 
   app.patch('/:id/responses', { schema: { body: responsesBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
@@ -483,6 +489,14 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     const tenantId = (req as any).tenantId as string;
     const attempt = attemptRepository.getById(tenantId, id);
     if (!attempt) { reply.code(404); return { error: 'Not found' }; }
+
+    const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId);
+    if (assessment) {
+      const items = assessment.itemIds.map(itemId => itemRepository.getById(tenantId, itemId)).filter((item): item is Item => !!item);
+      const sanitizedItems = items.map(sanitizeItemForLearner);
+      return { ...attempt, items: sanitizedItems };
+    }
+
     return attempt;
   });
 
