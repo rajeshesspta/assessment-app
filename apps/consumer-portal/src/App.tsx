@@ -14,6 +14,7 @@ import { UsersPage } from './components/UsersPage';
 import { AssessmentPlayer } from './components/AssessmentPlayer';
 import { AttemptResult } from './components/AttemptResult';
 import { LearnerDashboard } from './components/LearnerDashboard';
+import { ContentAuthorDashboard } from './components/ContentAuthorDashboard';
 import { Breadcrumb } from './components/Breadcrumb';
 import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
@@ -31,19 +32,19 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { id: 'overview', label: 'Overview', path: '/overview' },
   { id: 'my-assessments', label: 'My Assessments', path: '/my-assessments' },
   { id: 'manage-assessments', label: 'Assessments', path: '/manage-assessments', requiresContentAuthor: true },
   { id: 'item-bank', label: 'Item Bank', path: '/item-bank', requiresContentAuthor: true },
   { id: 'learners', label: 'Learners', path: '/learners', requiresContentAuthor: true },
   { id: 'cohorts', label: 'Cohorts', path: '/cohorts', requiresContentAuthor: true },
   { id: 'users', label: 'Users', path: '/users', requiresTenantAdmin: true },
-  { id: 'overview', label: 'Overview', path: '/overview' },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
   { id: 'resources', label: 'Resources', path: '/resources' },
 ];
 
 const LANDING_NAV_ID = 'overview';
-const LANDING_PATH = NAV_ITEMS.find(item => item.id === LANDING_NAV_ID)?.path ?? '/my-assessments';
+const LANDING_PATH = '/overview';
 
 function withAlpha(hex: string, alpha: number) {
   const normalized = hex?.startsWith('#') ? hex.slice(1) : hex;
@@ -163,17 +164,27 @@ export default function App() {
   }, [user, location.pathname, navigate]);
 
   useEffect(() => {
-    if (user && isBffEnabled() && config?.headlessTenantId) {
+    if (!checkingSession && !user && location.pathname !== '/login') {
+      navigate('/login', { replace: true });
+    }
+  }, [checkingSession, user, location.pathname, navigate]);
+
+  useEffect(() => {
+    console.log('Session save effect:', { user: !!user, isBffEnabled: isBffEnabled(), configHeadlessTenantId: config?.headlessTenantId, session: !!session });
+    if (user && isBffEnabled()) {
+      const tenantId = config?.headlessTenantId || 'dev-tenant';
       const rolesChanged = JSON.stringify(session?.actorRoles) !== JSON.stringify(user.roles);
       const userChanged = session?.userId !== user.id;
-      const tenantChanged = session?.tenantId !== config.headlessTenantId;
+      const tenantChanged = session?.tenantId !== tenantId;
       
+      console.log('Session save check:', { rolesChanged, userChanged, tenantChanged, userRoles: user.roles, tenantId });
       if (!session || rolesChanged || userChanged || tenantChanged) {
+        console.log('Saving session with roles:', user.roles, 'tenantId:', tenantId);
         saveSession({
           apiBaseUrl: buildBffUrl('/api'),
           actorRoles: user.roles,
           userId: user.id,
-          tenantId: config.headlessTenantId,
+          tenantId,
         });
       }
     }
@@ -185,12 +196,10 @@ export default function App() {
     }
   }, [user, api]);
 
-  const ensureApi = useCallback(() => {
-    if (!api) {
-      throw new Error('Configure tenant session first.');
-    }
-    return api;
-  }, [api]);
+  const combinedLogout = useCallback(async () => {
+    await logout();
+    clearSession();
+  }, [logout, clearSession]);
 
   const toggleSidebarPinned = useCallback(() => {
     setSidebarPinned(prev => {
@@ -256,6 +265,7 @@ export default function App() {
   );
 
   const OverviewPage = () => {
+    console.log('OverviewPage render:', { user, session, isContentAuthor, isTenantAdmin });
     if (!api) {
       return (
         <div className="flex items-center justify-center py-12">
@@ -264,6 +274,15 @@ export default function App() {
             <p className="mt-2 text-sm text-slate-600">Setting up session...</p>
           </div>
         </div>
+      );
+    }
+
+    if (isContentAuthor) {
+      return (
+        <ContentAuthorDashboard
+          api={api}
+          brandPrimary={brandPrimary}
+        />
       );
     }
 
@@ -526,7 +545,7 @@ export default function App() {
             type="button"
             className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700"
             onClick={() => {
-              logout();
+              combinedLogout();
               setAnalytics(null);
               setAttempts([]);
             }}
@@ -603,9 +622,9 @@ export default function App() {
 
           <Routes>
             <Route path="/" element={<Navigate to={LANDING_PATH} replace />} />
-            <Route path={LANDING_PATH} element={<MyAssessmentsPage />} />
-            <Route path="/my-assessments/completed" element={<CompletedAssessmentsPage />} />
             <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/my-assessments" element={<MyAssessmentsPage />} />
+            <Route path="/my-assessments/completed" element={<CompletedAssessmentsPage />} />
             <Route
               path="/item-bank"
               element={(isContentAuthor || isTenantAdmin) ? <ItemBankPage api={api} brandPrimary={brandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
