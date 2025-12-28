@@ -44,7 +44,7 @@ const EnterpriseIcon = () => (
 export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assessment Portal', supportEmail, branding }: LoginPageProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(['LEARNER']);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(['CONTENT_AUTHOR']);
   const [enterpriseIdentity, setEnterpriseIdentity] = useState('');
   const accentStyle = useMemo(() => (
     branding?.primaryColor ? { color: branding.primaryColor } : undefined
@@ -57,7 +57,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
     setSelectedRoles(prev => {
       if (prev.includes(role)) {
         const next = prev.filter(item => item !== role);
-        return next.length > 0 ? next : ['LEARNER'];
+        return next;
       }
       return [...prev, role];
     });

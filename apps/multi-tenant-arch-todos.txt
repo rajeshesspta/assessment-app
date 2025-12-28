@@ -378,4 +378,46 @@ Assessment Module Iteration Checklist
 - [ ] UI: Implement certificate/badge generation for completions.
 - [ ] BFF: Add feedback storage and certificate generation endpoints.
 
+**Iteration 26: Content Author Dashboard - Quick Actions Bar**
+- Goal: Provide immediate entry points for primary workflows to reduce clicks.
+- [x] UI: Add Quick Actions Bar with buttons for "Create New Item", "Build Assessment", "Add Cohort".
+- [x] UI: Implement modal/form for each action with Zod validation.
+- [x] BFF: Ensure role-based access (CONTENT_AUTHOR or TENANT_ADMIN).
+
+**Iteration 27: Content Author Dashboard - Recent Items Summary**
+- Goal: Enable quick review of the tenant-wide item bank.
+- [ ] UI: Create grid/cards for last 5-10 items (title, kind, status, created date).
+- [ ] UI: Add filters (All, Draft, Published) and edit/preview links.
+- [ ] BFF: Proxy GET /items with tenant filtering.
+
+**Iteration 28: Content Author Dashboard - Assessments Overview**
+- Goal: Monitor assessment assembly and publishing progress.
+- [ ] UI: List recent assessments with item count, cohort count, status, and publish controls.
+- [ ] UI: Display total assessments metric.
+- [ ] BFF: Surface assessment metadata via proxy routes.
+
+**Iteration 29: Content Author Dashboard - Cohorts and Learners Snapshot**
+- Goal: Ensure proper grouping and assignment of learners.
+- [ ] UI: Cards for top cohorts (name, learner count, assigned assessments).
+- [ ] UI: Alerts for learners without roles/cohorts.
+- [ ] BFF: Add proxy for cohort/learner data.
+
+**Iteration 30: Content Author Dashboard - Deferred Scoring Queue**
+- Goal: Handle pending evaluations promptly.
+- [ ] UI: Display count and list of pending evaluations (essays, scenarios).
+- [ ] UI: Allow assignment or self-review.
+- [ ] BFF: Proxy evaluation endpoints and events.
+
+**Iteration 31: Content Author Dashboard - Analytics Highlights**
+- Goal: Provide quick insights into performance.
+- [ ] UI: Charts for top items, attempt trends, and weekly metrics.
+- [ ] UI: Query reporting endpoints as ANALYTICS_CONSUMER.
+- [ ] BFF: Aggregate and proxy analytics data.
+
+**Iteration 32: Content Author Dashboard - Notifications/Alerts**
+- Goal: Proactive awareness of issues.
+- [ ] UI: Alerts for low item bank, unpublished assessments, failed attempts.
+- [ ] UI: Integrate with tenant-scoped notifications.
+- [ ] BFF: Add notification fetching and display logic.
+
 

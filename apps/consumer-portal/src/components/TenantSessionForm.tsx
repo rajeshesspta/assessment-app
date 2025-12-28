@@ -5,14 +5,15 @@ interface TenantSessionFormProps {
   value: TenantSession | null;
   onSave: (session: TenantSession) => void;
   onClear: () => void;
+  user?: { roles?: string[] };
 }
 
 const ROLE_PRESETS = ['LEARNER', 'CONTENT_AUTHOR', 'TENANT_ADMIN'];
 
-export function TenantSessionForm({ value, onSave, onClear }: TenantSessionFormProps) {
+export function TenantSessionForm({ value, onSave, onClear, user }: TenantSessionFormProps) {
   const [formState, setFormState] = useState<TenantSession>(() => value ?? {
     apiBaseUrl: '/api',
-    actorRoles: ['LEARNER'],
+    actorRoles: user?.roles || ['LEARNER'],
     userId: '',
     tenantId: '',
   });

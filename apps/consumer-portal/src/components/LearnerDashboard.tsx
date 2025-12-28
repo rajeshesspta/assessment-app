@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Calendar, Clock, CheckCircle, AlertCircle, TrendingUp, FileText } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, AlertCircle, TrendingUp, FileText, Play } from 'lucide-react';
 import type { Cohort, Assessment, AttemptResponse } from '../utils/api';
 
 interface LearnerDashboardProps {
@@ -76,6 +76,13 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
       if (!dueDate) return false;
       const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       return daysUntilDue >= 0 && daysUntilDue <= 7;
+    }).length;
+
+    const recentAttempts = attempts.filter(attempt => {
+      const createdAt = attempt.createdAt ? new Date(attempt.createdAt) : null;
+      if (!createdAt) return false;
+      const daysAgo = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+      return daysAgo <= 7 && daysAgo >= 0;
     }).length;
 
     // Count completed assessments (where user has used all attempts or has completed attempts)
