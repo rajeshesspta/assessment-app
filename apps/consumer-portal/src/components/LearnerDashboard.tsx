@@ -245,3 +245,6 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
           </div>
         </section>
       )}
+    </div>
+  );
+}
