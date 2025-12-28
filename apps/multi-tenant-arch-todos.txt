@@ -385,10 +385,15 @@ Assessment Module Iteration Checklist
 - [x] BFF: Ensure role-based access (CONTENT_AUTHOR or TENANT_ADMIN).
 
 **Iteration 27: Content Author Dashboard - Recent Items Summary**
+**Iteration 27b: BFF /api/items Role Enforcement & Tests**
+- [ ] Add middleware or inline logic to /api/items to enforce:
+	- Only CONTENT_AUTHOR or TENANT_ADMIN can access.
+	- SUPER_ADMIN is blocked from tenant-scoped requests.
+- [ ] Add/extend tests to cover these role checks.
 - Goal: Enable quick review of the tenant-wide item bank.
-- [ ] UI: Create grid/cards for last 5-10 items (title, kind, status, created date).
-- [ ] UI: Add filters (All, Draft, Published) and edit/preview links.
-- [ ] BFF: Proxy GET /items with tenant filtering.
+- [x] UI: Create grid/cards for last 5-10 items (title, kind, status, created date).
+- [x] UI: Add filters (All, Draft, Published) and edit/preview links.
+- [x] BFF: Proxy GET /items with tenant filtering.
 
 **Iteration 28: Content Author Dashboard - Assessments Overview**
 - Goal: Monitor assessment assembly and publishing progress.
