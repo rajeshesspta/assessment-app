@@ -15,11 +15,24 @@ export function runMigrations(db: SQLiteDatabase) {
       feature_flags_json TEXT NOT NULL,
       engine_size_id TEXT,
       engine_size_json TEXT,
+      taxonomy_config_json TEXT,
       status TEXT NOT NULL DEFAULT 'active',
       updated_at TEXT NOT NULL,
       updated_by TEXT NOT NULL
     );
   `);
+  try {
+    db.exec(`
+      ALTER TABLE tenant_registry
+      ADD COLUMN taxonomy_config_json TEXT
+    `);
+  } catch (error: any) {
+    if (typeof error?.message === 'string' && error.message.includes('duplicate column name')) {
+      // Column already exists; ignore.
+    } else {
+      throw error;
+    }
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS engine_sizes (

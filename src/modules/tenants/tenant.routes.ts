@@ -70,6 +70,24 @@ function ensureAdmin(request: any, reply: any): boolean {
 }
 
 export async function tenantRoutes(app: FastifyInstance, options: TenantRoutesOptions) {
+    // Expose taxonomy config for a tenant
+    app.get('/:id/taxonomy', async (req, reply) => {
+      const id = (req.params as any).id as string;
+      // Only allow access if requester is admin or requesting their own tenant
+      const requesterTenant = (req as any).tenantId as string;
+      if (!isAdmin(req) && id !== requesterTenant) {
+        reply.code(403);
+        return { error: 'Forbidden' };
+      }
+      // Load taxonomy config from control plane bundle/config
+      const { getTenantTaxonomyConfig } = await import('../../config/tenant-taxonomy.js');
+      const taxonomy = await getTenantTaxonomyConfig(id);
+      if (!taxonomy) {
+        reply.code(404);
+        return { error: 'No taxonomy config for tenant' };
+      }
+      return taxonomy;
+    });
   const { repository, userRepository } = options;
 
   app.get('/current', async (req, reply) => {

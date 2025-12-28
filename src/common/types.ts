@@ -27,6 +27,18 @@ export type ItemKind = 'MCQ' | 'TRUE_FALSE' | 'FILL_IN_THE_BLANK' | 'MATCHING' |
 export interface BaseItemEntity extends BaseEntity {
 	kind: ItemKind;
 	prompt: string;
+	/**
+	 * Category or categories for taxonomy grouping. Optional, can be string or array of strings.
+	 */
+	categories?: string[];
+	/**
+	 * Tags for flexible filtering. Optional, can be string or array of strings.
+	 */
+	tags?: string[];
+	/**
+	 * Arbitrary metadata for extensibility (e.g., difficulty, source, curriculum, etc.)
+	 */
+	metadata?: Record<string, any>;
 }
 
 export interface ChoiceItem extends BaseItemEntity {

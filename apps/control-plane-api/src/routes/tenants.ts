@@ -1,3 +1,5 @@
+import { tenantTaxonomyConfigSchema } from '../tenant-schema';
+const tenantTaxonomyUpdateSchema = tenantTaxonomyConfigSchema;
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -89,6 +91,40 @@ function recordToInput(record: TenantRecord): TenantRegistryInput {
 }
 
 export async function registerTenantRoutes(
+    // PATCH /control/tenants/:id/taxonomy
+    app.patch('/control/tenants/:id/taxonomy', async (request, reply) => {
+      const params = tenantIdParamsSchema.safeParse(request.params ?? {});
+      if (!params.success) {
+        reply.code(400);
+        return { error: 'Invalid tenant id' };
+      }
+
+      const { actor, roles } = parseActorContext(request.headers);
+      if (!isSuperAdmin({ actor, roles })) {
+        reply.code(403);
+        return { error: 'Forbidden: only Super Admins may edit taxonomy config' };
+      }
+
+      const parsedBody = tenantTaxonomyUpdateSchema.safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        reply.code(400);
+        return { error: 'Invalid payload', issues: parsedBody.error.issues };
+      }
+
+      const record = await repo.getTenant(params.data.id);
+      if (!record) {
+        reply.code(404);
+        return { error: 'Tenant not found' };
+      }
+
+      const updatedRecord: TenantRecord = {
+        ...record,
+        taxonomy: parsedBody.data,
+      };
+
+      const saved = await repo.upsertTenant(recordToInput(updatedRecord), actor);
+      return sanitizeRecord(saved as TenantRecord);
+    });
   app: FastifyInstance,
   repo: TenantRegistryRepository,
   engineSizes: EngineSizeRepository,

@@ -284,6 +284,22 @@ export function createSQLiteItemRepository(client: SQLiteTenantClient): ItemRepo
         clauses.push('lower(prompt) LIKE ?');
         params.push(`%${options.search.toLowerCase()}%`);
       }
+      // Filtering by categories/tags/metadata (JSON columns)
+      if (options.categories && options.categories.length > 0) {
+        clauses.push('json_extract(metadata_json, "$.categories") IS NOT NULL AND (' + options.categories.map(() => 'json_each.value = ?').join(' OR ') + ')');
+        params.push(...options.categories);
+      }
+      if (options.tags && options.tags.length > 0) {
+        clauses.push('json_extract(metadata_json, "$.tags") IS NOT NULL AND (' + options.tags.map(() => 'json_each.value = ?').join(' OR ') + ')');
+        params.push(...options.tags);
+      }
+      // Metadata key-value filtering (simple equality)
+      if (options.metadata) {
+        for (const [key, value] of Object.entries(options.metadata)) {
+          clauses.push(`json_extract(metadata_json, '$.${key}') = ?`);
+          params.push(value);
+        }
+      }
       params.push(limit, offset);
       const rows = db
         .prepare(`

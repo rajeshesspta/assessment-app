@@ -1,3 +1,4 @@
+import { getTenantTaxonomyConfig } from '../../config/tenant-taxonomy.js';
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
@@ -332,6 +333,9 @@ const listQuerySchema = z.object({
       'SCENARIO_TASK',
     ])
     .optional(),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 export interface ItemRoutesOptions {
@@ -343,8 +347,8 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
   app.get('/', async (req, reply) => {
     if (!ensureItemManager(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
-    const { search, limit, offset, kind } = listQuerySchema.parse(req.query ?? {});
-    return repository.list(tenantId, { search, kind, limit: limit ?? 10, offset: offset ?? 0 });
+    const { search, limit, offset, kind, categories, tags, metadata } = listQuerySchema.parse(req.query ?? {});
+    return repository.list(tenantId, { search, kind, categories, tags, metadata, limit: limit ?? 10, offset: offset ?? 0 });
   });
   app.post('/', {
     schema: {
@@ -370,6 +374,140 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       }
       throw error;
     }
+
+    // --- Item kind/type-specific validation (run before taxonomy) ---
+    // If any validation fails, return immediately (as in the original code)
+    // We'll use a flag to indicate if the item is valid so far
+    let itemKindValidationError: { code: number; error: string } | null = null;
+    // MCQ
+    if (parsed.kind === 'MCQ') {
+      const unique = new Set(parsed.correctIndexes);
+      if (unique.size !== parsed.correctIndexes.length) {
+        itemKindValidationError = { code: 400, error: 'correctIndexes must be unique' };
+      } else if (parsed.correctIndexes.some(index => index >= parsed.choices.length)) {
+        itemKindValidationError = { code: 400, error: 'correctIndexes out of range' };
+      } else if (parsed.answerMode === 'single' && parsed.correctIndexes.length !== 1) {
+        itemKindValidationError = { code: 400, error: 'Single-answer items must include exactly one correct index' };
+      } else if (parsed.answerMode === 'multiple' && parsed.correctIndexes.length < 2) {
+        itemKindValidationError = { code: 400, error: 'Multi-answer items require at least two correct indexes' };
+      }
+    }
+    // TRUE_FALSE
+    if (!itemKindValidationError && parsed.kind === 'TRUE_FALSE') {
+      // No extra validation needed
+    }
+    // FILL_IN_THE_BLANK
+    if (!itemKindValidationError && parsed.kind === 'FILL_IN_THE_BLANK') {
+      const blankIds = new Set(parsed.blanks.map(blank => blank.id));
+      if (blankIds.size !== parsed.blanks.length) {
+        itemKindValidationError = { code: 400, error: 'Blank ids must be unique' };
+      }
+    }
+    // MATCHING
+    if (!itemKindValidationError && parsed.kind === 'MATCHING') {
+      const promptIds = new Set(parsed.prompts.map(p => p.id));
+      const targetIds = new Set(parsed.targets.map(t => t.id));
+      if (promptIds.size !== parsed.prompts.length) {
+        itemKindValidationError = { code: 400, error: 'Prompt ids must be unique' };
+      } else if (targetIds.size !== parsed.targets.length) {
+        itemKindValidationError = { code: 400, error: 'Target ids must be unique' };
+      } else if (parsed.targets.length < parsed.prompts.length) {
+        itemKindValidationError = { code: 400, error: 'Targets must include at least as many entries as prompts' };
+      } else {
+        const invalidReference = parsed.prompts.find(prompt => !targetIds.has(prompt.correctTargetId));
+        if (invalidReference) {
+          itemKindValidationError = { code: 400, error: `Unknown target id: ${invalidReference.correctTargetId}` };
+        }
+      }
+    }
+    // ORDERING
+    if (!itemKindValidationError && parsed.kind === 'ORDERING') {
+      const optionIds = new Set(parsed.options.map(option => option.id));
+      if (optionIds.size !== parsed.options.length) {
+        itemKindValidationError = { code: 400, error: 'Option ids must be unique' };
+      } else if (parsed.correctOrder.length !== parsed.options.length) {
+        itemKindValidationError = { code: 400, error: 'correctOrder must include every option exactly once' };
+      } else {
+        const invalid = parsed.correctOrder.find(id => !optionIds.has(id));
+        if (invalid) {
+          itemKindValidationError = { code: 400, error: `Unknown option id: ${invalid}` };
+        } else {
+          const seen = new Set<string>();
+          for (const id of parsed.correctOrder) {
+            if (seen.has(id)) {
+              itemKindValidationError = { code: 400, error: 'correctOrder cannot contain duplicates' };
+              break;
+            }
+            seen.add(id);
+          }
+        }
+      }
+    }
+    // SHORT_ANSWER
+    if (!itemKindValidationError && parsed.kind === 'SHORT_ANSWER') {
+      if (parsed.scoring.mode === 'ai_rubric' && !parsed.scoring.aiEvaluatorId) {
+        itemKindValidationError = { code: 400, error: 'ai_rubric scoring requires aiEvaluatorId' };
+      }
+    }
+    // ESSAY
+    if (!itemKindValidationError && parsed.kind === 'ESSAY') {
+      if (parsed.scoring.mode === 'ai_rubric' && !parsed.scoring.aiEvaluatorId) {
+        itemKindValidationError = { code: 400, error: 'ai_rubric scoring requires aiEvaluatorId' };
+      }
+    }
+    // NUMERIC_ENTRY
+    if (!itemKindValidationError && parsed.kind === 'NUMERIC_ENTRY') {
+      if (parsed.validation.mode === 'range' && parsed.validation.min > parsed.validation.max) {
+        itemKindValidationError = { code: 400, error: 'Range min must be less than or equal to max' };
+      }
+    }
+    // HOTSPOT
+    if (!itemKindValidationError && parsed.kind === 'HOTSPOT') {
+      const regionIds = new Set(parsed.hotspots.map(region => region.id));
+      if (regionIds.size !== parsed.hotspots.length) {
+        itemKindValidationError = { code: 400, error: 'Hotspot ids must be unique' };
+      } else if (parsed.scoring.maxSelections && parsed.scoring.maxSelections > parsed.hotspots.length) {
+        itemKindValidationError = { code: 400, error: 'maxSelections cannot exceed hotspot count' };
+      } else if (parsed.scoring.mode === 'all' && parsed.scoring.maxSelections && parsed.scoring.maxSelections < parsed.hotspots.length) {
+        itemKindValidationError = { code: 400, error: 'maxSelections must allow selecting every hotspot' };
+      }
+    }
+    // DRAG_AND_DROP
+    if (!itemKindValidationError && parsed.kind === 'DRAG_AND_DROP') {
+      if (new Set(parsed.tokens.map(token => token.id)).size !== parsed.tokens.length) {
+        itemKindValidationError = { code: 400, error: 'Token ids must be unique' };
+      } else {
+        const zoneIdSet = new Set(parsed.zones.map(zone => zone.id));
+        if (zoneIdSet.size !== parsed.zones.length) {
+          itemKindValidationError = { code: 400, error: 'Zone ids must be unique' };
+        }
+      }
+    }
+    // SCENARIO_TASK
+    if (!itemKindValidationError && parsed.kind === 'SCENARIO_TASK') {
+      const attachments = parsed.attachments ?? [];
+      if (new Set(attachments.map(attachment => attachment.id)).size !== attachments.length) {
+        itemKindValidationError = { code: 400, error: 'Attachment ids must be unique' };
+      } else if (parsed.workspace?.instructions) {
+        const trimmedInstructions = parsed.workspace.instructions
+          .map((instruction: string) => instruction.trim())
+          .filter((instruction: string) => instruction.length > 0);
+        if (trimmedInstructions.length !== parsed.workspace.instructions.length) {
+          itemKindValidationError = { code: 400, error: 'Workspace instructions cannot be empty strings' };
+        }
+      } else if (parsed.evaluation.testCases) {
+        const testCaseIds = new Set(parsed.evaluation.testCases.map((test: any) => test.id));
+        if (testCaseIds.size !== parsed.evaluation.testCases.length) {
+          itemKindValidationError = { code: 400, error: 'Test case ids must be unique' };
+        }
+      }
+    }
+
+    if (itemKindValidationError) {
+      reply.code(itemKindValidationError.code);
+      return { error: itemKindValidationError.error };
+    }
+
     const id = uuid();
     if (parsed.kind === 'MCQ') {
       const unique = new Set(parsed.correctIndexes);
@@ -860,6 +998,7 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       req.log.debug({ err: (req as any).validationError }, 'Ignoring Fastify validation error; using Zod');
     }
 
+
     let parsed: z.infer<typeof createSchema>;
     try {
       parsed = createSchema.parse(req.body ?? {});
@@ -869,6 +1008,79 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         return { error: 'Invalid request body', issues: error.issues };
       }
       throw error;
+    }
+
+    // --- Taxonomy validation (same as POST) ---
+    const { getTenantTaxonomyConfig } = await import('../../config/tenant-taxonomy.js');
+    const taxonomy = await getTenantTaxonomyConfig(tenantId);
+    if (taxonomy) {
+      const hasCategories = (obj: any): obj is { categories: string[] } => Array.isArray(obj.categories);
+      const hasTags = (obj: any): obj is { tags: string[] } => Array.isArray(obj.tags);
+      const hasMetadata = (obj: any): obj is { metadata: Record<string, any> } => typeof obj.metadata === 'object' && obj.metadata !== null;
+
+      if (hasCategories(parsed) && taxonomy.categories.length > 0) {
+        const invalid = parsed.categories.filter((cat: string) => !taxonomy.categories.includes(cat));
+        if (invalid.length > 0) {
+          reply.code(400);
+          return { error: `Invalid categories: ${invalid.join(', ')}` };
+        }
+      }
+      if (hasTags(parsed) && taxonomy.tags.length > 0) {
+        const invalid = parsed.tags.filter((tag: string) => !taxonomy.tags.includes(tag));
+        if (invalid.length > 0) {
+          reply.code(400);
+          return { error: `Invalid tags: ${invalid.join(', ')}` };
+        }
+      }
+      if (hasMetadata(parsed) && taxonomy.metadataFields.length > 0) {
+        for (const field of taxonomy.metadataFields) {
+          const value = parsed.metadata[field.key];
+          if (field.required && (value === undefined || value === null)) {
+            reply.code(400);
+            return { error: `Missing required metadata field: ${field.key}` };
+          }
+          if (value !== undefined) {
+            switch (field.type) {
+              case 'string':
+                if (typeof value !== 'string') {
+                  reply.code(400);
+                  return { error: `Metadata field ${field.key} must be a string` };
+                }
+                break;
+              case 'number':
+                if (typeof value !== 'number') {
+                  reply.code(400);
+                  return { error: `Metadata field ${field.key} must be a number` };
+                }
+                break;
+              case 'boolean':
+                if (typeof value !== 'boolean') {
+                  reply.code(400);
+                  return { error: `Metadata field ${field.key} must be a boolean` };
+                }
+                break;
+              case 'enum':
+                if (!field.allowedValues?.includes(value)) {
+                  reply.code(400);
+                  return { error: `Metadata field ${field.key} must be one of: ${field.allowedValues?.join(', ')}` };
+                }
+                break;
+              case 'array':
+                if (!Array.isArray(value)) {
+                  reply.code(400);
+                  return { error: `Metadata field ${field.key} must be an array` };
+                }
+                break;
+              case 'object':
+                if (typeof value !== 'object' || Array.isArray(value) || value === null) {
+                  reply.code(400);
+                  return { error: `Metadata field ${field.key} must be an object` };
+                }
+                break;
+            }
+          }
+        }
+      }
     }
 
     // Reuse the same logic as POST but with the existing ID

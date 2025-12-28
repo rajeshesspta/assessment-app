@@ -426,6 +426,18 @@ Assessment Module Iteration Checklist
 - Goal: Proactive awareness of issues.
 - [ ] UI: Alerts for low item bank, unpublished assessments, failed attempts.
 - [ ] UI: Integrate with tenant-scoped notifications.
-- [ ] BFF: Add notification fetching and display logic.
+
+
+**Iteration 33: Flexible Item Categorization & Metadata (Multi-domain)**
+Goal: Support rich, tenant-configurable item properties for both education and corporate scenarios.
+
+	33.1 [ ] Schema & Types: Add/extend `categories`, `tags`, and `metadata` fields to item model. Define taxonomy config structure in control plane (per-tenant fields, allowed values, types).
+	33.2 [ ] Validation & Persistence: Enforce taxonomy config in item create/edit logic; update APIs to support new fields.
+	33.3 [ ] BFF: Expose taxonomy config to frontend via `/config` or `/taxonomy` endpoint.
+	33.4 [ ] UI: Dynamic item creation/edit forms based on taxonomy config (fields shown/hidden as needed).
+	33.5 [ ] Filtering: Enable item bank filtering/search by any category, tag, or metadata property.
+	33.6 [ ] Analytics: Support reporting/analytics by category, skill, compliance area, etc.
+	33.7 [ ] Migration: Migrate existing items to new flexible model.
+	33.8 [ ] Docs: Document extensible item model and tenant taxonomy config.
 
 

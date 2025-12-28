@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tenantRoutes } from '../tenant.routes.js';
 import { createInMemoryTenantRepository } from '../tenant.repository.js';
 import type { TenantRepository } from '../tenant.repository.js';
@@ -44,6 +44,34 @@ async function buildTestApp() {
 }
 
 describe('tenantRoutes', () => {
+    it('exposes taxonomy config for a tenant', async () => {
+      // Mock taxonomy config loader
+      vi.doMock('../../../config/tenant-taxonomy.js', () => ({
+        getTenantTaxonomyConfig: vi.fn(async (tenantId) => ({
+          categories: ['math', 'science'],
+          tags: ['easy', 'hard'],
+          metadataFields: [
+            { key: 'difficulty', type: 'enum', allowedValues: ['easy', 'hard'], required: true, label: 'Difficulty' },
+          ],
+        })),
+      }));
+      const response = await app.inject({ method: 'GET', url: '/tenants/some-tenant/taxonomy' });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        categories: expect.arrayContaining(['math', 'science']),
+        tags: expect.arrayContaining(['easy', 'hard']),
+        metadataFields: expect.any(Array),
+      });
+    });
+
+    it('returns 404 if taxonomy config missing', async () => {
+      vi.doMock('../../../config/tenant-taxonomy.js', () => ({
+        getTenantTaxonomyConfig: vi.fn(async () => undefined),
+      }));
+      const response = await app.inject({ method: 'GET', url: '/tenants/unknown/taxonomy' });
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ error: 'No taxonomy config for tenant' });
+    });
   let app: FastifyInstance;
   let repository: TenantRepository;
   let userRepository: UserRepository;

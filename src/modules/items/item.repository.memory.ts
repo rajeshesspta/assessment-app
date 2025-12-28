@@ -20,8 +20,24 @@ export function createInMemoryItemRepository(): ItemRepository {
       const items: Item[] = [];
       for (const item of store.values()) {
         if (item.tenantId !== tenantId) continue;
-        if (kind && item.kind !== kind) continue;
-        if (search && !item.prompt.toLowerCase().includes(search)) continue;
+        if (options.kind && item.kind !== options.kind) continue;
+        if (options.search && !item.prompt.toLowerCase().includes(options.search)) continue;
+        if (options.categories && options.categories.length > 0) {
+          if (!item.categories || !options.categories.some(cat => item.categories?.includes(cat))) continue;
+        }
+        if (options.tags && options.tags.length > 0) {
+          if (!item.tags || !options.tags.some(tag => item.tags?.includes(tag))) continue;
+        }
+        if (options.metadata) {
+          let match = true;
+          for (const [key, value] of Object.entries(options.metadata)) {
+            if (item.metadata?.[key] !== value) {
+              match = false;
+              break;
+            }
+          }
+          if (!match) continue;
+        }
         items.push(item);
       }
       return items
