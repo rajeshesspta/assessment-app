@@ -12,6 +12,21 @@ const tenantBrandingSchema = z
 
 const tenantFeatureFlagSchema = z.record(z.boolean()).default({});
 
+const taxonomyFieldSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  type: z.enum(['string', 'number', 'boolean', 'enum', 'array', 'object']),
+  required: z.boolean().default(false),
+  allowedValues: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  description: z.string().optional(),
+});
+
+const tenantTaxonomySchema = z.object({
+  categories: z.array(z.string()).default([]),
+  tags: z.array(z.string()).default([]),
+  metadataFields: z.array(taxonomyFieldSchema).default([]),
+});
+
 const tenantHeadlessSchema = z.object({
   baseUrl: z.string().url(),
   apiKey: z.string().min(1),
@@ -48,6 +63,7 @@ export const tenantConfigSchema = z.object({
   clientApp: tenantClientAppSchema,
   branding: tenantBrandingSchema,
   featureFlags: tenantFeatureFlagSchema,
+  taxonomy: tenantTaxonomySchema.optional(),
 });
 
 export type TenantConfig = z.infer<typeof tenantConfigSchema>;

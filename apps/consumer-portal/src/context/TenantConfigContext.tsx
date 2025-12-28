@@ -9,6 +9,19 @@ type TenantBranding = {
   backgroundImageUrl?: string;
 };
 
+type TenantTaxonomy = {
+  categories: string[];
+  tags: string[];
+  metadataFields: Array<{
+    key: string;
+    label: string;
+    type: 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'object';
+    required: boolean;
+    allowedValues?: (string | number | boolean)[];
+    description?: string;
+  }>;
+};
+
 type TenantConfig = {
   tenantId: string;
   headlessTenantId: string;
@@ -17,6 +30,7 @@ type TenantConfig = {
   premiumDeployment: boolean;
   branding: TenantBranding;
   featureFlags: Record<string, boolean>;
+  taxonomy?: TenantTaxonomy;
   clientApp: {
     baseUrl: string;
     landingPath: string;

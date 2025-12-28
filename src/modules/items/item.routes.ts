@@ -49,12 +49,18 @@ const mcqSchema = z.object({
   choices: z.array(z.object({ text: z.string().min(1) })).min(2),
   answerMode: z.enum(['single', 'multiple']).default('single'),
   correctIndexes: z.array(z.number().int().nonnegative()).nonempty(),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const trueFalseSchema = z.object({
   kind: z.literal('TRUE_FALSE'),
   prompt: z.string().min(1),
   answerIsTrue: z.boolean(),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const fillBlankAnswerSchema = z.union([
@@ -70,6 +76,9 @@ const fillBlankSchema = z.object({
     answers: z.array(fillBlankAnswerSchema).nonempty(),
   })).nonempty(),
   scoring: z.object({ mode: z.enum(['all', 'partial']).default('all') }).default({ mode: 'all' }),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const matchingSchema = z.object({
@@ -85,6 +94,9 @@ const matchingSchema = z.object({
     text: z.string().min(1),
   })).min(1),
   scoring: z.object({ mode: z.enum(['all', 'partial']).default('partial') }).default({ mode: 'partial' }),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const orderingSchema = z.object({
@@ -98,6 +110,9 @@ const orderingSchema = z.object({
       customEvaluatorId: z.string().min(1).optional(),
     })
     .default({ mode: 'all' }),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const shortAnswerSchema = z.object({
@@ -116,6 +131,9 @@ const shortAnswerSchema = z.object({
       maxScore: z.number().int().positive().max(10).default(1),
       aiEvaluatorId: z.string().min(1).optional(),
     }),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const essayLengthSchema = z.object({
@@ -161,6 +179,9 @@ const essaySchema = z.object({
       maxScore: z.number().int().positive().max(50).default(10),
       aiEvaluatorId: z.string().min(1).optional(),
     }),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const numericUnitsSchema = z.object({
@@ -177,6 +198,9 @@ const numericEntrySchema = z.object({
   prompt: z.string().min(1),
   validation: z.discriminatedUnion('mode', [numericExactSchema, numericRangeSchema]),
   units: numericUnitsSchema.optional(),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const hotspotPointSchema = z.object({
@@ -202,6 +226,9 @@ const hotspotSchema = z.object({
     mode: z.enum(['all', 'partial']).default('all'),
     maxSelections: z.number().int().positive().max(20).optional(),
   }).default({ mode: 'all' }),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const dragDropTokenSchema = z.object({
@@ -226,6 +253,9 @@ const dragDropSchema = z.object({
   tokens: z.array(dragDropTokenSchema).min(2),
   zones: z.array(dragDropZoneSchema).min(1),
   scoring: z.object({ mode: z.enum(['all', 'per_zone', 'per_token']).default('all') }).default({ mode: 'all' }),
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const scenarioAttachmentSchema = z.object({
@@ -296,6 +326,9 @@ const scenarioTaskSchema = z.object({
   workspace: scenarioWorkspaceSchema.optional(),
   evaluation: scenarioEvaluationSchema,
   scoring: scenarioScoringSchema,
+  categories: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const createSchema = z.discriminatedUnion('kind', [
@@ -508,6 +541,66 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
       return { error: itemKindValidationError.error };
     }
 
+    // --- Taxonomy validation ---
+    const taxonomyConfig = await getTenantTaxonomyConfig(tenantId);
+    if (taxonomyConfig) {
+      // Validate categories
+      if (parsed.categories) {
+        const invalidCategories = parsed.categories.filter(cat => !taxonomyConfig.categories.includes(cat));
+        if (invalidCategories.length > 0) {
+          reply.code(400);
+          return { error: `Invalid categories: ${invalidCategories.join(', ')}` };
+        }
+      }
+      // Validate tags
+      if (parsed.tags) {
+        const invalidTags = parsed.tags.filter(tag => !taxonomyConfig.tags.includes(tag));
+        if (invalidTags.length > 0) {
+          reply.code(400);
+          return { error: `Invalid tags: ${invalidTags.join(', ')}` };
+        }
+      }
+      // Validate metadata fields
+      if (parsed.metadata) {
+        for (const [key, value] of Object.entries(parsed.metadata)) {
+          const fieldConfig = taxonomyConfig.metadataFields.find(f => f.key === key);
+          if (!fieldConfig) {
+            reply.code(400);
+            return { error: `Unknown metadata field: ${key}` };
+          }
+          if (fieldConfig.required && (value === undefined || value === null)) {
+            reply.code(400);
+            return { error: `Required metadata field: ${key}` };
+          }
+          // Type validation
+          if (fieldConfig.type === 'string' && typeof value !== 'string') {
+            reply.code(400);
+            return { error: `Metadata field ${key} must be a string` };
+          }
+          if (fieldConfig.type === 'number' && typeof value !== 'number') {
+            reply.code(400);
+            return { error: `Metadata field ${key} must be a number` };
+          }
+          if (fieldConfig.type === 'boolean' && typeof value !== 'boolean') {
+            reply.code(400);
+            return { error: `Metadata field ${key} must be a boolean` };
+          }
+          if (fieldConfig.type === 'enum' && fieldConfig.allowedValues && !fieldConfig.allowedValues.includes(value)) {
+            reply.code(400);
+            return { error: `Invalid value for metadata field ${key}` };
+          }
+          // TODO: Add validation for array and object types
+        }
+        // Check required fields
+        for (const field of taxonomyConfig.metadataFields) {
+          if (field.required && !parsed.metadata.hasOwnProperty(field.key)) {
+            reply.code(400);
+            return { error: `Required metadata field: ${field.key}` };
+          }
+        }
+      }
+    }
+
     const id = uuid();
     if (parsed.kind === 'MCQ') {
       const unique = new Set(parsed.correctIndexes);
@@ -536,6 +629,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         choices: parsed.choices,
         answerMode: parsed.answerMode,
         correctIndexes: [...parsed.correctIndexes].sort((a, b) => a - b),
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -554,6 +650,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         choices: tfChoices,
         answerMode: 'single',
         correctIndexes,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -584,6 +683,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         prompt: parsed.prompt,
         blanks,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -619,6 +721,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         prompts: parsed.prompts,
         targets: parsed.targets,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -657,6 +762,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         options: parsed.options,
         correctOrder: parsed.correctOrder,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -681,6 +789,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         prompt: parsed.prompt,
         rubric,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -712,6 +823,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         rubric,
         length: parsed.length,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -744,6 +858,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         prompt: parsed.prompt,
         validation: parsed.validation,
         units: normalizedUnits,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -784,6 +901,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         image,
         hotspots,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -907,6 +1027,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         tokens,
         zones,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -955,6 +1078,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
           testCases: parsed.evaluation.testCases?.map(test => ({ ...test, weight: test.weight ?? 1 })),
         },
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
       repository.save(item);
       eventBus.publish({ id: uuid(), type: 'ItemCreated', occurredAt: new Date().toISOString(), tenantId, payload: { itemId: item.id } });
@@ -1112,6 +1238,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         choices: parsed.choices,
         answerMode: parsed.answerMode,
         correctIndexes: [...parsed.correctIndexes].sort((a, b) => a - b),
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
     } else if (parsed.kind === 'TRUE_FALSE') {
       const tfChoices = [{ text: 'True' }, { text: 'False' }];
@@ -1124,6 +1253,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         choices: tfChoices,
         answerMode: 'single',
         correctIndexes,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
     } else if (parsed.kind === 'FILL_IN_THE_BLANK') {
       const blankIds = new Set(parsed.blanks.map(blank => blank.id));
@@ -1148,6 +1280,9 @@ export async function itemRoutes(app: FastifyInstance, options: ItemRoutesOption
         prompt: parsed.prompt,
         blanks,
         scoring: parsed.scoring,
+        categories: parsed.categories,
+        tags: parsed.tags,
+        metadata: parsed.metadata,
       });
     } else {
       // For brevity in this edit, I'll assume other types follow the same pattern if needed, 

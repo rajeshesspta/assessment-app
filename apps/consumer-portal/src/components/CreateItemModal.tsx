@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import type { ItemKind, Item } from '../utils/api';
+import { useTenantConfig } from '../context/TenantConfigContext';
 
 interface CreateItemModalProps {
   isOpen: boolean;
@@ -48,11 +49,19 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
   const [scenarioTemplate, setScenarioTemplate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [metadata, setMetadata] = useState<Record<string, any>>({});
+
+  const { config } = useTenantConfig();
 
   useEffect(() => {
     if (initialItem) {
       setKind(initialItem.kind);
       setPrompt(initialItem.prompt);
+      setCategories(initialItem.categories || []);
+      setTags(initialItem.tags || []);
+      setMetadata(initialItem.metadata || {});
       if (initialItem.kind === 'MCQ') {
         setChoices(initialItem.choices || []);
         setCorrectIndexes(initialItem.correctIndexes || []);
@@ -109,6 +118,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
       setDragTokens([{ id: 't1', text: '' }]);
       setDragZones([{ id: 'z1', label: '', correctTokenIds: [] }]);
       setScenarioTemplate('');
+      setCategories([]);
+      setTags([]);
+      setMetadata({});
     }
   }, [initialItem, isOpen]);
 
@@ -235,6 +247,11 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           scoring: { mode: 'manual' }
         };
       }
+
+      // Add taxonomy fields
+      itemData.categories = categories.length > 0 ? categories : undefined;
+      itemData.tags = tags.length > 0 ? tags : undefined;
+      itemData.metadata = Object.keys(metadata).length > 0 ? metadata : undefined;
 
       await onSave(itemData);
       onClose();
@@ -809,6 +826,98 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
                   rows={8}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Taxonomy Fields */}
+          {config?.taxonomy && (
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+              <h4 className="text-sm font-semibold text-slate-700">Taxonomy</h4>
+              
+              {config.taxonomy.categories.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Categories</label>
+                  <select
+                    multiple
+                    value={categories}
+                    onChange={e => setCategories(Array.from(e.target.selectedOptions, option => option.value))}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                  >
+                    {config.taxonomy.categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {config.taxonomy.tags.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Tags</label>
+                  <select
+                    multiple
+                    value={tags}
+                    onChange={e => setTags(Array.from(e.target.selectedOptions, option => option.value))}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                  >
+                    {config.taxonomy.tags.map(tag => (
+                      <option key={tag} value={tag}>{tag}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {config.taxonomy.metadataFields.map(field => (
+                <div key={field.key} className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">
+                    {field.label} {field.required && <span className="text-rose-500">*</span>}
+                  </label>
+                  {field.type === 'string' && (
+                    <input
+                      type="text"
+                      required={field.required}
+                      value={metadata[field.key] || ''}
+                      onChange={e => setMetadata({ ...metadata, [field.key]: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                    />
+                  )}
+                  {field.type === 'number' && (
+                    <input
+                      type="number"
+                      required={field.required}
+                      value={metadata[field.key] || ''}
+                      onChange={e => setMetadata({ ...metadata, [field.key]: Number(e.target.value) })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                    />
+                  )}
+                  {field.type === 'boolean' && (
+                    <select
+                      required={field.required}
+                      value={metadata[field.key] ? 'true' : 'false'}
+                      onChange={e => setMetadata({ ...metadata, [field.key]: e.target.value === 'true' })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                    >
+                      <option value="false">False</option>
+                      <option value="true">True</option>
+                    </select>
+                  )}
+                  {field.type === 'enum' && field.allowedValues && (
+                    <select
+                      required={field.required}
+                      value={metadata[field.key] || ''}
+                      onChange={e => setMetadata({ ...metadata, [field.key]: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                    >
+                      <option value="">Select...</option>
+                      {field.allowedValues.map(val => (
+                        <option key={val} value={val}>{val}</option>
+                      ))}
+                    </select>
+                  )}
+                  {field.description && (
+                    <p className="text-xs text-slate-500">{field.description}</p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
