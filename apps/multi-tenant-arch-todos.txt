@@ -402,11 +402,13 @@ Assessment Module Iteration Checklist
 - [x] UI: Display total assessments metric.
 - [x] BFF: Surface assessment metadata via proxy routes.
 
-**Iteration 29: Content Author Dashboard - Cohorts and Learners Snapshot**
+**Iteration 29: Content Author Dashboard - Cohorts and Learners Snapshot** [x] COMPLETE
 - Goal: Ensure proper grouping and assignment of learners.
-- [ ] UI: Cards for top cohorts (name, learner count, assigned assessments).
-- [ ] UI: Alerts for learners without roles/cohorts.
-- [ ] BFF: Add proxy for cohort/learner data.
+- [x] UI: Cards for top cohorts (name, learner count, assigned assessments).
+- [x] UI: Show cohort details modal on card click.
+- [x] UI: Use standard color for cohort name.
+- [ ] UI: Alerts for learners without roles/cohorts. (deprioritized)
+- [x] BFF: Add proxy for cohort/learner data.
 
 **Iteration 30: Content Author Dashboard - Deferred Scoring Queue**
 - Goal: Handle pending evaluations promptly.

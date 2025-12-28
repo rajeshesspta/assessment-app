@@ -1,6 +1,5 @@
-
-
 import { useState, useEffect, useMemo } from 'react';
+import { AnalyticsBarChart } from './AnalyticsBarChart';
 import { Plus, FileText, Users, BookOpen, CheckCircle2, ListOrdered, Type, Hash, Image as ImageIcon, MousePointer2, Code, Edit2, Eye, Upload } from 'lucide-react';
 import { AssessmentPreviewModal } from './AssessmentPreviewModal';
 import type { Item, ItemKind, Assessment, Cohort } from '../utils/api';
@@ -35,10 +34,10 @@ export function ContentAuthorDashboard({ api, brandPrimary }: ContentAuthorDashb
   const [loadingViewUpdate, setLoadingViewUpdate] = useState(false);
   const [recentItems, setRecentItems] = useState<Item[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
-    const [recentError, setRecentError] = useState<string | null>(null);
-    const [filterStatus, setFilterStatus] = useState<'ALL' | 'DRAFT' | 'PUBLISHED'>('ALL');
-    const [editingItem, setEditingItem] = useState<Item | null>(null);
-    const [previewItem, setPreviewItem] = useState<Item | null>(null);
+  const [recentError, setRecentError] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'DRAFT' | 'PUBLISHED'>('ALL');
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [previewItem, setPreviewItem] = useState<Item | null>(null);
 
   // Assessments state
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -172,8 +171,70 @@ export function ContentAuthorDashboard({ api, brandPrimary }: ContentAuthorDashb
     setSelectedCohort(null);
   };
 
+
+  // --- Analytics Highlights Section ---
+  const [analytics, setAnalytics] = useState<any[]>([]);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [showChart, setShowChart] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoadingAnalytics(true);
+    setAnalyticsError(null);
+    // For now, fetch analytics for the first 3 assessments (or fewer)
+    Promise.all(
+      assessments.slice(0, 3).map(a =>
+        api.fetchAssessmentAnalytics(a.id)
+          .then(data => ({ ...data, assessmentTitle: a.title }))
+          .catch(() => null)
+      )
+    )
+      .then(results => {
+        if (!ignore) setAnalytics(results.filter(Boolean));
+      })
+      .catch(err => {
+        if (!ignore) setAnalyticsError(err.message);
+      })
+      .finally(() => {
+        if (!ignore) setLoadingAnalytics(false);
+      });
+    return () => { ignore = true; };
+  }, [api, assessments]);
+
   return (
     <div className="space-y-6">
+      {/* Analytics Highlights Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">Analytics Highlights</h2>
+          <button
+            className="text-xs px-3 py-1 rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 transition"
+            onClick={() => setShowChart(v => !v)}
+          >
+            {showChart ? 'Show Cards' : 'Show Chart'}
+          </button>
+        </div>
+        {analyticsError ? (
+          <div className="text-red-500">{analyticsError}</div>
+        ) : showChart ? (
+          <AnalyticsBarChart data={analytics} loading={loadingAnalytics} />
+        ) : loadingAnalytics ? (
+          <div className="text-slate-500">Loading analytics…</div>
+        ) : analytics.length === 0 ? (
+          <div className="text-slate-500">No analytics data available.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {analytics.map((a: any) => (
+              <div key={a.assessmentId} className="rounded-xl border border-slate-100 bg-slate-50 p-4 flex flex-col gap-2 shadow-sm">
+                <div className="font-bold text-slate-900 truncate" title={a.assessmentTitle}>{a.assessmentTitle || a.assessmentId}</div>
+                <div className="text-sm text-slate-700">Attempts: <span className="font-semibold">{a.attemptCount ?? a.attempts ?? 0}</span></div>
+                <div className="text-sm text-slate-700">Average Score: <span className="font-semibold">{typeof a.averageScore === 'number' ? a.averageScore.toFixed(2) : 'N/A'}</span></div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       {/* Cohorts Overview Section */}
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mt-8">
         <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
