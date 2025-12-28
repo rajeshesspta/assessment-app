@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Calendar, Clock, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, AlertCircle, TrendingUp, FileText } from 'lucide-react';
 import type { Cohort, Assessment, AttemptResponse } from '../utils/api';
 
 interface LearnerDashboardProps {
@@ -78,12 +78,29 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
       return daysUntilDue >= 0 && daysUntilDue <= 7;
     }).length;
 
-    // Recent activity (attempts in last 7 days)
-    const recentAttempts = attempts.filter(a => {
-      const attemptDate = new Date(a.startedAt);
-      const daysSince = Math.ceil((now.getTime() - attemptDate.getTime()) / (1000 * 60 * 60 * 24));
-      return daysSince <= 7;
+    // Count completed assessments (where user has used all attempts or has completed attempts)
+    const completedAssessments = allAssignments.filter(assignment => {
+      const assessment = assessments[assignment.assessmentId];
+      if (!assessment) return false;
+
+      const userAttempts = attempts.filter(a => a.assessmentId === assignment.assessmentId);
+      const maxAttempts = assessment.allowedAttempts || 1;
+      return userAttempts.length >= maxAttempts && userAttempts.length > 0;
     }).length;
+
+    // Get completed assessments details
+    const completedAssessmentDetails = allAssignments.filter(assignment => {
+      const assessment = assessments[assignment.assessmentId];
+      if (!assessment) return false;
+
+      const userAttempts = attempts.filter(a => a.assessmentId === assignment.assessmentId);
+      const maxAttempts = assessment.allowedAttempts || 1;
+      return userAttempts.length >= maxAttempts && userAttempts.length > 0;
+    }).map(assignment => ({
+      ...assignment,
+      assessment: assessments[assignment.assessmentId],
+      attempts: attempts.filter(a => a.assessmentId === assignment.assessmentId)
+    }));
 
     return {
       totalAssigned: uniqueAssessmentIds.length,
@@ -91,6 +108,8 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
       completedAttempts,
       upcomingDeadlines,
       recentAttempts,
+      completedAssessments,
+      completedAssessmentDetails,
     };
   }, [cohorts, assessments, attempts, loading]);
 
@@ -195,6 +214,34 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
           View All Assessments
         </button>
       </section>
-    </div>
-  );
-}
+
+      {/* Completed Assessments */}
+      {dashboardStats.completedAssessments > 0 && (
+        <section className="rounded-2xl border border-brand-50 bg-white p-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Completed Assessments</h2>
+          <p className="text-sm text-slate-600 mb-4">
+            You have completed {dashboardStats.completedAssessments} assessment{dashboardStats.completedAssessments !== 1 ? 's' : ''}.
+          </p>
+          <div className="space-y-3">
+            {dashboardStats.completedAssessmentDetails.map((item, index) => (
+              <div key={`${item.assessmentId}-${index}`} className="flex items-center justify-between p-3 rounded-lg border border-slate-100">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-emerald-600" />
+                  <div>
+                    <p className="font-medium text-slate-900">{item.assessment?.title || `Assessment ${item.assessmentId}`}</p>
+                    <p className="text-sm text-slate-500">
+                      {item.attempts.length} attempt{item.attempts.length !== 1 ? 's' : ''} completed
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => window.location.href = `/assessment/${item.assessmentId}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  View Results
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
