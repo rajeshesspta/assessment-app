@@ -33,6 +33,12 @@ async function buildApp() {
       getById: getMock,
       listByAssessment: listByAssessmentMock,
       listByLearner: listByLearnerMock,
+      listByUser: vi.fn(),
+    },
+    itemRepository: {
+      save: vi.fn(),
+      getById: vi.fn(),
+      list: vi.fn(),
     },
   });
   return app;

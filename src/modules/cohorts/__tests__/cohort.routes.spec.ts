@@ -16,11 +16,13 @@ const userRepository = {
   getById: vi.fn(),
   getByEmail: vi.fn(),
   listByRole: vi.fn(),
+  delete: vi.fn(),
 };
 
 const assessmentRepository = {
   save: vi.fn(),
   getById: vi.fn(),
+  list: vi.fn(),
 };
 
 let currentActorRoles: string[] = ['TENANT_ADMIN'];

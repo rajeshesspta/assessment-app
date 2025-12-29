@@ -20,6 +20,7 @@ describe('SQLiteAssessmentRepository', () => {
       dbRoot,
       filePattern: '{tenantId}.db',
       migrationsDir: './migrations/sqlite',
+      seedDefaultTenant: false,
     });
     repository = createSQLiteAssessmentRepository(client);
   });
@@ -90,9 +91,9 @@ describe('SQLiteAssessmentRepository', () => {
 
     const listT1 = repository.list('t1');
     expect(listT1).toHaveLength(2);
-    expect(listT1.map(a => a.id)).toContain('a1');
-    expect(listT1.map(a => a.id)).toContain('a2');
-    expect(listT1.map(a => a.id)).not.toContain('a3');
+    expect(listT1.map((a: Assessment) => a.id)).toContain('a1');
+    expect(listT1.map((a: Assessment) => a.id)).toContain('a2');
+    expect(listT1.map((a: Assessment) => a.id)).not.toContain('a3');
   });
 
   it('updates an existing assessment', () => {

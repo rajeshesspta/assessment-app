@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => {
     uuidMock: vi.fn(),
     listByAssessmentMock: vi.fn(),
     listByLearnerMock: vi.fn(),
+    listByUserMock: vi.fn(),
+    listMock: vi.fn(),
+    deleteMock: vi.fn(),
     userSaveMock: vi.fn(),
     userGetByIdMock: vi.fn(),
     userGetByEmailMock: vi.fn(),
@@ -63,26 +66,31 @@ async function buildApp() {
       getById: mocks.getByIdMock,
       listByAssessment: mocks.listByAssessmentMock,
       listByLearner: mocks.listByLearnerMock,
+      listByUser: mocks.listByUserMock,
     },
     assessmentRepository: {
       save: mocks.assessmentSaveMock,
       getById: mocks.assessmentGetByIdMock,
+      list: vi.fn(),
     },
     itemRepository: {
       save: mocks.itemSaveMock,
       getById: mocks.itemGetByIdMock,
+      list: vi.fn(),
     },
     userRepository: {
       save: mocks.userSaveMock,
       getById: mocks.userGetByIdMock,
       getByEmail: mocks.userGetByEmailMock,
       listByRole: mocks.userListByRoleMock,
+      delete: vi.fn(),
     },
     cohortRepository: {
       save: mocks.cohortSaveMock,
       getById: mocks.cohortGetByIdMock,
       list: mocks.cohortListMock,
       listByLearner: mocks.cohortListByLearnerMock,
+      delete: vi.fn(),
     },
   });
   return app;

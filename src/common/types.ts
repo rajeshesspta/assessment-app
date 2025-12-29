@@ -327,15 +327,19 @@ export interface Tenant {
 }
 
 export interface TaxonomyField {
-	name: string;
-	type: 'string' | 'number' | 'boolean' | 'array';
+	key: string;
+	label: string;
+	type: 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'object';
 	required: boolean;
-	allowedValues?: string[]; // for enums
+	allowedValues?: (string | number | boolean)[];
 	description?: string;
 }
 
 export interface TaxonomyConfig {
-	categories: TaxonomyField;
-	tags: TaxonomyField;
-	metadata: Record<string, TaxonomyField>; // additional metadata fields
+	categories: string[];
+	tags: {
+		predefined: string[];
+		allowCustom: boolean;
+	};
+	metadataFields: TaxonomyField[];
 }

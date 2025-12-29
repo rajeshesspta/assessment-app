@@ -73,19 +73,9 @@ describe('configRoutes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body)).toEqual({
-        categories: {
-          name: 'categories',
-          type: 'array',
-          required: false,
-          description: 'Categories for organizing items'
-        },
-        tags: {
-          name: 'tags',
-          type: 'array',
-          required: false,
-          description: 'Tags for additional item classification'
-        },
-        metadata: {},
+        categories: [],
+        tags: { predefined: [], allowCustom: true },
+        metadataFields: [],
       });
     });
 
@@ -107,9 +97,15 @@ describe('configRoutes', () => {
   describe('PUT /config/taxonomy', () => {
     it('updates taxonomy config for tenant admin', async () => {
       const config = {
-        categories: { name: 'categories', type: 'array', required: false },
-        tags: { name: 'tags', type: 'array', required: false },
-        metadata: {},
+        categories: ['Math', 'Science'],
+        tags: { predefined: ['easy', 'hard'], allowCustom: true },
+        metadataFields: [{
+          key: 'difficulty',
+          label: 'Difficulty',
+          type: 'enum',
+          required: false,
+          allowedValues: ['easy', 'medium', 'hard']
+        }],
       };
       upsertTaxonomyConfigMock.mockResolvedValue(undefined);
 
@@ -128,7 +124,7 @@ describe('configRoutes', () => {
       const response = await app.inject({
         method: 'PUT',
         url: '/config/taxonomy',
-        payload: { invalid: 'config' },
+        payload: { categories: 'not an array' },
       });
 
       expect(response.statusCode).toBe(400);

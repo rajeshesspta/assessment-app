@@ -227,6 +227,14 @@ async function callHeadless<T>(tenant: TenantRuntime, path: string, reply: Fasti
   const payload = isJson ? await response.json() : await response.text();
   if (!response.ok) {
     const message = typeof payload === 'string' ? payload : (payload as { error?: string }).error ?? 'Headless API error';
+    if (request && request.log) {
+      request.log.error({
+        err: new HeadlessRequestError(message, response.status),
+        status: response.status,
+        url: url.toString(),
+        payload
+      }, 'HeadlessRequestError in callHeadless');
+    }
     throw new HeadlessRequestError(message, response.status);
   }
   reply.code(response.status);
@@ -927,11 +935,13 @@ app.post('/api/items', async (request, reply) => {
       body: JSON.stringify(request.body),
     }, request);
   } catch (error) {
+    request.log.error({ err: error }, 'Error in POST /api/items');
     if (error instanceof HeadlessRequestError) {
       reply.code(error.statusCode);
       return { error: error.message };
     }
-    throw error;
+    reply.code(500);
+    return { error: error instanceof Error ? error.message : String(error) };
   }
 });
 

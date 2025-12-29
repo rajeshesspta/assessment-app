@@ -4,7 +4,7 @@ vi.mock('../../../config/tenant-taxonomy.js', () => ({
     if (tenantId === 'tenant-1') {
       return {
         categories: ['math', 'science', 'history'],
-        tags: ['beginner', 'intermediate', 'advanced'],
+        tags: { predefined: ['beginner', 'intermediate', 'advanced'], allowCustom: true },
         metadataFields: [
           { key: 'difficulty', type: 'enum', allowedValues: ['easy', 'medium', 'hard'] },
           { key: 'estimatedTime', type: 'number', required: false },
@@ -435,7 +435,7 @@ describe('itemRoutes', () => {
           {
             id: 'zone-birds',
             label: 'Birds',
-            acceptsTokenIds: ['tok-2', 'tok-2'],
+            acceptsTokenIds: ['tok-2'],
             correctTokenIds: ['tok-2'],
             evaluation: 'set',
           },
