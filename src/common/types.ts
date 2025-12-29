@@ -325,3 +325,17 @@ export interface Tenant {
 	createdAt: string;
 	updatedAt: string;
 }
+
+export interface TaxonomyField {
+	name: string;
+	type: 'string' | 'number' | 'boolean' | 'array';
+	required: boolean;
+	allowedValues?: string[]; // for enums
+	description?: string;
+}
+
+export interface TaxonomyConfig {
+	categories: TaxonomyField;
+	tags: TaxonomyField;
+	metadata: Record<string, TaxonomyField>; // additional metadata fields
+}

@@ -125,3 +125,24 @@ Tenant taxonomy is configured in the Control Plane and exposed via the tenant co
 ### UI Behavior
 
 Item creation/edit forms dynamically show taxonomy fields based on the tenant config. Fields are hidden if not configured, ensuring a clean interface for tenants without custom taxonomy.
+
+## Taxonomy Configuration
+
+Tenant Admins can configure the taxonomy fields (categories, tags, metadata) for their tenant to customize how items are categorized and filtered.
+
+### Workflow
+
+1. **Access Configuration**: Tenant Admins navigate to the "Taxonomy Config" page in the portal.
+2. **Define Fields**: Configure the structure of categories and tags fields (type, required, description).
+3. **Add Metadata**: Define additional metadata fields with types and validation rules.
+4. **Save Changes**: Update the configuration, which takes effect immediately for new item creation.
+5. **Migration**: Existing items remain valid; the UI adapts to show/hide fields based on the new config.
+
+### API Endpoints
+
+- `GET /api/config/taxonomy`: Retrieve current taxonomy configuration.
+- `PUT /api/config/taxonomy`: Update taxonomy configuration (Tenant Admin only).
+
+### Validation
+
+Changes to taxonomy config are validated to ensure they don't break existing functionality. For example, removing required fields or changing types may be restricted if items already use them.

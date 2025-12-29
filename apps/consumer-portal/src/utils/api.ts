@@ -238,6 +238,15 @@ export function createApiClient(session: TenantSession) {
     async fetchUserRoles(): Promise<{ roles: string[] }> {
       return request<{ roles: string[] }>('/users/roles');
     },
+    async fetchTaxonomyConfig(): Promise<any> {
+      return request<any>('/config/taxonomy');
+    },
+    async updateTaxonomyConfig(config: any): Promise<any> {
+      return request<any>('/config/taxonomy', {
+        method: 'PUT',
+        body: JSON.stringify(config),
+      });
+    },
     async assignToUser(userId: string, assignment: { assessmentId: string; allowedAttempts?: number; availableFrom?: string; dueDate?: string }): Promise<any> {
       return request(`/cohorts/assignments/users/${userId}`, {
         method: 'POST',

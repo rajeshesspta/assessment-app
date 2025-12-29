@@ -16,6 +16,7 @@ import { AttemptResult } from './components/AttemptResult';
 import { LearnerDashboard } from './components/LearnerDashboard';
 import { ContentAuthorDashboard } from './components/ContentAuthorDashboard';
 import { Breadcrumb } from './components/Breadcrumb';
+import { TaxonomyConfigPage } from './components/TaxonomyConfigPage';
 import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
 import { usePortalAuth } from './hooks/usePortalAuth';
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'learners', label: 'Learners', path: '/learners', requiresContentAuthor: true },
   { id: 'cohorts', label: 'Cohorts', path: '/cohorts', requiresContentAuthor: true },
   { id: 'users', label: 'Users', path: '/users', requiresTenantAdmin: true },
+  { id: 'taxonomy-config', label: 'Taxonomy Config', path: '/taxonomy-config', requiresTenantAdmin: true },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
   { id: 'resources', label: 'Resources', path: '/resources' },
 ];
@@ -647,6 +649,7 @@ export default function App() {
             />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/resources" element={<ResourcesPage />} />
+            <Route path="/taxonomy-config" element={<TaxonomyConfigPage api={api} brandPrimary={tenantConfig?.branding?.primary} />} />
             <Route path="/assessment/:id" element={<AssessmentDetailPage />} />
             <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
           </Routes>

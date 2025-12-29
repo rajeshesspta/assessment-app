@@ -24,6 +24,11 @@ import {
   createSQLiteCohortRepository,
   type CohortRepository,
 } from '../modules/cohorts/cohort.repository.js';
+import {
+  createInMemoryTaxonomyRepository,
+  createSQLiteTaxonomyRepository,
+  type TaxonomyRepository,
+} from '../modules/taxonomy-config/taxonomy.repository.js';
 import { createSQLiteTenantClient } from './sqlite/client.js';
 
 export interface RepositoryBundle {
@@ -32,6 +37,7 @@ export interface RepositoryBundle {
   attempt: AttemptRepository;
   user: UserRepository;
   cohort: CohortRepository;
+  taxonomy: TaxonomyRepository;
   dispose?: () => void | Promise<void>;
 }
 
@@ -42,6 +48,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     attempt: createInMemoryAttemptRepository(),
     user: createInMemoryUserRepository(),
     cohort: createInMemoryCohortRepository(),
+    taxonomy: createInMemoryTaxonomyRepository(),
     dispose: () => {},
   };
 }
@@ -54,6 +61,7 @@ export function createSQLiteRepositoryBundle(config: AppConfig): RepositoryBundl
     attempt: createSQLiteAttemptRepository(client),
     user: createSQLiteUserRepository(client),
     cohort: createSQLiteCohortRepository(client),
+    taxonomy: createSQLiteTaxonomyRepository(client),
     dispose: () => client.closeAll(),
   };
 }

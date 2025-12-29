@@ -440,4 +440,14 @@ Goal: Support rich, tenant-configurable item properties for both education and c
 	33.7 [x] Migration: Migrate existing items to new flexible model.
 	33.8 [x] Docs: Document extensible item model and tenant taxonomy config.
 
+**Iteration 34: Tenant Taxonomy Configuration UI**
+Goal: Provide tenant admins with a UI to configure taxonomy fields (categories, tags, metadata) for their tenant.
+
+	34.1 [x] API: Add endpoints for tenant admins to CRUD taxonomy config (GET/PUT /config/taxonomy).
+	34.2 [x] BFF: Proxy taxonomy config endpoints and integrate with tenant config refresh.
+	34.3 [x] UI: Add taxonomy configuration page/modal in the portal for tenant admins.
+	34.4 [x] Validation: Ensure taxonomy changes don't break existing items (e.g., remove categories in use).
+	34.5 [x] Persistence: Store taxonomy config in control plane or tenant-specific storage.
+	34.6 [x] Docs: Update docs with taxonomy configuration workflow.
+
 

@@ -8,6 +8,7 @@ import { attemptRoutes } from './modules/attempts/attempt.routes.js';
 import { analyticsRoutes } from './modules/analytics/analytics.routes.js';
 import { userRoutes } from './modules/users/user.routes.js';
 import { cohortRoutes } from './modules/cohorts/cohort.routes.js';
+import { registerTaxonomyRoutes } from './modules/taxonomy-config/taxonomy.routes.js';
 import {
   createInMemoryRepositoryBundle,
   type RepositoryBundle,
@@ -110,6 +111,7 @@ export function buildApp(deps: AppDependencies = {}) {
     repository: tenantRepository,
     userRepository: repositories.user,
   });
+  app.register(registerTaxonomyRoutes, { taxonomyRepo: repositories.taxonomy });
 
   app.addHook('onClose', async () => {
     if (repositories.dispose) {

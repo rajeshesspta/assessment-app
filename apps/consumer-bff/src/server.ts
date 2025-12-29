@@ -952,6 +952,35 @@ app.put('/api/items/:id', async (request, reply) => {
   }
 });
 
+app.get('/api/config/taxonomy', async (request, reply) => {
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/config/taxonomy', reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.put('/api/config/taxonomy', async (request, reply) => {
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/config/taxonomy', reply, {
+      method: 'PUT',
+      body: JSON.stringify(request.body),
+    }, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
 if (!isTestEnv) {
   app
     .listen({ port: env.PORT, host: env.HOST })
