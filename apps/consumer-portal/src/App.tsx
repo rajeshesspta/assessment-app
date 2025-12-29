@@ -649,7 +649,7 @@ export default function App() {
             />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/resources" element={<ResourcesPage />} />
-            <Route path="/taxonomy-config" element={<TaxonomyConfigPage api={api} brandPrimary={tenantConfig?.branding?.primary} />} />
+            <Route path="/taxonomy-config" element={<TaxonomyConfigPage api={api} brandPrimary={brandPrimary} />} />
             <Route path="/assessment/:id" element={<AssessmentDetailPage />} />
             <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
           </Routes>

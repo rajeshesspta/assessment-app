@@ -73,8 +73,18 @@ describe('configRoutes', () => {
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body)).toEqual({
-        categories: null,
-        tags: null,
+        categories: {
+          name: 'categories',
+          type: 'array',
+          required: false,
+          description: 'Categories for organizing items'
+        },
+        tags: {
+          name: 'tags',
+          type: 'array',
+          required: false,
+          description: 'Tags for additional item classification'
+        },
         metadata: {},
       });
     });

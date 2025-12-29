@@ -41,7 +41,21 @@ export async function registerTaxonomyRoutes(
 		}
 
 		const config = await taxonomyRepo.getTaxonomyConfig(tenantId);
-		return config || { categories: null, tags: null, metadata: {} };
+		return config || {
+			categories: {
+				name: 'categories',
+				type: 'array' as const,
+				required: false,
+				description: 'Categories for organizing items'
+			},
+			tags: {
+				name: 'tags',
+				type: 'array' as const,
+				required: false,
+				description: 'Tags for additional item classification'
+			},
+			metadata: {}
+		};
 	});
 
 	app.put('/config/taxonomy', async (request, reply) => {
