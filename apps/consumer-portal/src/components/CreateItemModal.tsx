@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import type { ItemKind, Item } from '../utils/api';
 import { useTenantConfig } from '../context/TenantConfigContext';
+import { TagInput } from './TagInput';
 
 interface CreateItemModalProps {
   isOpen: boolean;
@@ -322,6 +323,104 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
               rows={3}
             />
           </div>
+
+          {/* Taxonomy Fields */}
+          {config?.taxonomy && (
+            <div className="space-y-6 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Taxonomy</h3>
+
+              {/* Categories */}
+              {config.taxonomy.categories.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Categories</label>
+                  <select
+                    multiple
+                    value={categories}
+                    onChange={e => {
+                      const selected = Array.from(e.target.selectedOptions, option => option.value);
+                      setCategories(selected);
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                  >
+                    {config.taxonomy.categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500">Hold Ctrl/Cmd to select multiple categories</p>
+                </div>
+              )}
+
+              {/* Tags */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Tags</label>
+                <TagInput
+                  predefinedTags={config.taxonomy.tags.predefined}
+                  allowCustom={config.taxonomy.tags.allowCustom}
+                  selectedTags={tags}
+                  onChange={setTags}
+                  brandPrimary={brandPrimary}
+                />
+              </div>
+
+              {/* Metadata Fields */}
+              {config.taxonomy.metadataFields.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-slate-700">Additional Metadata</h4>
+                  {config.taxonomy.metadataFields.map(field => (
+                    <div key={field.key} className="space-y-1">
+                      <label className="text-sm font-medium text-slate-700">{field.label}</label>
+                      {field.type === 'string' && (
+                        <input
+                          type="text"
+                          required={field.required}
+                          value={metadata[field.key] || ''}
+                          onChange={e => setMetadata({ ...metadata, [field.key]: e.target.value })}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                        />
+                      )}
+                      {field.type === 'number' && (
+                        <input
+                          type="number"
+                          required={field.required}
+                          value={metadata[field.key] || ''}
+                          onChange={e => setMetadata({ ...metadata, [field.key]: Number(e.target.value) || '' })}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                        />
+                      )}
+                      {field.type === 'boolean' && (
+                        <select
+                          required={field.required}
+                          value={metadata[field.key] || ''}
+                          onChange={e => setMetadata({ ...metadata, [field.key]: e.target.value === 'true' })}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                        >
+                          <option value="">Select...</option>
+                          <option value="true">Yes</option>
+                          <option value="false">No</option>
+                        </select>
+                      )}
+                      {field.type === 'enum' && field.allowedValues && (
+                        <select
+                          required={field.required}
+                          value={metadata[field.key] || ''}
+                          onChange={e => setMetadata({ ...metadata, [field.key]: e.target.value })}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                        >
+                          <option value="">Select...</option>
+                          {field.allowedValues.map(val => (
+                            <option key={val} value={val}>{val}</option>
+                          ))}
+                        </select>
+                      )}
+                      {field.description && (
+                        <p className="text-xs text-slate-500">{field.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {kind === 'MCQ' && (
             <div className="space-y-4">

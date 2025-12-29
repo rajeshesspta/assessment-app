@@ -23,7 +23,10 @@ const taxonomyFieldSchema = z.object({
 
 const tenantTaxonomySchema = z.object({
   categories: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
+  tags: z.object({
+    predefined: z.array(z.string()).default([]),
+    allowCustom: z.boolean().default(true),
+  }).default({ predefined: [], allowCustom: true }),
   metadataFields: z.array(taxonomyFieldSchema).default([]),
 });
 

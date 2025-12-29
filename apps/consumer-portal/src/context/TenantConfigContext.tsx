@@ -11,7 +11,10 @@ type TenantBranding = {
 
 type TenantTaxonomy = {
   categories: string[];
-  tags: string[];
+  tags: {
+    predefined: string[];
+    allowCustom: boolean;
+  };
   metadataFields: Array<{
     key: string;
     label: string;
