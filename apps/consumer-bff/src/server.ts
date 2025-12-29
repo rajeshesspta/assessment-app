@@ -148,7 +148,6 @@ const tenantConfigResponse = (tenant: TenantRuntime) => ({
   premiumDeployment: tenant.premiumDeployment,
   branding: tenant.branding,
   featureFlags: tenant.featureFlags,
-  taxonomy: tenant.taxonomy,
   clientApp: {
     baseUrl: tenant.clientApp.baseUrl,
     landingPath: tenant.clientApp.landingPath,
