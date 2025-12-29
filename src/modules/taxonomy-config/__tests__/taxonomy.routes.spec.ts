@@ -47,9 +47,9 @@ describe('configRoutes', () => {
   describe('GET /config/taxonomy', () => {
     it('returns taxonomy config for tenant admin', async () => {
       const config = {
-        categories: { name: 'categories', type: 'array', required: false },
-        tags: { name: 'tags', type: 'array', required: false },
-        metadata: {},
+        categories: ['cat1'],
+        tags: { predefined: ['tag1'], allowCustom: true },
+        metadataFields: [{ key: 'key1', label: 'label1', type: 'string', required: false }],
       };
       getTaxonomyConfigMock.mockResolvedValue(config);
 

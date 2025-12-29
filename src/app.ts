@@ -28,7 +28,7 @@ export interface AppDependencies {
 const apiVersion = typeof pkg?.version === 'string' ? pkg.version : '0.0.0';
 
 export function buildApp(deps: AppDependencies = {}) {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: { level: 'info' } });
   const repositories = deps.repositories ?? createInMemoryRepositoryBundle();
   const tenantRepository = deps.tenantRepository ?? createInMemoryTenantRepository();
 

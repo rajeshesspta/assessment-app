@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings, Save, AlertCircle } from 'lucide-react';
+import { Settings, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import { LoadingState } from './LoadingState';
 
 interface TaxonomyConfigPageProps {
@@ -7,18 +7,27 @@ interface TaxonomyConfigPageProps {
   brandPrimary?: string;
 }
 
-interface TaxonomyField {
-  name: string;
-  type: 'string' | 'number' | 'boolean' | 'array';
-  required: boolean;
-  allowedValues?: string[];
-  description?: string;
-}
 
 interface TaxonomyConfig {
-  categories: TaxonomyField;
-  tags: TaxonomyField;
-  metadata: Record<string, TaxonomyField>;
+  categories: {
+    type: 'string' | 'array';
+    required: boolean;
+    description?: string;
+    value?: string;
+    values?: string[];
+  };
+  tags: {
+    predefined: string[];
+    allowCustom: boolean;
+  };
+  metadata: Array<{
+    key: string;
+    label: string;
+    type: 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'object';
+    required: boolean;
+    allowedValues?: (string | number | boolean)[];
+    description?: string;
+  }>;
 }
 
 export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProps) {
@@ -33,7 +42,20 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
     setError(null);
     try {
       const data = await api.fetchTaxonomyConfig();
-      setConfig(data);
+      // Normalize categories for UI
+      let categoriesUI: any = { type: 'string', required: false, description: '', value: '', values: [] };
+      if (Array.isArray(data.categories)) {
+        categoriesUI = { type: 'array', required: false, description: '', values: data.categories };
+      } else if (typeof data.categories === 'string') {
+        categoriesUI = { type: 'string', required: false, description: '', value: data.categories };
+      } else if (typeof data.categories === 'object' && data.categories) {
+        categoriesUI = { ...data.categories };
+      }
+      setConfig({
+        ...data,
+        categories: categoriesUI,
+        metadata: Array.isArray(data.metadataFields) ? data.metadataFields : [],
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -50,9 +72,27 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
     setSaving(true);
     setError(null);
     setSuccess(false);
+    // Prepare config for backend
+    let categories: any;
+    if (config.categories.type === 'array') {
+      categories = Array.isArray(config.categories.values) ? config.categories.values.filter(v => v.trim() !== '') : [];
+    } else {
+      categories = typeof config.categories.value === 'string' ? config.categories.value : '';
+    }
+    // Normalize metadata: filter out invalid fields
+    const metadata = config.metadata.filter(field => field.key?.trim() && field.label?.trim());
+    const payload = {
+      ...config,
+      categories,
+      tags: config.tags,
+      metadataFields: metadata,
+    };
     try {
-      await api.updateTaxonomyConfig(config);
+      console.log('Taxonomy config save payload:', payload);
+      await api.updateTaxonomyConfig(payload);
       setSuccess(true);
+      // Reload config to show updated metadata
+      loadConfig();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -60,13 +100,61 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
     }
   };
 
-  const updateField = (field: keyof TaxonomyConfig, key: string, value: any) => {
+
+  const updateCategoryField = (key: string, value: any) => {
     if (!config) return;
     setConfig({
       ...config,
-      [field]: {
-        ...config[field],
+      categories: {
+        ...config.categories,
         [key]: value,
+      },
+    });
+  };
+
+  const updateTagsPredefined = (index: number, value: string) => {
+    if (!config) return;
+    const newPredefined = [...config.tags.predefined];
+    newPredefined[index] = value;
+    setConfig({
+      ...config,
+      tags: {
+        ...config.tags,
+        predefined: newPredefined,
+      },
+    });
+  };
+
+  const addTagPredefined = () => {
+    if (!config) return;
+    setConfig({
+      ...config,
+      tags: {
+        ...config.tags,
+        predefined: [...config.tags.predefined, ''],
+      },
+    });
+  };
+
+  const removeTagPredefined = (index: number) => {
+    if (!config) return;
+    const newPredefined = config.tags.predefined.filter((_, i) => i !== index);
+    setConfig({
+      ...config,
+      tags: {
+        ...config.tags,
+        predefined: newPredefined,
+      },
+    });
+  };
+
+  const updateTagsAllowCustom = (value: boolean) => {
+    if (!config) return;
+    setConfig({
+      ...config,
+      tags: {
+        ...config.tags,
+        allowCustom: value,
       },
     });
   };
@@ -113,6 +201,7 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
       )}
 
       <div className="space-y-6">
+
         {/* Categories Field */}
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Categories</h2>
@@ -121,7 +210,7 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
               <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
               <select
                 value={config.categories.type}
-                onChange={(e) => updateField('categories', 'type', e.target.value)}
+                onChange={(e) => updateCategoryField('type', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="string">String</option>
@@ -133,7 +222,7 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
               <input
                 type="checkbox"
                 checked={config.categories.required}
-                onChange={(e) => updateField('categories', 'required', e.target.checked)}
+                onChange={(e) => updateCategoryField('required', e.target.checked)}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
             </div>
@@ -142,46 +231,100 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
               value={config.categories.description || ''}
-              onChange={(e) => updateField('categories', 'description', e.target.value)}
+              onChange={(e) => updateCategoryField('description', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={2}
             />
           </div>
+
+          {/* Array input for categories if type is 'array' */}
+          {config.categories.type === 'array' && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category Values</label>
+              {(Array.isArray(config.categories.values) ? config.categories.values : []).map((cat: string, idx: number) => (
+                <div key={idx} className="flex items-center mb-2">
+                  <input
+                    type="text"
+                    value={cat}
+                    onChange={e => {
+                      const newValues = [...(config.categories.values || [])];
+                      newValues[idx] = e.target.value;
+                      updateCategoryField('values', newValues);
+                    }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={`Category #${idx + 1}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newValues = (config.categories.values || []).filter((_: string, i: number) => i !== idx);
+                      updateCategoryField('values', newValues);
+                    }}
+                    className="ml-2 px-2 py-1 text-xs text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const newValues = Array.isArray(config.categories.values) ? [...config.categories.values, ''] : [''];
+                  updateCategoryField('values', newValues);
+                }}
+                className="mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+              >
+                Add Category Value
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Tags Field */}
+
+        {/* Tags Field (new format) */}
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Tags</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <select
-                value={config.tags.type}
-                onChange={(e) => updateField('tags', 'type', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="string">String</option>
-                <option value="array">Array</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Required</label>
-              <input
-                type="checkbox"
-                checked={config.tags.required}
-                onChange={(e) => updateField('tags', 'required', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-            </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Tags</label>
+            {config.tags.predefined.length === 0 && (
+              <div className="text-gray-400 text-sm mb-2">No predefined tags. Add one below.</div>
+            )}
+            {config.tags.predefined.map((tag, idx) => (
+              <div key={idx} className="flex items-center mb-2">
+                <input
+                  type="text"
+                  value={tag}
+                  onChange={(e) => updateTagsPredefined(idx, e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={`Tag #${idx + 1}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeTagPredefined(idx)}
+                  className="ml-2 px-2 py-1 text-xs text-red-600 hover:underline"
+                  aria-label="Remove tag"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addTagPredefined}
+              className="mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            >
+              Add Tag
+            </button>
           </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={config.tags.description || ''}
-              onChange={(e) => updateField('tags', 'description', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={2}
+          <div className="mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Allow Custom Tags</label>
+            <input
+              type="checkbox"
+              checked={config.tags.allowCustom}
+              onChange={(e) => updateTagsAllowCustom(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
+            <span className="ml-2 text-gray-600 text-sm">Allow users to add their own tags</span>
           </div>
         </div>
 
@@ -189,9 +332,137 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata Fields</h2>
           <p className="text-gray-600 mb-4">Additional custom fields for items.</p>
-          {/* TODO: Add UI for managing metadata fields */}
-          <div className="text-gray-500">
-            Metadata configuration coming soon...
+          <div className="space-y-4">
+            {config.metadata.length === 0 && (
+              <div className="text-gray-400 text-sm mb-2">No metadata fields defined.</div>
+            )}
+            {config.metadata.map((field, idx) => (
+              <div key={idx} className="border rounded p-4 mb-2 bg-gray-50">
+                <div className="flex flex-wrap gap-4 mb-2">
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Key</label>
+                    <input
+                      type="text"
+                      value={field.key || ''}
+                      onChange={e => {
+                        const newMeta = [...config.metadata];
+                        newMeta[idx] = { ...field, key: e.target.value };
+                        setConfig({ ...config, metadata: newMeta });
+                      }}
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Label</label>
+                    <input
+                      type="text"
+                      value={field.label || ''}
+                      onChange={e => {
+                        const newMeta = [...config.metadata];
+                        newMeta[idx] = { ...field, label: e.target.value };
+                        setConfig({ ...config, metadata: newMeta });
+                      }}
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                    <select
+                      value={field.type}
+                      onChange={e => {
+                        const newMeta = [...config.metadata];
+                        newMeta[idx] = { ...field, type: e.target.value as any };
+                        setConfig({ ...config, metadata: newMeta });
+                      }}
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                    >
+                      <option value="string">String</option>
+                      <option value="number">Number</option>
+                      <option value="boolean">Boolean</option>
+                      <option value="enum">Enum</option>
+                      <option value="array">Array</option>
+                      <option value="object">Object</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center min-w-[100px]">
+                    <label className="block text-xs font-medium text-gray-700 mr-2">Required</label>
+                    <input
+                      type="checkbox"
+                      checked={!!field.required}
+                      onChange={e => {
+                        const newMeta = [...config.metadata];
+                        newMeta[idx] = { ...field, required: e.target.checked };
+                        setConfig({ ...config, metadata: newMeta });
+                      }}
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newMeta = config.metadata.filter((_, i) => i !== idx);
+                      setConfig({ ...config, metadata: newMeta });
+                    }}
+                    className="ml-2 px-2 py-1 text-xs text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Allowed Values (comma separated, for enum/array)</label>
+                    <input
+                      type="text"
+                      value={Array.isArray(field.allowedValues) ? field.allowedValues.join(',') : ''}
+                      onChange={e => {
+                        const newMeta = [...config.metadata];
+                        newMeta[idx] = {
+                          ...field,
+                          allowedValues: e.target.value.split(',').map(v => v.trim()).filter(Boolean),
+                        };
+                        setConfig({ ...config, metadata: newMeta });
+                      }}
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+                    <input
+                      type="text"
+                      value={field.description || ''}
+                      onChange={e => {
+                        const newMeta = [...config.metadata];
+                        newMeta[idx] = { ...field, description: e.target.value };
+                        setConfig({ ...config, metadata: newMeta });
+                      }}
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setConfig({
+                  ...config,
+                  metadata: [
+                    ...config.metadata,
+                    {
+                      key: '',
+                      label: '',
+                      type: 'string',
+                      required: false,
+                      allowedValues: [],
+                      description: '',
+                    },
+                  ],
+                });
+              }}
+              className="mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            >
+              Add Metadata Field
+            </button>
           </div>
         </div>
       </div>

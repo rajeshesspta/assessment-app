@@ -4,19 +4,19 @@ import type { TaxonomyRepository } from './taxonomy.repository.js';
 import type { TaxonomyConfig } from '../../common/types.js';
 
 const taxonomyConfigSchema = z.object({
-	categories: z.array(z.string()).default([]),
-	tags: z.object({
-		predefined: z.array(z.string()).default([]),
-		allowCustom: z.boolean().default(true),
-	}).default({ predefined: [], allowCustom: true }),
-	metadataFields: z.array(z.object({
-		key: z.string().min(1),
-		label: z.string().min(1),
-		type: z.enum(['string', 'number', 'boolean', 'enum', 'array', 'object']),
-		required: z.boolean().default(false),
-		allowedValues: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
-		description: z.string().optional(),
-	})).default([]),
+  categories: z.array(z.string()).default([]),
+  tags: z.object({
+    predefined: z.array(z.string()).default([]),
+    allowCustom: z.boolean().default(true),
+  }).default({ predefined: [], allowCustom: true }),
+  metadataFields: z.array(z.object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    type: z.enum(['string', 'number', 'boolean', 'enum', 'array', 'object']),
+    required: z.boolean().default(false),
+    allowedValues: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
+    description: z.string().optional(),
+  })).default([]),
 });
 
 export async function registerTaxonomyRoutes(
@@ -33,7 +33,18 @@ export async function registerTaxonomyRoutes(
 		}
 
 		const config = await taxonomyRepo.getTaxonomyConfig(tenantId);
-		return config || {
+		// Always return the new tags object format
+		if (config) {
+			request.log.info({ retrievedTaxonomyConfig: config }, 'Retrieved taxonomy config');
+			return {
+				...config,
+				tags: config.tags && Array.isArray(config.tags.predefined)
+					? config.tags
+					: { predefined: Array.isArray(config.tags) ? config.tags : [], allowCustom: true },
+			};
+		}
+		request.log.info('No taxonomy config found, returning defaults');
+		return {
 			categories: [],
 			tags: { predefined: [], allowCustom: true },
 			metadataFields: []
