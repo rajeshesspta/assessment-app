@@ -79,3 +79,49 @@ Learners inherit access to any assessment listed in the cohort’s `assessmentId
 | `POST /attempts`                                  | Validates learner record, cohort membership, and `allowedAttempts` before starting attempt. |
 
 The `users` table is now implemented via migration `013_users_table.sql`, and corresponding routes (`POST /tenants/:id/admins`, `POST /users`) persist real user records for tenant administration and invitations. Apply the migration (e.g., `npm run db:migrate -- --all-tenants`) before calling the new APIs in existing environments.
+
+## Extensible Item Model & Tenant Taxonomy
+
+Items support tenant-configurable taxonomy fields for categorization and metadata:
+
+- **Categories**: Multi-select from a tenant-defined list (e.g., "Math", "Science").
+- **Tags**: Multi-select from a tenant-defined list (e.g., "Easy", "Advanced").
+- **Metadata**: Custom fields defined per tenant, supporting string, number, boolean, enum, array, or object types.
+
+### Taxonomy Configuration
+
+Tenant taxonomy is configured in the Control Plane and exposed via the tenant config bundle. Example:
+
+```json
+{
+  "taxonomy": {
+    "categories": ["Math", "Science", "History"],
+    "tags": ["Easy", "Medium", "Hard"],
+    "metadataFields": [
+      {
+        "key": "difficulty",
+        "label": "Difficulty Level",
+        "type": "enum",
+        "required": false,
+        "allowedValues": ["Beginner", "Intermediate", "Advanced"]
+      },
+      {
+        "key": "skills",
+        "label": "Required Skills",
+        "type": "array",
+        "required": true
+      }
+    ]
+  }
+}
+```
+
+### Item API Extensions
+
+- `POST /items` and `PATCH /items/:id` accept `categories[]`, `tags[]`, and `metadata` object.
+- `GET /items` supports filtering: `?categories=Math&tags=Easy&metadata[difficulty]=Beginner`.
+- Analytics endpoints: `GET /analytics/items/by-category`, `GET /analytics/items/by-tag` for reporting.
+
+### UI Behavior
+
+Item creation/edit forms dynamically show taxonomy fields based on the tenant config. Fields are hidden if not configured, ensuring a clean interface for tenants without custom taxonomy.
