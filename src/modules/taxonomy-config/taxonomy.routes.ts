@@ -27,9 +27,9 @@ export async function registerTaxonomyRoutes(
 		const tenantId = (request as any).tenantId as string;
 		const actorRoles = (request as any).actorRoles as string[];
 
-		if (!actorRoles.includes('TENANT_ADMIN')) {
+		if (!actorRoles.includes('TENANT_ADMIN') && !actorRoles.includes('CONTENT_AUTHOR')) {
 			reply.code(403);
-			return { error: 'Forbidden: only tenant admins can access taxonomy config' };
+			return { error: 'Forbidden: only tenant admins and content authors can access taxonomy config' };
 		}
 
 		const config = await taxonomyRepo.getTaxonomyConfig(tenantId);

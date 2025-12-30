@@ -63,6 +63,25 @@ describe('configRoutes', () => {
       expect(getTaxonomyConfigMock).toHaveBeenCalledWith('tenant-1');
     });
 
+    it('returns taxonomy config for content author', async () => {
+      currentActorRoles = ['CONTENT_AUTHOR'];
+      const config = {
+        categories: ['cat1'],
+        tags: { predefined: ['tag1'], allowCustom: true },
+        metadataFields: [{ key: 'key1', label: 'label1', type: 'string', required: false }],
+      };
+      getTaxonomyConfigMock.mockResolvedValue(config);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/config/taxonomy',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(JSON.parse(response.body)).toEqual(config);
+      expect(getTaxonomyConfigMock).toHaveBeenCalledWith('tenant-1');
+    });
+
     it('returns default config if none exists', async () => {
       getTaxonomyConfigMock.mockResolvedValue(null);
 
@@ -79,8 +98,8 @@ describe('configRoutes', () => {
       });
     });
 
-    it('returns 403 for non-tenant-admin', async () => {
-      currentActorRoles = ['CONTENT_AUTHOR'];
+    it('returns 403 for non-authorized roles', async () => {
+      currentActorRoles = ['LEARNER'];
 
       const response = await app.inject({
         method: 'GET',
@@ -89,7 +108,7 @@ describe('configRoutes', () => {
 
       expect(response.statusCode).toBe(403);
       expect(JSON.parse(response.body)).toEqual({
-        error: 'Forbidden: only tenant admins can access taxonomy config',
+        error: 'Forbidden: only tenant admins and content authors can access taxonomy config',
       });
     });
   });

@@ -450,4 +450,16 @@ Goal: Provide tenant admins with a UI to configure taxonomy fields (categories, 
 	34.5 [x] Persistence: Store taxonomy config in control plane or tenant-specific storage.
 	34.6 [x] Docs: Update docs with taxonomy configuration workflow.
 
+**Iteration 35: Proxy Tenant Taxonomy Management to Headless API**
+- Goal: Refactor the BFF so all tenant taxonomy creation, update, and read operations are proxied to the headless API, which becomes the single source of truth for taxonomy data.
+- [ ] Identify BFF endpoints for taxonomy management.
+- [ ] Remove direct bundle/config access for taxonomy in the BFF.
+- [ ] Implement proxy logic for GET/PUT/POST taxonomy endpoints to the headless API.
+- [ ] Ensure correct authentication and tenant context in proxied requests.
+- [ ] Adapt responses as needed for frontend compatibility.
+- [ ] Update frontend integration to use BFF endpoints.
+- [ ] Remove stale taxonomy data from config bundles.
+- [ ] Test end-to-end flows for taxonomy management.
+- [ ] Update documentation to reflect the new architecture.
+
 

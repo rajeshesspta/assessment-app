@@ -246,6 +246,7 @@ Headers required: `x-api-key`, `x-tenant-id`, and `x-actor-roles` (comma-separat
 The BFF (Backend-for-Frontend) does not persist business or tenant data. Instead, it handles and stores only transient/session-related data needed for frontend interactions:
 
 ### What the BFF Stores/Handles
+
 - **User session data:** Auth tokens, userId, tenantId, roles, session expiry, etc. (in memory, cookies, or session store)
 - **Request context:** Current tenant, actor roles, API keys (for proxying to headless)
 - **Temporary cache:** Short-lived config, branding, or feature flags fetched from the headless API or control plane (for performance)
@@ -253,10 +254,12 @@ The BFF (Backend-for-Frontend) does not persist business or tenant data. Instead
 - **Error and audit logs:** For debugging, monitoring, and security (not business data)
 
 ### What the BFF Does NOT Store
-- Tenants, taxonomy, items, assessments, users, attempts, or any domain/business data.  
+
+- Tenants, taxonomy, items, assessments, users, attempts, or any domain/business data.
 - All persistent data is managed by the headless API and its database.
 
 ### Summary
+
 The BFF is a stateless adapter and proxy, not a source of truth. Its storage is limited to session, cache, and request context for frontend delivery and security.
 
 ---

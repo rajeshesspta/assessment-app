@@ -537,7 +537,17 @@ app.get('/config', async (request, reply) => {
     reply.code(404);
     return { error: 'Tenant not resolved' };
   }
-  return tenantConfigResponse(tenant);
+  try {
+    const taxonomy = await callHeadless(tenant, '/config/taxonomy', reply, {
+      headers: { 'x-actor-roles': 'TENANT_ADMIN' }
+    }, request);
+    const config = tenantConfigResponse(tenant) as any;
+    config.taxonomy = taxonomy;
+    return config;
+  } catch (error) {
+    // If taxonomy fetch fails, return config without taxonomy
+    return tenantConfigResponse(tenant);
+  }
 });
 
 app.post('/auth/logout', async (_request, reply) => {

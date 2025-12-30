@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Settings, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import { LoadingState } from './LoadingState';
+import { useTenantConfig } from '../context/TenantConfigContext';
 
 interface TaxonomyConfigPageProps {
   api: any;
@@ -36,6 +37,8 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const { refresh } = useTenantConfig();
 
   const loadConfig = async () => {
     setLoading(true);
@@ -93,6 +96,8 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
       setSuccess(true);
       // Reload config to show updated metadata
       loadConfig();
+      // Refresh tenant config to update taxonomy in other components
+      await refresh();
     } catch (err) {
       setError((err as Error).message);
     } finally {
