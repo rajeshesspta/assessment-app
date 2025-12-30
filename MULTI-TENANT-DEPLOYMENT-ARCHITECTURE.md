@@ -286,15 +286,85 @@ if (!userTenants.includes(requestedTenantId)) {
 }
 ```
 
-### Recommended SaaS Pattern
+### SaaS Hostname Resolution
 
-**Hybrid Approach (Recommended):**
-1. JWT identifies user + their base tenant
-2. Request context (hostname/header) specifies target tenant
-3. Application validates user has access to target tenant
-4. Database queries are scoped to validated tenant
+#### How Multi-Tenant Hostname Resolution Works
 
-This provides maximum flexibility while maintaining security.
+```javascript
+// User visits: https://tenant1.app.rubickstricks.com
+// DNS resolves to: 1.2.3.4 (BFF server IP)
+// HTTP Request:
+GET /api/assessments HTTP/1.1
+Host: tenant1.app.rubickstricks.com  // ← This identifies the tenant
+Origin: https://tenant1.app.rubickstricks.com  // ← CORS validation
+
+// BFF resolves tenant:
+const tenant = resolveTenantByHost("tenant1.app.rubickstricks.com");
+// Returns: { tenantId: "tenant-1", ... }
+```
+
+#### DNS Configuration for SaaS
+```
+# Shared BFF Infrastructure
+BFF Server: 1.2.3.4
+
+# DNS Records
+tenant1.app.rubickstricks.com  →  1.2.3.4
+tenant2.app.rubickstricks.com  →  1.2.3.4
+tenant3.app.rubickstricks.com  →  1.2.3.4
+
+# All point to same BFF, but Host header differs
+```
+
+#### Tenant Configuration
+```json
+{
+  "tenants": [
+    {
+      "tenantId": "tenant-1",
+      "name": "Acme Corp",
+      "hosts": ["tenant1.app.rubickstricks.com"],
+      "clientApp": {
+        "baseUrl": "https://tenant1.app.rubickstricks.com"
+      }
+    },
+    {
+      "tenantId": "tenant-2", 
+      "name": "Beta Inc",
+      "hosts": ["tenant2.app.rubickstricks.com"],
+      "clientApp": {
+        "baseUrl": "https://tenant2.app.rubickstricks.com"
+      }
+    }
+  ]
+}
+```
+
+### Host vs Origin in SaaS Context
+
+**Host Header**: Identifies which tenant is being accessed
+- `tenant1.app.com` → Tenant 1
+- `tenant2.app.com` → Tenant 2
+
+**Origin Header**: Used for CORS validation
+- Ensures `https://tenant1.app.com` can only make requests to allowed origins
+- Prevents cross-origin attacks
+
+### Why Hostname-Based Resolution Works
+
+```javascript
+// Same BFF server receives both requests:
+
+// Request 1
+Host: tenant1.app.rubickstricks.com
+→ resolveTenantByHost() → Tenant 1 config
+
+// Request 2  
+Host: tenant2.app.rubickstricks.com
+→ resolveTenantByHost() → Tenant 2 config
+
+// Different tenants, same infrastructure!
+```
 
 ## Performance Benchmarks
 
