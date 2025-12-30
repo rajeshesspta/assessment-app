@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Pin, PinOff } from 'lucide-react';
+import { Pin, PinOff, ChevronRight, ChevronDown } from 'lucide-react';
 import { TenantSessionForm } from './components/TenantSessionForm';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import { AssignedAssessmentsList } from './components/AssignedAssessmentsList';
@@ -27,9 +27,10 @@ import { LoginPage } from './components/LoginPage';
 type NavItem = {
   id: string;
   label: string;
-  path: string;
+  path?: string;
   requiresTenantAdmin?: boolean;
   requiresContentAuthor?: boolean;
+  children?: NavItem[];
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -40,9 +41,11 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'learners', label: 'Learners', path: '/learners', requiresContentAuthor: true },
   { id: 'cohorts', label: 'Cohorts', path: '/cohorts', requiresContentAuthor: true },
   { id: 'users', label: 'Users', path: '/users', requiresTenantAdmin: true },
-  { id: 'taxonomy-config', label: 'Taxonomy Config', path: '/taxonomy-config', requiresTenantAdmin: true },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
   { id: 'resources', label: 'Resources', path: '/resources' },
+  { id: 'settings', label: 'Settings', requiresTenantAdmin: true, children: [
+    { id: 'taxonomy-config', label: 'Taxonomy Config', path: '/taxonomy-config' }
+  ] },
 ];
 
 const LANDING_NAV_ID = 'overview';
@@ -77,6 +80,7 @@ export default function App() {
   const [viewingAttemptId, setViewingAttemptId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
 
   const tenantName = config?.name ?? 'Assessment App';
   const supportEmail = config?.supportEmail ?? 'support@example.com';
@@ -109,8 +113,19 @@ export default function App() {
   const normalizedPath = location.pathname.length > 1 && location.pathname.endsWith('/')
     ? location.pathname.replace(/\/+/g, '/').replace(/\/+$/, '')
     : location.pathname;
+  const findActiveItem = (items: NavItem[]): NavItem | null => {
+    for (const item of items) {
+      if (item.path === normalizedPath) return item;
+      if (item.children) {
+        const child = findActiveItem(item.children);
+        if (child) return child;
+      }
+    }
+    return null;
+  };
+
   const currentNav = useMemo(
-    () => NAV_ITEMS.find(item => item.path === normalizedPath) ?? null,
+    () => findActiveItem(NAV_ITEMS) ?? NAV_ITEMS.find(item => item.id === LANDING_NAV_ID) ?? null,
     [normalizedPath],
   );
   const activeNav = currentNav?.id ?? LANDING_NAV_ID;
@@ -123,6 +138,13 @@ export default function App() {
     }),
     [isTenantAdmin, isContentAuthor],
   );
+
+  useEffect(() => {
+    const parent = visibleNavItems.find(item => item.children?.some(c => c.id === activeNav));
+    if (parent) {
+      setExpandedMenus(prev => new Set(prev).add(parent.id));
+    }
+  }, [activeNav, visibleNavItems]);
 
   // Determine breadcrumb items based on current route
   const breadcrumbItems = useMemo(() => {
@@ -148,9 +170,14 @@ export default function App() {
     }
 
     // For other routes, just show the current page name
-    const currentNav = NAV_ITEMS.find(item => item.path === path);
+    const currentNav = findActiveItem(NAV_ITEMS);
     if (currentNav) {
-      return [{ label: currentNav.label }];
+      const parent = NAV_ITEMS.find(item => item.children?.some(c => c.id === currentNav.id));
+      if (parent) {
+        return [{ label: parent.label }, { label: currentNav.label }];
+      } else {
+        return [{ label: currentNav.label }];
+      }
     }
 
     return [];
@@ -504,30 +531,82 @@ export default function App() {
             </button>
           </div>
         </div>
-        <div className="space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
           {visibleNavItems.map(item => {
-            const isActive = item.id === activeNav;
+            const isActive = item.id === activeNav || item.children?.some(c => c.id === activeNav);
+            const isExpanded = expandedMenus.has(item.id);
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (location.pathname !== item.path) {
-                    navigate(item.path);
-                  }
-                  if (!sidebarPinned) {
-                    setSidebarOpen(false);
-                  }
-                }}
-                className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                  isActive
-                    ? 'border-brand-100 bg-brand-50 text-brand-700'
-                    : 'border-transparent bg-white text-slate-500 hover:border-brand-100 hover:text-slate-900'
-                }`}
-              >
-                {item.label}
-                {isActive && <span className="h-2 w-2 rounded-full bg-brand-500" />}
-              </button>
+              <div key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (item.children) {
+                      setExpandedMenus(prev => {
+                        const newSet = new Set(prev);
+                        if (newSet.has(item.id)) {
+                          newSet.delete(item.id);
+                        } else {
+                          newSet.add(item.id);
+                        }
+                        return newSet;
+                      });
+                    } else if (item.path) {
+                      if (location.pathname !== item.path) {
+                        navigate(item.path);
+                      }
+                      if (!sidebarPinned) {
+                        setSidebarOpen(false);
+                      }
+                    }
+                  }}
+                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                    isActive
+                      ? 'border-brand-100 bg-brand-50 text-brand-700'
+                      : 'border-transparent bg-white text-slate-500 hover:border-brand-100 hover:text-slate-900'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {item.label}
+                    {item.children && (
+                      isExpanded ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )
+                    )}
+                  </span>
+                  {isActive && !item.children && <span className="h-2 w-2 rounded-full bg-brand-500" />}
+                </button>
+                {isExpanded && item.children && (
+                  <div className="ml-4 space-y-2">
+                    {item.children.map(child => {
+                      const childActive = child.id === activeNav;
+                      return (
+                        <button
+                          key={child.id}
+                          type="button"
+                          onClick={() => {
+                            if (child.path && location.pathname !== child.path) {
+                              navigate(child.path);
+                            }
+                            if (!sidebarPinned) {
+                              setSidebarOpen(false);
+                            }
+                          }}
+                          className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                            childActive
+                              ? 'border-brand-100 bg-brand-50 text-brand-700'
+                              : 'border-transparent bg-white text-slate-500 hover:border-brand-100 hover:text-slate-900'
+                          }`}
+                        >
+                          {child.label}
+                          {childActive && <span className="h-2 w-2 rounded-full bg-brand-500" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
