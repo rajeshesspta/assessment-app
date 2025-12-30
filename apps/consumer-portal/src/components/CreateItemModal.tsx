@@ -30,6 +30,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
   const [numericUnits, setNumericUnits] = useState('');
   const [sampleAnswer, setSampleAnswer] = useState('');
   const [rubricKeywords, setRubricKeywords] = useState<string[]>([]);
+  const [rubricKeywordsInput, setRubricKeywordsInput] = useState('');
   const [essayRubric, setEssayRubric] = useState<{ section: string; points: number }[]>([
     { section: 'Content', points: 5 },
     { section: 'Grammar', points: 5 },
@@ -82,6 +83,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
       } else if (initialItem.kind === 'SHORT_ANSWER') {
         setSampleAnswer(initialItem.sampleAnswer || '');
         setRubricKeywords(initialItem.rubric?.keywords || []);
+        setRubricKeywordsInput((initialItem.rubric?.keywords || []).join(', '));
       } else if (initialItem.kind === 'ESSAY') {
         setEssayRubric(initialItem.rubric?.sections || []);
         setMinWords(initialItem.lengthExpectation?.minWords ?? '');
@@ -110,6 +112,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
       setNumericUnits('');
       setSampleAnswer('');
       setRubricKeywords([]);
+      setRubricKeywordsInput('');
       setEssayRubric([{ section: 'Content', points: 5 }, { section: 'Grammar', points: 5 }]);
       setMinWords('');
       setMaxWords('');
@@ -282,8 +285,8 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Item Type</label>
+          <div className="space-y-2 border-b border-slate-200 pb-6">
+            <label className="text-sm font-semibold text-slate-900">Item Type</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
                 { id: 'MCQ', label: 'Multiple Choice', desc: 'Single/Multiple correct' },
@@ -312,8 +315,8 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Prompt</label>
+          <div className="space-y-2 border-b border-slate-200 pb-6">
+            <label className="text-sm font-semibold text-slate-900">Prompt</label>
             <textarea
               required
               value={prompt}
@@ -324,15 +327,15 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
             />
           </div>
 
-          {/* Taxonomy Fields */}
+          {/* Organization Fields */}
           {config?.taxonomy && (
-            <div className="space-y-6 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Taxonomy</h3>
+            <div className="space-y-6 rounded-xl border border-slate-100 bg-slate-50/50 p-4 pb-6">
+              <h3 className="text-sm font-bold text-slate-900 tracking-wide">Organization</h3>
 
               {/* Categories */}
               {config.taxonomy.categories.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Categories</label>
+                  <label className="text-sm font-semibold text-slate-900">Categories</label>
                   <select
                     multiple
                     value={categories}
@@ -352,7 +355,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
 
               {/* Tags */}
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Tags</label>
+                <label className="text-sm font-semibold text-slate-900">Tags</label>
                 <TagInput
                   predefinedTags={config.taxonomy.tags.predefined}
                   allowCustom={config.taxonomy.tags.allowCustom}
@@ -365,10 +368,10 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
               {/* Metadata Fields */}
               {config.taxonomy.metadataFields.length > 0 && (
                 <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-slate-700">Additional Metadata</h4>
+                  <h4 className="text-sm font-semibold text-slate-900">Custom Properties</h4>
                   {config.taxonomy.metadataFields.map(field => (
                     <div key={field.key} className="space-y-1">
-                      <label className="text-sm font-medium text-slate-700">{field.label}</label>
+                      <label className="text-sm font-medium text-slate-900">{field.label}</label>
                       {field.type === 'string' && (
                         <input
                           type="text"
@@ -423,9 +426,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'MCQ' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-200 pb-6">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-slate-700">Choices</label>
+                <label className="text-sm font-semibold text-slate-900">Choices</label>
                 <button
                   type="button"
                   onClick={handleAddChoice}
@@ -474,8 +477,8 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'TRUE_FALSE' && (
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Correct Answer</label>
+            <div className="space-y-2 border-b border-slate-200 pb-6">
+              <label className="text-sm font-semibold text-slate-900">Correct Answer</label>
               <div className="flex gap-4">
                 <button
                   type="button"
@@ -498,9 +501,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'MATCHING' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-200 pb-6">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-slate-700">Matching Pairs</label>
+                <label className="text-sm font-semibold text-slate-900">Matching Pairs</label>
                 <button
                   type="button"
                   onClick={() => setMatchingPairs([...matchingPairs, { prompt: '', target: '' }])}
@@ -554,9 +557,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'ORDERING' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-200 pb-6">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-slate-700">Items in Correct Order</label>
+                <label className="text-sm font-semibold text-slate-900">Items in Correct Order</label>
                 <button
                   type="button"
                   onClick={() => setOrderingOptions([...orderingOptions, ''])}
@@ -598,9 +601,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'NUMERIC_ENTRY' && (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4 border-b border-slate-200 pb-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Correct Value</label>
+                <label className="text-sm font-semibold text-slate-900">Correct Value</label>
                 <input
                   type="number"
                   required
@@ -610,7 +613,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Tolerance (±)</label>
+                <label className="text-sm font-semibold text-slate-900">Tolerance (±)</label>
                 <input
                   type="number"
                   min={0}
@@ -621,7 +624,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Units (Optional)</label>
+                <label className="text-sm font-semibold text-slate-900">Units (Optional)</label>
                 <input
                   type="text"
                   value={numericUnits}
@@ -634,9 +637,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'SHORT_ANSWER' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-200 pb-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Sample Answer</label>
+                <label className="text-sm font-semibold text-slate-900">Sample Answer</label>
                 <textarea
                   value={sampleAnswer}
                   onChange={e => setSampleAnswer(e.target.value)}
@@ -646,12 +649,17 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Keywords (for auto-grading hint)</label>
+                <label className="text-sm font-semibold text-slate-900">Keywords (for auto-grading hint)</label>
                 <input
                   type="text"
                   placeholder="Enter keywords separated by commas..."
-                  value={rubricKeywords.join(', ')}
-                  onChange={e => setRubricKeywords(e.target.value.split(',').map(k => k.trim()).filter(k => k))}
+                  value={rubricKeywordsInput}
+                  onChange={e => setRubricKeywordsInput(e.target.value)}
+                  onBlur={e => {
+                    const parsed = e.target.value.split(',').map(k => k.trim()).filter(k => k);
+                    setRubricKeywords(parsed);
+                    setRubricKeywordsInput(parsed.join(', '));
+                  }}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
                 />
               </div>
@@ -659,10 +667,10 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'ESSAY' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-200 pb-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Min Words</label>
+                  <label className="text-sm font-semibold text-slate-900">Min Words</label>
                   <input
                     type="number"
                     value={minWords}
@@ -671,7 +679,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Max Words</label>
+                  <label className="text-sm font-semibold text-slate-900">Max Words</label>
                   <input
                     type="number"
                     value={maxWords}
@@ -682,7 +690,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
               </div>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-slate-700">Rubric Sections</label>
+                  <label className="text-sm font-semibold text-slate-900">Rubric Sections</label>
                   <button
                     type="button"
                     onClick={() => setEssayRubric([...essayRubric, { section: '', points: 5 }])}
@@ -735,9 +743,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'FILL_IN_THE_BLANK' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-200 pb-6">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-slate-700">Blanks</label>
+                <label className="text-sm font-semibold text-slate-900">Blanks</label>
                 <button
                   type="button"
                   onClick={() => setBlanks([...blanks, { key: `blank${blanks.length + 1}`, correctValue: '' }])}
@@ -791,9 +799,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'HOTSPOT' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-200 pb-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Image URL</label>
+                <label className="text-sm font-semibold text-slate-900">Image URL</label>
                 <input
                   type="url"
                   required
@@ -810,7 +818,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'DRAG_AND_DROP' && (
-            <div className="space-y-6">
+            <div className="space-y-6 border-b border-slate-100 pb-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-semibold text-slate-700">Tokens (Draggable Items)</label>
@@ -914,7 +922,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           )}
 
           {kind === 'SCENARIO_TASK' && (
-            <div className="space-y-4">
+            <div className="space-y-4 border-b border-slate-100 pb-6">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">Workspace Template (Markdown/JSON)</label>
                 <textarea

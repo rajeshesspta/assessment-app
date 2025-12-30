@@ -37,6 +37,7 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [inputValues, setInputValues] = useState<Record<string, string>>({});
 
   const { refresh } = useTenantConfig();
 
@@ -59,6 +60,7 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
         categories: categoriesUI,
         metadata: Array.isArray(data.metadataFields) ? data.metadataFields : [],
       });
+      setInputValues({});
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -407,6 +409,11 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
                     onClick={() => {
                       const newMeta = config.metadata.filter((_, i) => i !== idx);
                       setConfig({ ...config, metadata: newMeta });
+                      setInputValues(prev => {
+                        const newInputValues = { ...prev };
+                        delete newInputValues[field.key];
+                        return newInputValues;
+                      });
                     }}
                     className="ml-2 px-2 py-1 text-xs text-red-600 hover:underline"
                   >
@@ -418,14 +425,19 @@ export function TaxonomyConfigPage({ api, brandPrimary }: TaxonomyConfigPageProp
                     <label className="block text-xs font-medium text-gray-700 mb-1">Allowed Values (comma separated, for enum/array)</label>
                     <input
                       type="text"
-                      value={Array.isArray(field.allowedValues) ? field.allowedValues.join(',') : ''}
+                      value={inputValues[field.key] ?? (Array.isArray(field.allowedValues) ? field.allowedValues.join(', ') : '')}
                       onChange={e => {
+                        setInputValues(prev => ({ ...prev, [field.key]: e.target.value }));
+                      }}
+                      onBlur={e => {
+                        const parsed = e.target.value.split(',').map(v => v.trim()).filter(Boolean);
                         const newMeta = [...config.metadata];
                         newMeta[idx] = {
                           ...field,
-                          allowedValues: e.target.value.split(',').map(v => v.trim()).filter(Boolean),
+                          allowedValues: parsed,
                         };
                         setConfig({ ...config, metadata: newMeta });
+                        setInputValues(prev => ({ ...prev, [field.key]: parsed.join(', ') }));
                       }}
                       className="w-full px-2 py-1 border border-gray-300 rounded"
                     />
