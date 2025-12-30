@@ -4,6 +4,14 @@
 
 Headless assessment platform MVP in TypeScript + Fastify.
 
+## Documentation
+
+- **[Multi-Tenant Deployment Architecture](MULTI-TENANT-DEPLOYMENT-ARCHITECTURE.md)** - Complete deployment guide for production multi-tenant setups
+- **[Domain Overview](docs/domain.md)** - Role hierarchy, user lifecycle, and data model
+- **[Multi-Tenant Roadmap](docs/multi-tenant-roadmap.md)** - Implementation phases and future enhancements
+- **[Control Plane Plan](docs/control-plane-plan.md)** - Super admin management and tenant provisioning
+- **[Dev Portal](docs/dev-portal.md)** - Developer portal documentation
+
 ## Modules (MVP)
 
 - Auth (API key)
