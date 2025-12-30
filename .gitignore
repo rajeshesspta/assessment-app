@@ -5,3 +5,4 @@ coverage/
 data/
 tmp/
 apps/consumer-bff/tenants.json
+tenants.json
