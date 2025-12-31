@@ -15,6 +15,11 @@ export function AttemptResult({ attemptId, api, brandPrimary = '#f97316', onExit
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showReview, setShowReview] = useState(false);
+  const [reviewItems, setReviewItems] = useState<Item[] | null>(null);
+  const [loadingReview, setLoadingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewForbidden, setReviewForbidden] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -32,6 +37,396 @@ export function AttemptResult({ attemptId, api, brandPrimary = '#f97316', onExit
     }
     loadData();
   }, [attemptId, api]);
+
+  /*
+  // const renderItemReview = (item: Item, response: AttemptResponse | undefined) => {
+    switch (item.kind) {
+      case 'MCQ':
+      case 'TRUE_FALSE':
+        return (
+          <div className="space-y-1">
+            {item.choices?.map((choice, choiceIndex) => {
+              const isCorrect = (item as any).correctIndexes?.includes(choiceIndex);
+              const isSelected = response?.answerIndexes?.includes(choiceIndex);
+              let className = 'text-slate-600';
+              if (isCorrect && isSelected) {
+                className = 'text-green-700 font-semibold bg-green-50';
+              } else if (isCorrect) {
+                className = 'text-green-700 font-semibold';
+              } else if (isSelected) {
+                className = 'text-blue-700 font-semibold bg-blue-50';
+              }
+              return (
+                <div key={choiceIndex} className="flex items-center gap-2 text-sm">
+                  <span className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-xs">
+                    {String.fromCharCode(65 + choiceIndex)}
+                  </span>
+                  <span className={className}>
+                    {choice.text}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'FILL_IN_THE_BLANK':
+        const fillBlankItem = item as any;
+        return (
+          <div className="space-y-2">
+            {fillBlankItem.blanks?.map((blank: any, blankIndex: number) => {
+              const userAnswer = response?.textAnswers?.[blankIndex];
+              const isCorrect = blank.acceptableAnswers.some((matcher: any) => {
+                if (matcher.type === 'exact') {
+                  return matcher.caseSensitive ? userAnswer === matcher.value : userAnswer?.toLowerCase() === matcher.value.toLowerCase();
+                }
+                // For regex and other types, simplified check
+                return false;
+              });
+              return (
+                <div key={blankIndex} className="p-2 bg-slate-50 rounded text-sm">
+                  <div className="font-medium text-slate-700">Blank {blankIndex + 1}:</div>
+                  <div className={`mt-1 ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                    Your answer: {userAnswer || 'Not answered'}
+                  </div>
+                  <div className="text-green-700 mt-1">
+                    Correct answers: {blank.acceptableAnswers.map((a: any) => a.value || a.pattern).join(', ')}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'MATCHING':
+        const matchingItem = item as any;
+        return (
+          <div className="space-y-2">
+            {matchingItem.prompts?.map((prompt: any, promptIndex: number) => {
+              const userMatch = response?.matchingAnswers?.find((m: any) => m.promptId === prompt.id);
+              const correctTarget = matchingItem.targets?.find((t: any) => t.id === prompt.correctTargetId);
+              const userTarget = matchingItem.targets?.find((t: any) => t.id === userMatch?.targetId);
+              const isCorrect = userMatch?.targetId === prompt.correctTargetId;
+              return (
+                <div key={promptIndex} className="p-2 bg-slate-50 rounded text-sm">
+                  <div className="font-medium text-slate-700">{prompt.text}</div>
+                  <div className={`mt-1 ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                    Your match: {userTarget?.text || 'Not matched'}
+                  </div>
+                  <div className="text-green-700 mt-1">
+                    Correct: {correctTarget?.text}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'ORDERING':
+        const orderingItem = item as any;
+        const correctOrder = orderingItem.correctOrder || [];
+        const userOrder = response?.orderingAnswer || [];
+        return (
+          <div className="space-y-2">
+            <div className="text-sm">
+              <div className="font-medium text-slate-700 mb-2">Your order:</div>
+              <div className="space-y-1">
+                {userOrder.map((optionId: string, idx: number) => {
+                  const option = orderingItem.options?.find((o: any) => o.id === optionId);
+                  const correctIndex = correctOrder.indexOf(optionId);
+                  const isCorrect = idx === correctIndex;
+                  return (
+                    <div key={optionId} className={`flex items-center gap-2 p-1 rounded ${isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <span className="text-xs font-bold">{idx + 1}.</span>
+                      <span>{option?.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="text-sm">
+              <div className="font-medium text-green-700 mb-2">Correct order:</div>
+              <div className="space-y-1">
+                {correctOrder.map((optionId: string, idx: number) => {
+                  const option = orderingItem.options?.find((o: any) => o.id === optionId);
+                  return (
+                    <div key={optionId} className="flex items-center gap-2 p-1 rounded bg-green-50 text-green-700">
+                      <span className="text-xs font-bold">{idx + 1}.</span>
+                      <span>{option?.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'SHORT_ANSWER':
+      case 'ESSAY':
+        const textAnswer = response?.textAnswers?.[0] || response?.essayAnswer;
+        const essayItem = item as any;
+        return (
+          <div className="space-y-2">
+            <div className="p-3 bg-slate-50 rounded text-sm">
+              <div className="font-medium text-slate-700 mb-1">Your answer:</div>
+              <div className="text-slate-900 whitespace-pre-wrap">{textAnswer || 'Not answered'}</div>
+            </div>
+            {essayItem.rubric?.sampleAnswer && (
+              <div className="p-3 bg-green-50 rounded text-sm">
+                <div className="font-medium text-green-700 mb-1">Sample answer:</div>
+                <div className="text-green-800 whitespace-pre-wrap">{essayItem.rubric.sampleAnswer}</div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'NUMERIC_ENTRY':
+        const numericItem = item as any;
+        const userNumeric = response?.numericAnswer;
+        const correctValue = (numericItem.validation as any)?.value;
+        const isNumericCorrect = userNumeric?.value === correctValue;
+        return (
+          <div className="space-y-2">
+            <div className={`p-3 rounded text-sm ${isNumericCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className="font-medium text-slate-700 mb-1">Your answer:</div>
+              <div className={isNumericCorrect ? 'text-green-700' : 'text-red-700'}>
+                {userNumeric?.value ?? 'Not answered'} {userNumeric?.unit || numericItem.units?.label}
+              </div>
+            </div>
+            <div className="p-3 bg-green-50 rounded text-sm">
+              <div className="font-medium text-green-700 mb-1">Correct answer:</div>
+              <div className="text-green-800">
+                {correctValue} {numericItem.units?.label}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'HOTSPOT':
+        // Simplified display for hotspot
+        return (
+          <div className="p-3 bg-slate-50 rounded text-sm">
+            <div className="font-medium text-slate-700">Hotspot item - Review requires image display</div>
+            <div className="text-slate-600 mt-1">Your selections: {response?.hotspotAnswers?.length || 0} points</div>
+          </div>
+        );
+
+      case 'DRAG_AND_DROP':
+        // Simplified display for drag and drop
+        return (
+          <div className="p-3 bg-slate-50 rounded text-sm">
+            <div className="font-medium text-slate-700">Drag and Drop item</div>
+            <div className="text-slate-600 mt-1">Your placements: {response?.dragDropAnswers?.length || 0} items</div>
+          </div>
+        );
+
+      case 'SCENARIO_TASK':
+        return (
+          <div className="p-3 bg-slate-50 rounded text-sm">
+            <div className="font-medium text-slate-700">Scenario task</div>
+            <div className="text-slate-600 mt-1">Submission: {response?.scenarioAnswer?.repositoryUrl ? 'Repository submitted' : 'Not submitted'}</div>
+          </div>
+        );
+
+      default:
+        return <div className="text-sm text-slate-600">Item type not supported for review</div>;
+    }
+  };
+  */
+
+  const renderItemReview = (item: Item, response: AttemptResponse | undefined) => {
+    switch (item.kind) {
+      case 'MCQ':
+      case 'TRUE_FALSE':
+        return (
+          <div className="space-y-1">
+            {item.choices?.map((choice, choiceIndex) => {
+              const isCorrect = (item as any).correctIndexes?.includes(choiceIndex);
+              const isSelected = response?.answerIndexes?.includes(choiceIndex);
+              let className = 'text-slate-600';
+              if (isCorrect && isSelected) {
+                className = 'text-green-700 font-semibold bg-green-50';
+              } else if (isCorrect) {
+                className = 'text-green-700 font-semibold';
+              } else if (isSelected) {
+                className = 'text-blue-700 font-semibold bg-blue-50';
+              }
+              return (
+                <div key={choiceIndex} className="flex items-center gap-2 text-sm">
+                  <span className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-xs">
+                    {String.fromCharCode(65 + choiceIndex)}
+                  </span>
+                  <span className={className}>
+                    {choice.text}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'FILL_IN_THE_BLANK':
+        const fillBlankItem = item as any;
+        return (
+          <div className="space-y-2">
+            {fillBlankItem.blanks?.map((blank: any, blankIndex: number) => {
+              const userAnswer = response?.textAnswers?.[blankIndex];
+              const isCorrect = blank.acceptableAnswers.some((matcher: any) => {
+                if (matcher.type === 'exact') {
+                  return matcher.caseSensitive ? userAnswer === matcher.value : userAnswer?.toLowerCase() === matcher.value.toLowerCase();
+                }
+                // For regex and other types, simplified check
+                return false;
+              });
+              return (
+                <div key={blankIndex} className="p-2 bg-slate-50 rounded text-sm">
+                  <div className="font-medium text-slate-700">Blank {blankIndex + 1}:</div>
+                  <div className={`mt-1 ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                    Your answer: {userAnswer || 'Not answered'}
+                  </div>
+                  <div className="text-green-700 mt-1">
+                    Correct answers: {blank.acceptableAnswers.map((a: any) => a.value || a.pattern).join(', ')}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'MATCHING':
+        const matchingItem = item as any;
+        return (
+          <div className="space-y-2">
+            {matchingItem.prompts?.map((prompt: any, promptIndex: number) => {
+              const userMatch = response?.matchingAnswers?.find((m: any) => m.promptId === prompt.id);
+              const correctTarget = matchingItem.targets?.find((t: any) => t.id === prompt.correctTargetId);
+              const userTarget = matchingItem.targets?.find((t: any) => t.id === userMatch?.targetId);
+              const isCorrect = userMatch?.targetId === prompt.correctTargetId;
+              return (
+                <div key={promptIndex} className="p-2 bg-slate-50 rounded text-sm">
+                  <div className="font-medium text-slate-700">{prompt.text}</div>
+                  <div className={`mt-1 ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                    Your match: {userTarget?.text || 'Not matched'}
+                  </div>
+                  <div className="text-green-700 mt-1">
+                    Correct: {correctTarget?.text}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'ORDERING':
+        const orderingItem = item as any;
+        const correctOrder = orderingItem.correctOrder || [];
+        const userOrder = response?.orderingAnswer || [];
+        return (
+          <div className="space-y-2">
+            <div className="text-sm">
+              <div className="font-medium text-slate-700 mb-2">Your order:</div>
+              <div className="space-y-1">
+                {userOrder.map((optionId: string, idx: number) => {
+                  const option = orderingItem.options?.find((o: any) => o.id === optionId);
+                  const correctIndex = correctOrder.indexOf(optionId);
+                  const isCorrect = idx === correctIndex;
+                  return (
+                    <div key={optionId} className={`flex items-center gap-2 p-1 rounded ${isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <span className="text-xs font-bold">{idx + 1}.</span>
+                      <span>{option?.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="text-sm">
+              <div className="font-medium text-green-700 mb-2">Correct order:</div>
+              <div className="space-y-1">
+                {correctOrder.map((optionId: string, idx: number) => {
+                  const option = orderingItem.options?.find((o: any) => o.id === optionId);
+                  return (
+                    <div key={optionId} className={`flex items-center gap-2 p-1 rounded bg-green-50 text-green-700`}>
+                      <span className="text-xs font-bold">{idx + 1}.</span>
+                      <span>{option?.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'SHORT_ANSWER':
+      case 'ESSAY':
+        const textAnswer = response?.textAnswers?.[0] || response?.essayAnswer;
+        const essayItem = item as any;
+        return (
+          <div className="space-y-2">
+            <div className="p-3 bg-slate-50 rounded text-sm">
+              <div className="font-medium text-slate-700 mb-1">Your answer:</div>
+              <div className="text-slate-900 whitespace-pre-wrap">{textAnswer || 'Not answered'}</div>
+            </div>
+            {essayItem.rubric?.sampleAnswer && (
+              <div className="p-3 bg-green-50 rounded text-sm">
+                <div className="font-medium text-green-700 mb-1">Sample answer:</div>
+                <div className="text-green-800 whitespace-pre-wrap">{essayItem.rubric.sampleAnswer}</div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'NUMERIC_ENTRY':
+        const numericItem = item as any;
+        const userNumeric = response?.numericAnswer;
+        const correctValue = (numericItem.validation as any)?.value;
+        const isNumericCorrect = userNumeric?.value === correctValue;
+        return (
+          <div className="space-y-2">
+            <div className={`p-3 rounded text-sm ${isNumericCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className="font-medium text-slate-700 mb-1">Your answer:</div>
+              <div className={isNumericCorrect ? 'text-green-700' : 'text-red-700'}>
+                {userNumeric?.value ?? 'Not answered'} {userNumeric?.unit || numericItem.units?.label}
+              </div>
+            </div>
+            <div className="p-3 bg-green-50 rounded text-sm">
+              <div className="font-medium text-green-700 mb-1">Correct answer:</div>
+              <div className="text-green-800">
+                {correctValue} {numericItem.units?.label}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'HOTSPOT':
+        // Simplified display for hotspot
+        return (
+          <div className="p-3 bg-slate-50 rounded text-sm">
+            <div className="font-medium text-slate-700">Hotspot item - Review requires image display</div>
+            <div className="text-slate-600 mt-1">Your selections: {response?.hotspotAnswers?.length || 0} points</div>
+          </div>
+        );
+
+      case 'DRAG_AND_DROP':
+        // Simplified display for drag and drop
+        return (
+          <div className="p-3 bg-slate-50 rounded text-sm">
+            <div className="font-medium text-slate-700">Drag and Drop item</div>
+            <div className="text-slate-600 mt-1">Your placements: {response?.dragDropAnswers?.length || 0} items</div>
+          </div>
+        );
+
+      case 'SCENARIO_TASK':
+        return (
+          <div className="p-3 bg-slate-50 rounded text-sm">
+            <div className="font-medium text-slate-700">Scenario task</div>
+            <div className="text-slate-600 mt-1">Submission: {response?.scenarioAnswer?.repositoryUrl ? 'Repository submitted' : 'Not submitted'}</div>
+          </div>
+        );
+
+      default:
+        return <div className="text-sm text-slate-600">Item type not supported for review</div>;
+    }
+  };
 
   if (loading) return <div className="flex h-screen items-center justify-center"><LoadingState label="Loading results..." /></div>;
   if (error) return <div className="p-8 text-rose-600">Error: {error}</div>;
@@ -142,79 +537,109 @@ export function AttemptResult({ attemptId, api, brandPrimary = '#f97316', onExit
             </div>
           )}
 
-          {/* Review Items */}
-          {attempt.items && attempt.items.length > 0 && (
+          {/* Review Items - lazy loaded when assessment requests reveal */}
+          {(assessment && assessment.revealDetailsAfterCompletion) && (
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
               <h3 className="text-lg font-semibold text-slate-900 mb-4">Review Questions</h3>
-              
-              {/* Legend */}
-              <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                <h4 className="text-sm font-semibold text-slate-700 mb-3">Answer Key</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-green-50 border border-green-200"></div>
-                    <span className="text-green-700 font-medium">Correct & Selected</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-blue-50 border border-blue-200"></div>
-                    <span className="text-blue-700 font-medium">Your Selection</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-slate-100 border border-slate-300"></div>
-                    <span className="text-green-700 font-medium">Correct Answer</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-slate-100 border border-slate-300"></div>
-                    <span className="text-slate-600">Unselected</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-6">
-                {attempt.items.map((item, index) => {
-                  const response = attempt.responses?.find(r => r.itemId === item.id);
-                  return (
-                    <div key={item.id} className="border border-slate-100 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
-                          {index + 1}
-                        </span>
-                        <div className="flex-1">
-                          <p className="text-sm text-slate-900 mb-2">{item.prompt}</p>
-                          {/* Display choices if MCQ */}
-                          {item.choices && (
-                            <div className="space-y-1">
-                              {item.choices.map((choice, choiceIndex) => {
-                                const isCorrect = item.correctIndexes?.includes(choiceIndex);
-                                const isSelected = response?.answerIndexes?.includes(choiceIndex);
-                                let className = 'text-slate-600';
-                                if (isCorrect && isSelected) {
-                                  className = 'text-green-700 font-semibold bg-green-50';
-                                } else if (isCorrect) {
-                                  className = 'text-green-700 font-semibold';
-                                } else if (isSelected) {
-                                  className = 'text-blue-700 font-semibold bg-blue-50';
+
+              {!showReview && (
+                <div className="flex items-center justify-between gap-4">
+                  {assessment && assessment.revealDetailsAfterCompletion ? (
+                    (attempt.status === 'submitted' || attempt.status === 'scored') ? (
+                      <>
+                        <p className="text-sm text-slate-600">Details are hidden until you request them.</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            disabled={reviewForbidden}
+                            onClick={async () => {
+                              setShowReview(true);
+                              if (reviewItems || loadingReview) return;
+                              setLoadingReview(true);
+                              setReviewError(null);
+                              try {
+                                const items = await api.fetchAttemptItems(attemptId);
+                                setReviewItems(items);
+                              } catch (err) {
+                                const msg = (err as Error).message || '';
+                                if (msg.toLowerCase().includes('forbid') || msg.includes('403')) {
+                                  setReviewForbidden(true);
+                                  setReviewError('You do not have permission to view review questions.');
+                                } else {
+                                  setReviewError(msg || 'Failed to load review items');
                                 }
-                                return (
-                                  <div key={choiceIndex} className="flex items-center gap-2 text-sm">
-                                    <span className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-xs">
-                                      {String.fromCharCode(65 + choiceIndex)}
-                                    </span>
-                                    <span className={className}>
-                                      {choice.text}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {/* Add more item types as needed */}
+                              } finally {
+                                setLoadingReview(false);
+                              }
+                            }}
+                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                          >
+                            Review assessments
+                          </button>
                         </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-600">Review will be available after submission.</p>
+                    )
+                  ) : (
+                    <p className="text-sm text-slate-600">Review items are not available for reveal.</p>
+                  )}
+                </div>
+              )}
+
+              {showReview && (
+                <div>
+                  {/* Legend */}
+                  <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-3">Answer Key</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-green-50 border border-green-200"></div>
+                        <span className="text-green-700 font-medium">Correct Answer</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-blue-50 border border-blue-200"></div>
+                        <span className="text-blue-700 font-medium">Your Answer</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-green-50 border border-green-200"></div>
+                        <span className="text-green-700 font-medium">Correct & Selected</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded bg-red-50 border border-red-200"></div>
+                        <span className="text-red-700 font-medium">Incorrect Answer</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+
+                  {loadingReview && <div className="py-6"><LoadingState label="Loading review questions..." /></div>}
+                  {reviewError && <div className="text-rose-600">{reviewError}</div>}
+
+                  {reviewItems && reviewItems.length === 0 && (
+                    <div className="p-4 text-sm text-slate-600">No review items found for this attempt.</div>
+                  )}
+
+                  {reviewItems && reviewItems.length > 0 && (
+                    <div className="space-y-6">
+                      {reviewItems.map((item, index) => {
+                        const response = attempt.responses?.find(r => r.itemId === item.id);
+                        return (
+                          <div key={item.id} className="border border-slate-100 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                                {index + 1}
+                              </span>
+                              <div className="flex-1">
+                                <p className="text-sm text-slate-900 mb-2">{item.prompt}</p>
+                                {renderItemReview(item, response)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

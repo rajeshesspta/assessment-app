@@ -151,6 +151,9 @@ export function createApiClient(session: TenantSession) {
     async fetchAttempt(attemptId: string): Promise<AttemptResponse> {
       return request<AttemptResponse>(`/attempts/${attemptId}`);
     },
+    async fetchAttemptItems(attemptId: string): Promise<Item[]> {
+      return request<Item[]>(`/attempts/${attemptId}/items`);
+    },
     async fetchItems(params?: { search?: string; kind?: ItemKind; limit?: number; offset?: number }): Promise<Item[]> {
       const query = new URLSearchParams();
       if (params?.search) query.set('search', params.search);

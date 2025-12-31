@@ -605,6 +605,7 @@ function buildRandomAssessment(tenantId: string, items: Item[], index: number): 
     title: `Math Drill ${index + 1}`,
     itemIds: picked,
     allowedAttempts: randomInt(3) + 1,
+    revealDetailsAfterCompletion: randomInt(2) === 0, // Randomly set to true or false
     createdAt: now,
     updatedAt: now,
   };
