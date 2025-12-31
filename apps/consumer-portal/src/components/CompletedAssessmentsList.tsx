@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Play } from 'lucide-react';
 import type { Cohort, Assessment, AttemptResponse } from '../utils/api';
 
@@ -9,6 +10,7 @@ interface CompletedAssessmentsListProps {
 }
 
 export function CompletedAssessmentsList({ api, userId, attempts }: CompletedAssessmentsListProps) {
+  const navigate = useNavigate();
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [assessments, setAssessments] = useState<Record<string, Assessment>>({});
   const [loading, setLoading] = useState(true);
@@ -133,7 +135,7 @@ export function CompletedAssessmentsList({ api, userId, attempts }: CompletedAss
               Attempts: {userAttempts.length} / {allowedAttempts}
             </span>
             <button
-              onClick={() => navigate(`/assessment/${assessment.id}`)}
+              onClick={() => navigate(`/assessment/${assessment.id}/result`)}
               disabled={isDisabled}
               className="inline-flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >

@@ -37,6 +37,7 @@ describe('SQLiteAssessmentRepository', () => {
       itemIds: ['i1', 'i2'],
       allowedAttempts: 3,
       timeLimitMinutes: 45,
+      revealDetailsAfterCompletion: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -57,6 +58,7 @@ describe('SQLiteAssessmentRepository', () => {
       metadata: {},
       itemIds: ['i1'],
       allowedAttempts: 1,
+      revealDetailsAfterCompletion: false,
       createdAt: '2023-01-01T10:00:00Z',
       updatedAt: '2023-01-01T10:00:00Z',
     };
@@ -69,6 +71,7 @@ describe('SQLiteAssessmentRepository', () => {
       metadata: {},
       itemIds: ['i2'],
       allowedAttempts: 1,
+      revealDetailsAfterCompletion: false,
       createdAt: '2023-01-01T11:00:00Z',
       updatedAt: '2023-01-01T11:00:00Z',
     };
@@ -81,6 +84,7 @@ describe('SQLiteAssessmentRepository', () => {
       metadata: {},
       itemIds: ['i3'],
       allowedAttempts: 1,
+      revealDetailsAfterCompletion: false,
       createdAt: '2023-01-01T12:00:00Z',
       updatedAt: '2023-01-01T12:00:00Z',
     };
@@ -106,6 +110,7 @@ describe('SQLiteAssessmentRepository', () => {
       metadata: {},
       itemIds: ['i1'],
       allowedAttempts: 1,
+      revealDetailsAfterCompletion: false,
       createdAt: '2023-01-01T10:00:00Z',
       updatedAt: '2023-01-01T10:00:00Z',
     };

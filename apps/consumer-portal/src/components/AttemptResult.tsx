@@ -142,6 +142,82 @@ export function AttemptResult({ attemptId, api, brandPrimary = '#f97316', onExit
             </div>
           )}
 
+          {/* Review Items */}
+          {attempt.items && attempt.items.length > 0 && (
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900 mb-4">Review Questions</h3>
+              
+              {/* Legend */}
+              <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Answer Key</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-green-50 border border-green-200"></div>
+                    <span className="text-green-700 font-medium">Correct & Selected</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-blue-50 border border-blue-200"></div>
+                    <span className="text-blue-700 font-medium">Your Selection</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-slate-100 border border-slate-300"></div>
+                    <span className="text-green-700 font-medium">Correct Answer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-slate-100 border border-slate-300"></div>
+                    <span className="text-slate-600">Unselected</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-6">
+                {attempt.items.map((item, index) => {
+                  const response = attempt.responses?.find(r => r.itemId === item.id);
+                  return (
+                    <div key={item.id} className="border border-slate-100 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-sm text-slate-900 mb-2">{item.prompt}</p>
+                          {/* Display choices if MCQ */}
+                          {item.choices && (
+                            <div className="space-y-1">
+                              {item.choices.map((choice, choiceIndex) => {
+                                const isCorrect = item.correctIndexes?.includes(choiceIndex);
+                                const isSelected = response?.answerIndexes?.includes(choiceIndex);
+                                let className = 'text-slate-600';
+                                if (isCorrect && isSelected) {
+                                  className = 'text-green-700 font-semibold bg-green-50';
+                                } else if (isCorrect) {
+                                  className = 'text-green-700 font-semibold';
+                                } else if (isSelected) {
+                                  className = 'text-blue-700 font-semibold bg-blue-50';
+                                }
+                                return (
+                                  <div key={choiceIndex} className="flex items-center gap-2 text-sm">
+                                    <span className="w-4 h-4 rounded-full border border-slate-300 flex items-center justify-center text-xs">
+                                      {String.fromCharCode(65 + choiceIndex)}
+                                    </span>
+                                    <span className={className}>
+                                      {choice.text}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {/* Add more item types as needed */}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-center pt-4">
             <button
               onClick={onExit}

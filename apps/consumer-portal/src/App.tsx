@@ -23,6 +23,7 @@ import { usePortalAuth } from './hooks/usePortalAuth';
 import { useTenantConfig } from './context/TenantConfigContext';
 import { buildBffUrl, isBffEnabled } from './utils/bff';
 import { LoginPage } from './components/LoginPage';
+import AssessmentResultPage from './pages/AssessmentResultPage';
 
 type NavItem = {
   id: string;
@@ -70,6 +71,13 @@ export default function App() {
   const { session, saveSession, clearSession } = useTenantSession();
   const { config, loading: tenantConfigLoading, error: tenantConfigError } = useTenantConfig();
   const api = useApiClient(session);
+
+  const ensureApi = useCallback(() => {
+    if (!api) {
+      throw new Error('API client not available');
+    }
+    return api;
+  }, [api]);
   const location = useLocation();
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState<AssessmentAnalytics | null>(null);
@@ -730,6 +738,7 @@ export default function App() {
             <Route path="/resources" element={<ResourcesPage />} />
             <Route path="/taxonomy-config" element={<TaxonomyConfigPage api={api} brandPrimary={brandPrimary} />} />
             <Route path="/assessment/:id" element={<AssessmentDetailPage />} />
+            <Route path="/assessment/:id/result" element={<AssessmentResultPage api={api} brandPrimary={brandPrimary} />} />
             <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
           </Routes>
         </main>

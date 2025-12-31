@@ -242,7 +242,7 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
                   </div>
                 </div>
                 <button
-                  onClick={() => window.location.href = `/assessment/${item.assessmentId}`}
+                  onClick={() => window.location.href = `/assessment/${item.assessmentId}/result`}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 >
                   View Results

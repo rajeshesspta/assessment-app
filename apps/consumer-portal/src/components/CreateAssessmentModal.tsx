@@ -22,6 +22,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
   const [tags, setTags] = useState('');
   const [allowedAttempts, setAllowedAttempts] = useState(1);
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | undefined>(undefined);
+  const [revealDetailsAfterCompletion, setRevealDetailsAfterCompletion] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [isReadonly, setIsReadonly] = useState(readonlyMode);
   const [availableItems, setAvailableItems] = useState<Item[]>([]);
@@ -41,6 +42,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
         setAllowedAttempts(initialAssessment.allowedAttempts);
         setTimeLimitMinutes(initialAssessment.timeLimitMinutes);
         setSelectedItemIds(initialAssessment.itemIds);
+        setRevealDetailsAfterCompletion(initialAssessment.revealDetailsAfterCompletion ?? false);
       } else {
         setTitle('');
         setDescription('');
@@ -49,6 +51,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
         setAllowedAttempts(1);
         setTimeLimitMinutes(undefined);
         setSelectedItemIds([]);
+        setRevealDetailsAfterCompletion(false);
       }
     }
   }, [isOpen, initialAssessment, readonlyMode]);
@@ -91,6 +94,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
         allowedAttempts: isNaN(allowedAttempts) ? 1 : allowedAttempts,
         timeLimitMinutes: timeLimitMinutes && isNaN(timeLimitMinutes) ? undefined : timeLimitMinutes,
         itemIds: selectedItemIds,
+        revealDetailsAfterCompletion,
       });
       onClose();
       // Reset form
@@ -101,6 +105,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
       setAllowedAttempts(1);
       setTimeLimitMinutes(undefined);
       setSelectedItemIds([]);
+      setRevealDetailsAfterCompletion(false);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -223,6 +228,21 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
                       disabled={isReadonly}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={revealDetailsAfterCompletion}
+                      onChange={e => setRevealDetailsAfterCompletion(e.target.checked)}
+                      disabled={isReadonly}
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                      style={{ accentColor: brandPrimary }}
+                    />
+                    <span className="text-sm font-semibold text-slate-700">Reveal question details after completion</span>
+                  </label>
+                  <p className="text-xs text-slate-500">Allow learners to view full question items and answers after finishing the assessment.</p>
                 </div>
               </div>
 

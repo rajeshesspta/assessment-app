@@ -268,6 +268,7 @@ export interface Assessment extends BaseEntity {
 	itemIds: string[];
 	allowedAttempts: number;
 	timeLimitMinutes?: number;
+	revealDetailsAfterCompletion?: boolean;
 }
 
 export interface CohortAssignment {

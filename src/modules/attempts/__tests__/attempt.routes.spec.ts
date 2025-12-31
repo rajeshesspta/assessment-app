@@ -1483,7 +1483,7 @@ describe('attemptRoutes', () => {
     expect(body.id).toBe('attempt-1');
     expect(body.items).toBeDefined();
     expect(body.items[0].id).toBe('item-1');
-    expect(body.items[0].correctIndexes).toBeUndefined();
+    expect(body.items[0].correctIndexes).toEqual([1]);
     expect(mocks.getByIdMock).toHaveBeenCalledWith('tenant-1', 'attempt-1');
   });
 

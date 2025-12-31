@@ -239,6 +239,7 @@ REDIS_URL=${TENANT_CACHE_URL}
 ### Standard Approaches
 
 #### 1. **Token-Embedded Tenant ID** (Current Implementation)
+
 ```javascript
 // JWT Payload includes tenant context
 {
@@ -248,35 +249,42 @@ REDIS_URL=${TENANT_CACHE_URL}
   "roles": ["LEARNER"]
 }
 ```
+
 **Pros**: Simple, self-contained tokens
 **Cons**: Less flexible, requires re-authentication for tenant switches
 
 #### 2. **Request-Header Based** (Alternative Approach)
+
 ```javascript
 // Token identifies user, header specifies tenant context
 Authorization: Bearer <user-jwt>
 x-tenant-id: tenant-123  // ← Tenant from request context
 ```
+
 **Pros**: More flexible, supports multi-tenant users
 **Cons**: Requires header validation on every request
 
 #### 3. **Hostname-Based** (Your Current Setup)
+
 ```javascript
 // Tenant resolved from request hostname
 Host: tenant1.app.rubickstricks.com → tenantId: "tenant-123"
 Authorization: Bearer <user-jwt>
 ```
+
 **Pros**: Clean URLs, automatic tenant isolation
 **Cons**: Requires DNS configuration per tenant
 
 ### Security Considerations
 
 #### Token Scope & Isolation
+
 - **User tokens should be tenant-agnostic** - identify the user, not their current tenant context
 - **Tenant validation happens at application level** - ensure user has access to the requested tenant
 - **Never trust tenant ID from client** - always validate against user's allowed tenants
 
 #### Multi-Tenant User Scenarios
+
 ```javascript
 // User belongs to multiple tenants
 const userTenants = await db.getUserTenants(userId);
@@ -303,7 +311,42 @@ const tenant = resolveTenantByHost("tenant1.app.rubickstricks.com");
 // Returns: { tenantId: "tenant-1", ... }
 ```
 
+#### Cross-Origin SaaS Architecture
+
+**Scenario**: Client app (`tenant1.app.com`) calls separate BFF (`bff.app.com`)
+
+```javascript
+// React app at tenant1.app.com makes request to bff.app.com
+fetch('https://bff.app.com/api/assessments', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer <jwt-token>',
+    'x-tenant-id': 'tenant-1'  // ← Tenant specified in header
+  }
+});
+
+// HTTP Request sent:
+GET /api/assessments HTTP/1.1
+Host: bff.app.com                    // ← Server domain (same for all tenants)
+Origin: https://tenant1.app.com      // ← Client domain (tenant-specific)
+Authorization: Bearer <jwt-token>
+x-tenant-id: tenant-1               // ← Explicit tenant identifier
+```
+
+**Headers in Cross-Origin Setup:**
+
+- **Host**: `bff.app.com` (always the BFF domain)
+- **Origin**: `https://tenant1.app.com` (varies by tenant)
+- **x-tenant-id**: `tenant-1` (explicit tenant identifier)
+
+**Tenant Resolution Strategies:**
+
+1. **Header-based**: Use `x-tenant-id` header
+2. **Token-based**: Extract tenant from JWT payload
+3. **Origin-based**: Map origin to tenant (less secure)
+
 #### DNS Configuration for SaaS
+
 ```
 # Shared BFF Infrastructure
 BFF Server: 1.2.3.4
@@ -317,6 +360,7 @@ tenant3.app.rubickstricks.com  →  1.2.3.4
 ```
 
 #### Tenant Configuration
+
 ```json
 {
   "tenants": [
@@ -329,7 +373,7 @@ tenant3.app.rubickstricks.com  →  1.2.3.4
       }
     },
     {
-      "tenantId": "tenant-2", 
+      "tenantId": "tenant-2",
       "name": "Beta Inc",
       "hosts": ["tenant2.app.rubickstricks.com"],
       "clientApp": {
@@ -343,10 +387,12 @@ tenant3.app.rubickstricks.com  →  1.2.3.4
 ### Host vs Origin in SaaS Context
 
 **Host Header**: Identifies which tenant is being accessed
+
 - `tenant1.app.com` → Tenant 1
 - `tenant2.app.com` → Tenant 2
 
 **Origin Header**: Used for CORS validation
+
 - Ensures `https://tenant1.app.com` can only make requests to allowed origins
 - Prevents cross-origin attacks
 
@@ -359,7 +405,7 @@ tenant3.app.rubickstricks.com  →  1.2.3.4
 Host: tenant1.app.rubickstricks.com
 → resolveTenantByHost() → Tenant 1 config
 
-// Request 2  
+// Request 2
 Host: tenant2.app.rubickstricks.com
 → resolveTenantByHost() → Tenant 2 config
 

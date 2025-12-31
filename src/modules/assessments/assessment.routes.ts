@@ -67,6 +67,7 @@ const createSchema = z.object({
   itemIds: z.array(z.string()).min(1),
   allowedAttempts: z.number().int().min(1).max(100).optional(),
   timeLimitMinutes: z.number().int().min(1).optional(),
+  revealDetailsAfterCompletion: z.boolean().optional(),
 });
 
 const createAssessmentBodySchema = toJsonSchema(createSchema, 'CreateAssessmentRequest');

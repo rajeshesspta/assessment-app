@@ -7,6 +7,19 @@ export interface AssessmentAnalytics {
   averageScore: number | null;
 }
 
+export interface AttemptResponseItem {
+  itemId: string;
+  answerIndexes?: number[];
+  textAnswers?: string[];
+  matchingAnswers?: { promptId: string; targetId: string }[];
+  orderingAnswer?: string[];
+  essayAnswer?: string;
+  numericAnswer?: { value: number; unit?: string };
+  hotspotAnswers?: { x: number; y: number }[];
+  dragDropAnswers?: { tokenId: string; dropZoneId: string; position?: number }[];
+  scenarioAnswer?: { repositoryUrl?: string; artifactUrl?: string; files?: { path: string; url?: string }[] };
+}
+
 export interface AttemptResponse {
   id: string;
   assessmentId: string;
@@ -15,6 +28,7 @@ export interface AttemptResponse {
   score?: number;
   maxScore?: number;
   items?: Item[];
+  responses?: AttemptResponseItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +67,7 @@ export interface Assessment {
   itemIds: string[];
   allowedAttempts: number;
   timeLimitMinutes?: number;
+  revealDetailsAfterCompletion?: boolean;
   createdAt: string;
   updatedAt: string;
 }

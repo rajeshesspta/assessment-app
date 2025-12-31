@@ -1,0 +1,1 @@
+ALTER TABLE assessments ADD COLUMN reveal_details_after_completion BOOLEAN DEFAULT 0;

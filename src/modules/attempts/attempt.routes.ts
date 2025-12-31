@@ -495,14 +495,22 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     if (!ensureAttemptAccess(req, reply)) return;
     const id = (req.params as any).id as string;
     const tenantId = (req as any).tenantId as string;
+    const roles: UserRole[] = (req as any).actorRoles ?? [];
+
     const attempt = attemptRepository.getById(tenantId, id);
     if (!attempt) { reply.code(404); return { error: 'Not found' }; }
 
     const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId);
     if (assessment) {
       const items = assessment.itemIds.map(itemId => itemRepository.getById(tenantId, itemId)).filter((item): item is Item => !!item);
-      const sanitizedItems = items.map(sanitizeItemForLearner);
-      return { ...attempt, items: sanitizedItems };
+      
+      // Check if learner can see full details
+      const isManager = ['CONTENT_AUTHOR', 'TENANT_ADMIN'].some(role => roles.includes(role as UserRole));
+      const isLearnerWithAccess = roles.includes('LEARNER') && (attempt.status === 'submitted' || attempt.status === 'scored') && assessment.revealDetailsAfterCompletion;
+      
+      const processedItems = (isManager || isLearnerWithAccess) ? items : items.map(sanitizeItemForLearner);
+      
+      return { ...attempt, items: processedItems };
     }
 
     return attempt;
@@ -520,5 +528,41 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
 
     const tenantId = (req as any).tenantId as string;
     return attemptRepository.listByUser(tenantId, userId);
+  });
+
+  app.get('/:id/items', {
+    schema: {
+      tags: ['Attempts'],
+      summary: 'Get attempt items if allowed',
+    },
+  }, async (req, reply) => {
+    if (!ensureAttemptAccess(req, reply)) return;
+    const id = (req.params as any).id as string;
+    const tenantId = (req as any).tenantId as string;
+    const roles: UserRole[] = (req as any).actorRoles ?? [];
+
+    const attempt = attemptRepository.getById(tenantId, id);
+    if (!attempt) {
+      reply.code(404);
+      return { error: 'Attempt not found' };
+    }
+
+    const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId);
+    if (!assessment) {
+      reply.code(404);
+      return { error: 'Assessment not found' };
+    }
+
+    // Allow if user is content author/admin, or if learner and assessment allows and attempt is completed
+    const isManager = ['CONTENT_AUTHOR', 'TENANT_ADMIN'].some(role => roles.includes(role as UserRole));
+    const isLearnerAllowed = roles.includes('LEARNER') && assessment.revealDetailsAfterCompletion && (attempt.status === 'submitted' || attempt.status === 'scored');
+
+    if (!isManager && !isLearnerAllowed) {
+      reply.code(403);
+      return { error: 'Access denied' };
+    }
+
+    const items = assessment.itemIds.map(itemId => itemRepository.getById(tenantId, itemId)).filter((item): item is Item => !!item);
+    return items;
   });
 }
