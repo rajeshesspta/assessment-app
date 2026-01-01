@@ -349,7 +349,7 @@ export function ContentAuthorDashboard({ api, brandPrimary }: ContentAuthorDashb
                   return (
                     <tr key={a.id} className="border-b last:border-0 hover:bg-slate-50">
                       <td className="px-3 py-2 font-medium text-slate-900 max-w-xs truncate" title={a.title}>{a.title}</td>
-                      <td className="px-3 py-2">{a.itemIds.length}</td>
+                      <td className="px-3 py-2">{(a.itemIds ?? []).length}</td>
                       <td className="px-3 py-2">{loadingCohorts ? '…' : cohortCount}</td>
                       <td className="px-3 py-2 capitalize">{a.metadata?.status || 'draft'}</td>
                       <td className="px-3 py-2 flex gap-2">

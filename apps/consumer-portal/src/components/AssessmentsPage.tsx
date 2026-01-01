@@ -179,7 +179,7 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
                     </div>
                     <div className="flex items-center gap-1">
                       <FileText className="h-3 w-3" />
-                      <span>{assessment.itemIds.length} items</span>
+                      <span>{(assessment.itemSnapshotIds ?? assessment.itemIds ?? []).length} items</span>
                     </div>
                   </div>
                 </div>

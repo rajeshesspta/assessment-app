@@ -5,6 +5,11 @@ import {
   type ItemRepository,
 } from '../modules/items/item.repository.js';
 import {
+  createInMemoryItemSnapshotRepository,
+  createSQLiteItemSnapshotRepository,
+  type ItemSnapshotRepository,
+} from '../modules/items/item.snapshot.repository.js';
+import {
   createInMemoryAssessmentRepository,
   createSQLiteAssessmentRepository,
   type AssessmentRepository,
@@ -38,6 +43,7 @@ export interface RepositoryBundle {
   user: UserRepository;
   cohort: CohortRepository;
   taxonomy: TaxonomyRepository;
+  snapshot: ItemSnapshotRepository;
   dispose?: () => void | Promise<void>;
 }
 
@@ -49,6 +55,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     user: createInMemoryUserRepository(),
     cohort: createInMemoryCohortRepository(),
     taxonomy: createInMemoryTaxonomyRepository(),
+    snapshot: createInMemoryItemSnapshotRepository(),
     dispose: () => {},
   };
 }
@@ -62,6 +69,7 @@ export function createSQLiteRepositoryBundle(config: AppConfig): RepositoryBundl
     user: createSQLiteUserRepository(client),
     cohort: createSQLiteCohortRepository(client),
     taxonomy: createSQLiteTaxonomyRepository(client),
+    snapshot: createSQLiteItemSnapshotRepository(client),
     dispose: () => client.closeAll(),
   };
 }

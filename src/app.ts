@@ -3,6 +3,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { registerAuth } from './modules/auth/auth.middleware.js';
 import { itemRoutes } from './modules/items/item.routes.js';
+import { registerSnapshotRoutes } from './modules/items/item.snapshot.routes.js';
 import { assessmentRoutes } from './modules/assessments/assessment.routes.js';
 import { attemptRoutes } from './modules/attempts/attempt.routes.js';
 import { analyticsRoutes } from './modules/analytics/analytics.routes.js';
@@ -97,7 +98,16 @@ export function buildApp(deps: AppDependencies = {}) {
     itemRepository: repositories.item,
     userRepository: repositories.user,
     cohortRepository: repositories.cohort,
+    // Snapshot repo for serving immutable item copies
+    itemSnapshotRepository: repositories.snapshot,
   });
+  // Snapshot management routes
+  app.register(registerSnapshotRoutes, {
+    prefix: '/snapshots',
+    repository: repositories.snapshot,
+    itemRepository: repositories.item,
+    assessmentRepository: repositories.assessment,
+  } as any);
   app.register(analyticsRoutes, { prefix: '/analytics', attemptRepository: repositories.attempt, itemRepository: repositories.item });
   app.register(userRoutes, { prefix: '/users', repository: repositories.user });
   app.register(cohortRoutes, {
@@ -105,6 +115,8 @@ export function buildApp(deps: AppDependencies = {}) {
     repository: repositories.cohort,
     userRepository: repositories.user,
     assessmentRepository: repositories.assessment,
+    itemRepository: repositories.item,
+    itemSnapshotRepository: repositories.snapshot,
   });
   app.register(tenantRoutes, {
     prefix: '/tenants',

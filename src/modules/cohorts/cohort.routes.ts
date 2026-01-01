@@ -3,6 +3,9 @@ import { z } from 'zod';
 import type { CohortRepository } from './cohort.repository.js';
 import type { UserRepository } from '../users/user.repository.js';
 import type { AssessmentRepository } from '../assessments/assessment.repository.js';
+import type { ItemRepository } from '../items/item.repository.js';
+import type { ItemSnapshotRepository } from '../items/item.snapshot.repository.js';
+import { v4 as uuid } from 'uuid';
 import type { UserRole, Cohort, CohortAssignment } from '../../common/types.js';
 import { createCohort, updateCohort } from './cohort.model.js';
 import { passThroughValidator } from '../../common/fastify-schema.js';
@@ -199,10 +202,46 @@ export interface CohortRoutesOptions {
   repository: CohortRepository;
   userRepository: UserRepository;
   assessmentRepository: AssessmentRepository;
+  itemRepository?: ItemRepository;
+  itemSnapshotRepository?: ItemSnapshotRepository;
 }
 
 export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOptions) {
   const { repository, userRepository, assessmentRepository } = options;
+  const itemRepository = options.itemRepository;
+  const itemSnapshotRepository = options.itemSnapshotRepository;
+
+  async function ensureSnapshotsForAssessment(tenantId: string, assessmentId: string, actorId?: string) {
+    const assessment = await assessmentRepository.getById(tenantId, assessmentId);
+    if (!assessment) return;
+    // If assessment already has snapshots, skip
+    if (assessment.itemSnapshotIds && assessment.itemSnapshotIds.length > 0) return;
+    if (!itemRepository || !itemSnapshotRepository) return;
+
+    const snapshotIds: string[] = [];
+    const itemIds = assessment.itemIds || [];
+    for (const itemId of itemIds) {
+      const item = itemRepository.getById(tenantId, itemId);
+      if (!item) continue;
+      const now = new Date().toISOString();
+      const snapshot = {
+        id: uuid(),
+        tenantId,
+        originalItemId: item.id,
+        itemVersion: item.updatedAt,
+        snapshotJson: item,
+        createdBy: actorId,
+        createdAt: now,
+        updatedAt: now,
+      } as any;
+      itemSnapshotRepository.save(snapshot);
+      snapshotIds.push(snapshot.id);
+    }
+    if (snapshotIds.length > 0) {
+      const updatedAssessment = { ...assessment, itemSnapshotIds: snapshotIds, updatedAt: new Date().toISOString() };
+      assessmentRepository.save(updatedAssessment);
+    }
+  }
 
   app.get('/', async (req, reply) => {
     if (!ensureCohortManager(req, reply)) return;
@@ -408,6 +447,10 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
     }
 
     const updated = updateCohort(cohort, { assignments: Array.from(assignmentMap.values()) });
+    // Ensure snapshots exist for assigned assessments (create if missing)
+    for (const a of updated.assignments ?? []) {
+      await ensureSnapshotsForAssessment(tenantId, a.assessmentId, (req as any).userId as string);
+    }
     await repository.save(updated);
     return reply.send(updated);
   });
@@ -482,7 +525,10 @@ export async function cohortRoutes(app: FastifyInstance, options: CohortRoutesOp
       }
       personalCohort = updateCohort(personalCohort, { assignments: Array.from(assignmentMap.values()) });
     }
-
+    // Ensure snapshots exist for any assessments assigned directly to the user
+    for (const a of personalCohort.assignments ?? []) {
+      await ensureSnapshotsForAssessment(tenantId, a.assessmentId, (req as any).userId as string);
+    }
     await repository.save(personalCohort);
     return reply.send(personalCohort);
   });

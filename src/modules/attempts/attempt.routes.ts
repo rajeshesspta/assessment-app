@@ -5,6 +5,7 @@ import { createAttempt } from './attempt.model.js';
 import type { AttemptRepository } from './attempt.repository.js';
 import type { AssessmentRepository } from '../assessments/assessment.repository.js';
 import type { ItemRepository } from '../items/item.repository.js';
+import type { ItemSnapshotRepository } from '../items/item.snapshot.repository.js';
 import type { CohortRepository } from '../cohorts/cohort.repository.js';
 import type { UserRepository } from '../users/user.repository.js';
 import type {
@@ -77,6 +78,7 @@ export interface AttemptRoutesOptions {
   itemRepository: ItemRepository;
   cohortRepository: CohortRepository;
   userRepository: UserRepository;
+  itemSnapshotRepository?: ItemSnapshotRepository;
 }
 
 function normalizeTextAnswers(textAnswer?: string, textAnswers?: string[]): string[] | undefined {
@@ -92,7 +94,25 @@ function normalizeTextAnswers(textAnswer?: string, textAnswers?: string[]): stri
 }
 
 export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
-  const { attemptRepository, assessmentRepository, itemRepository, cohortRepository, userRepository } = options;
+  const { attemptRepository, assessmentRepository, itemRepository, cohortRepository, userRepository, itemSnapshotRepository } = options;
+
+  const loadAssessmentItems = (tenantId: string, assessment: any) => {
+    // If the assessment has snapshot IDs, load immutable snapshots and override item id
+    if (itemSnapshotRepository && Array.isArray(assessment.itemSnapshotIds) && assessment.itemSnapshotIds.length > 0) {
+      return (assessment.itemSnapshotIds || [])
+        .map((sid: string) => {
+          const snap = itemSnapshotRepository.getById(tenantId, sid);
+          if (!snap) return undefined;
+          const item = snap.snapshotJson as Item;
+          return { ...item, id: snap.id, tenantId: snap.tenantId } as Item;
+        })
+        .filter((i: Item | undefined): i is Item => !!i);
+    }
+    // Fallback to live items
+      return (assessment.itemIds || [])
+        .map((itemId: string) => itemRepository.getById(tenantId, itemId))
+        .filter((i: Item | undefined): i is Item => !!i);
+  };
   app.post('/', { schema: { body: startBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
     if (!ensureAttemptAccess(req, reply)) return;
     const tenantId = (req as any).tenantId as string;
@@ -147,7 +167,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
     attemptRepository.save(attempt);
     eventBus.publish({ id: uuid(), type: 'AttemptStarted', occurredAt: new Date().toISOString(), tenantId, payload: { attemptId: id } });
     
-    const items = assessment.itemIds.map(itemId => itemRepository.getById(tenantId, itemId)).filter((item): item is Item => !!item);
+    const items = loadAssessmentItems(tenantId, assessment);
     const sanitizedItems = items.map(sanitizeItemForLearner);
     
     reply.code(201);
@@ -325,9 +345,9 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       workspace?: ScenarioWorkspaceTemplate;
       response?: AttemptResponse['scenarioAnswer'];
     }> = [];
-    for (const itemId of assessment.itemIds) {
-      const item = itemRepository.getById(tenantId, itemId); if (!item) continue;
-      const response = attempt.responses.find(r => r.itemId === itemId);
+    const items = loadAssessmentItems(tenantId, assessment);
+    for (const item of items) {
+      const response = attempt.responses.find(r => r.itemId === item.id);
       if (item.kind === 'FILL_IN_THE_BLANK') {
         const result = scoreFillBlankItem(item, response?.textAnswers);
         score += result.score;
@@ -502,7 +522,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
 
     const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId);
     if (assessment) {
-      const items = assessment.itemIds.map(itemId => itemRepository.getById(tenantId, itemId)).filter((item): item is Item => !!item);
+      const items = loadAssessmentItems(tenantId, assessment);
       
       // Check if learner can see full details
       const isManager = ['CONTENT_AUTHOR', 'TENANT_ADMIN'].some(role => roles.includes(role as UserRole));
@@ -562,7 +582,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       return { error: 'Access denied' };
     }
 
-    const items = assessment.itemIds.map(itemId => itemRepository.getById(tenantId, itemId)).filter((item): item is Item => !!item);
+    const items = loadAssessmentItems(tenantId, assessment);
     return items;
   });
 }

@@ -460,14 +460,29 @@ Goal: Provide tenant admins with a UI to configure taxonomy fields (categories, 
 - [ ] Test end-to-end flows for taxonomy management.
 - [ ] Update documentation to reflect the new architecture.
 
+
 **Iteration 36: Assessment Item Snapshotting**
 Goal: Ensure assessments are not affected by future edits to items by snapshotting item content at publish/assignment time.
 
-	36.1 [ ] Design item snapshot table/model
-	36.2 [ ] Update assessment schema to reference snapshots
-	36.3 [ ] Implement snapshot creation logic on assessment publish
-	36.4 [ ] Serve items from snapshots in assessment attempts
-	36.5 [ ] Update author/admin UI to reflect snapshot behavior
-	36.6 [ ] Add audit and reporting for snapshots
+	36.1 [x] Design item snapshot table/model
+	36.2 [x] Update assessment schema to reference snapshots
+	36.3 [x] Implement snapshot creation logic on assessment publish
+	36.4 [x] Serve items from snapshots in assessment attempts
+	36.5 [x] Update author/admin UI to reflect snapshot behavior
+	36.6 [x] Add audit and reporting for snapshots
+	36.7 [x] Implement retention/prune/delete endpoints for snapshots
 
+**Iteration 37: Tenant Admin Snapshot Reports**
+Goal: Surface snapshot health insights to tenant admins through the portal once the headless API exposes structured reports.
 
+	37.1 [x] Proxy `/snapshots/reports/summary` through the BFF and guard it so only tenant admins can reach it.
+	37.2 [x] Proxy `/snapshots/reports/original/:itemId` through the BFF with the same guard so item timelines stay tenant-scoped.
+	37.3 [x] Add a tenant-admin-facing page that consumes the new reports, highlights totals, and lets admins inspect per-item histories.
+	37.4 [x] Tie the portal navigation into the new page and call out any retention gaps or missing snapshots for proactive action.
+
+**Next Steps – Snapshot Follow-ups**
+	NS.1 [x] Wire the portal + BFF to the new `/snapshots/reports/*` endpoints so content authors can review snapshot health without manual API calls.
+	NS.2 [ ] Schedule a nightly (or per-tenant) job that invokes `/snapshots/retention/enforce` with tenant-specific policies to keep storage in check.
+
+**Iteration 38: Assign assessment popup is not display current assessment of the learner
+	38.1 /my-assessments/completed - add list view option along with card view

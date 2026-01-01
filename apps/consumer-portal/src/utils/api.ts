@@ -65,7 +65,7 @@ export interface Assessment {
   collectionId?: string;
   tags?: string[];
   metadata?: Record<string, any>;
-  itemIds: string[];
+  itemIds?: string[];
   allowedAttempts: number;
   timeLimitMinutes?: number;
   revealDetailsAfterCompletion?: boolean;
@@ -95,6 +95,40 @@ export interface Cohort {
   }[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SnapshotSummaryPerItem {
+  originalItemId: string;
+  count: number;
+  newestSnapshotAt?: string;
+  newestSnapshotId?: string;
+  oldestSnapshotAt?: string;
+  itemTitle?: string;
+  itemKind?: ItemKind;
+}
+
+export interface SnapshotSummary {
+  totalSnapshots: number;
+  uniqueItems: number;
+  newestSnapshotAt?: string;
+  oldestSnapshotAt?: string;
+  assessmentsWithSnapshots: number;
+  assessmentsMissingSnapshots: number;
+  perItem: SnapshotSummaryPerItem[];
+}
+
+export interface SnapshotEntry {
+  id: string;
+  originalItemId: string;
+  createdAt: string;
+  createdBy?: string;
+  itemVersion?: string;
+}
+
+export interface SnapshotDetails {
+  originalItemId: string;
+  totalSnapshots: number;
+  snapshots: SnapshotEntry[];
 }
 
 interface ApiError {
@@ -193,6 +227,20 @@ export function createApiClient(session: TenantSession) {
     },
     async fetchAssessment(id: string): Promise<Assessment> {
       return request<Assessment>(`/assessments/${id}`);
+    },
+    async fetchAssessmentSnapshots(assessmentId: string): Promise<any[]> {
+      return request<any[]>(`/snapshots/assessment/${assessmentId}`);
+    },
+    async resnapshotAssessment(assessmentId: string): Promise<{ snapshotIds: string[] }> {
+      return request<{ snapshotIds: string[] }>(`/snapshots/assessment/${assessmentId}/resnapshot`, {
+        method: 'POST',
+      });
+    },
+    async fetchSnapshotSummary(): Promise<SnapshotSummary> {
+      return request<SnapshotSummary>('/snapshots/reports/summary');
+    },
+    async fetchSnapshotsByOriginalItem(itemId: string): Promise<SnapshotDetails> {
+      return request<SnapshotDetails>(`/snapshots/reports/original/${itemId}`);
     },
     async saveAttemptResponses(attemptId: string, responses: any[]): Promise<AttemptResponse> {
       return request<AttemptResponse>(`/attempts/${attemptId}/responses`, {

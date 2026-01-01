@@ -31,9 +31,9 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
       db.prepare(`
         INSERT INTO assessments (
           id, tenant_id, title, description, collection_id, tags_json, metadata_json,
-          item_ids_json, allowed_attempts, time_limit_minutes, reveal_details_after_completion, created_at, updated_at
+          item_ids_json, item_snapshot_ids_json, allowed_attempts, time_limit_minutes, reveal_details_after_completion, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           description = excluded.description,
@@ -41,6 +41,7 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
           tags_json = excluded.tags_json,
           metadata_json = excluded.metadata_json,
           item_ids_json = excluded.item_ids_json,
+          item_snapshot_ids_json = excluded.item_snapshot_ids_json,
           allowed_attempts = excluded.allowed_attempts,
           time_limit_minutes = excluded.time_limit_minutes,
           reveal_details_after_completion = excluded.reveal_details_after_completion,
@@ -54,7 +55,8 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
         assessment.collectionId || null,
         JSON.stringify(assessment.tags || []),
         JSON.stringify(assessment.metadata || {}),
-        JSON.stringify(assessment.itemIds),
+        JSON.stringify(assessment.itemIds ?? []),
+        assessment.itemSnapshotIds !== undefined ? JSON.stringify(assessment.itemSnapshotIds) : null,
         assessment.allowedAttempts,
         assessment.timeLimitMinutes || null,
         assessment.revealDetailsAfterCompletion ? 1 : 0,
@@ -68,7 +70,7 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
       const row = db.prepare(`
          SELECT id, tenant_id as tenantId, title, description, collection_id as collectionId,
            tags_json as tagsJson, metadata_json as metadataJson,
-           item_ids_json as itemIdsJson, allowed_attempts as allowedAttempts,
+           item_ids_json as itemIdsJson, item_snapshot_ids_json as itemSnapshotIdsJson, allowed_attempts as allowedAttempts,
            time_limit_minutes as timeLimitMinutes, reveal_details_after_completion as revealDetailsAfterCompletion,
            created_at as createdAt, updated_at as updatedAt
         FROM assessments
@@ -85,7 +87,8 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
         collectionId: row.collectionId || undefined,
         tags: JSON.parse(row.tagsJson || '[]'),
         metadata: JSON.parse(row.metadataJson || '{}'),
-        itemIds: JSON.parse(row.itemIdsJson) as Assessment['itemIds'],
+        itemIds: row.itemIdsJson ? JSON.parse(row.itemIdsJson) as Assessment['itemIds'] : [],
+        itemSnapshotIds: row.itemSnapshotIdsJson ? JSON.parse(row.itemSnapshotIdsJson) as Assessment['itemSnapshotIds'] : undefined,
         allowedAttempts: row.allowedAttempts ?? 1,
         timeLimitMinutes: row.timeLimitMinutes || undefined,
         revealDetailsAfterCompletion: Boolean(row.revealDetailsAfterCompletion),
@@ -99,7 +102,7 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
       const rows = db.prepare(`
         SELECT id, tenant_id as tenantId, title, description, collection_id as collectionId,
           tags_json as tagsJson, metadata_json as metadataJson,
-          item_ids_json as itemIdsJson, allowed_attempts as allowedAttempts,
+          item_ids_json as itemIdsJson, item_snapshot_ids_json as itemSnapshotIdsJson, allowed_attempts as allowedAttempts,
           time_limit_minutes as timeLimitMinutes, reveal_details_after_completion as revealDetailsAfterCompletion,
           created_at as createdAt, updated_at as updatedAt
         FROM assessments
@@ -114,7 +117,8 @@ export function createSQLiteAssessmentRepository(client: SQLiteTenantClient): As
         collectionId: row.collectionId || undefined,
         tags: JSON.parse(row.tagsJson || '[]'),
         metadata: JSON.parse(row.metadataJson || '{}'),
-        itemIds: JSON.parse(row.itemIdsJson) as Assessment['itemIds'],
+        itemIds: row.itemIdsJson ? JSON.parse(row.itemIdsJson) as Assessment['itemIds'] : [],
+        itemSnapshotIds: row.itemSnapshotIdsJson ? JSON.parse(row.itemSnapshotIdsJson) as Assessment['itemSnapshotIds'] : undefined,
         allowedAttempts: row.allowedAttempts ?? 1,
         timeLimitMinutes: row.timeLimitMinutes || undefined,
         revealDetailsAfterCompletion: Boolean(row.revealDetailsAfterCompletion),

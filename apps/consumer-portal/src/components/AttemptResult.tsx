@@ -501,7 +501,7 @@ export function AttemptResult({ attemptId, api, brandPrimary = '#f97316', onExit
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Items</dt>
-                  <dd className="font-semibold text-slate-900">{assessment.itemIds.length}</dd>
+                  <dd className="font-semibold text-slate-900">{(assessment.itemSnapshotIds ?? assessment.itemIds ?? []).length}</dd>
                 </div>
               </dl>
             </div>

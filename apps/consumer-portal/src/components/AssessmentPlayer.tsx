@@ -65,7 +65,7 @@ export function AssessmentPlayer({ attemptId, api, brandPrimary = '#f97316', onC
         } else {
           // Fallback for older attempts or if items weren't included
           const allItems = await api.fetchItems({ limit: 1000 });
-          const assessmentItems = assessmentData.itemIds
+          const assessmentItems = (assessmentData.itemIds ?? [])
             .map((id: string) => allItems.find((item: Item) => item.id === id))
             .filter(Boolean) as Item[];
           setItems(assessmentItems);

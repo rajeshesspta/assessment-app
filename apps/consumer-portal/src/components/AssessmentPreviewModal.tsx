@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import type { Assessment, Item } from '../utils/api';
+import { AssessmentSnapshots } from './AssessmentSnapshots';
 
 interface AssessmentPreviewModalProps {
   isOpen: boolean;
@@ -29,12 +30,12 @@ export function AssessmentPreviewModal({ isOpen, onClose, assessment, items, onE
             <div className="text-lg font-semibold text-slate-900">{assessment.title}</div>
             <div className="text-slate-600 text-sm mb-2">{assessment.description}</div>
             <div className="text-xs text-slate-500 mb-2">Allowed Attempts: {assessment.allowedAttempts}</div>
-            <div className="text-xs text-slate-500 mb-2">Items: {assessment.itemIds.length}</div>
+            <div className="text-xs text-slate-500 mb-2">Items: {(assessment.itemSnapshotIds ?? assessment.itemIds ?? []).length}</div>
           </div>
           <div>
             <h4 className="font-semibold text-slate-800 mb-2">Items</h4>
             <ul className="space-y-2">
-              {assessment.itemIds.map((id, idx) => {
+              {(assessment.itemSnapshotIds ?? assessment.itemIds ?? []).map((id, idx) => {
                 const item = items.find(i => i.id === id);
                 return (
                   <li key={id} className="border rounded p-3 bg-slate-50">
@@ -45,6 +46,7 @@ export function AssessmentPreviewModal({ isOpen, onClose, assessment, items, onE
               })}
             </ul>
           </div>
+          <AssessmentSnapshots assessment={assessment} />
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4 bg-slate-50">
           <button

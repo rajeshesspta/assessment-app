@@ -240,6 +240,19 @@ async function callHeadless<T>(tenant: TenantRuntime, path: string, reply: Fasti
   return payload as T;
 }
 
+function ensureTenantAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
+  const rawRoles = (request.headers['x-actor-roles'] as string | undefined) ?? '';
+  const roles = rawRoles
+    .split(',')
+    .map(role => role.trim().toUpperCase())
+    .filter(Boolean);
+  if (!roles.includes('TENANT_ADMIN')) {
+    reply.code(403).send({ error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
+
 export const app = Fastify({
   logger: true,
 });
@@ -565,6 +578,39 @@ app.get('/api/analytics/assessments/:id', async (request, reply) => {
   const tenant = request.tenant;
   try {
     return await callHeadless(tenant, `/analytics/assessments/${assessmentId}`, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/snapshots/reports/summary', async (request, reply) => {
+  if (!ensureTenantAdmin(request, reply)) {
+    return;
+  }
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, '/snapshots/reports/summary', reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/snapshots/reports/original/:itemId', async (request, reply) => {
+  if (!ensureTenantAdmin(request, reply)) {
+    return;
+  }
+  const tenant = request.tenant;
+  const { itemId } = request.params as { itemId: string };
+  try {
+    return await callHeadless(tenant, `/snapshots/reports/original/${itemId}`, reply, undefined, request);
   } catch (error) {
     if (error instanceof HeadlessRequestError) {
       reply.code(error.statusCode);

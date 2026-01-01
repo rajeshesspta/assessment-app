@@ -41,7 +41,7 @@ export function CreateAssessmentModal({ isOpen, onClose, onSave, initialAssessme
         setTags(initialAssessment.tags?.join(', ') || '');
         setAllowedAttempts(initialAssessment.allowedAttempts);
         setTimeLimitMinutes(initialAssessment.timeLimitMinutes);
-        setSelectedItemIds(initialAssessment.itemIds);
+        setSelectedItemIds(initialAssessment.itemIds ?? []);
         setRevealDetailsAfterCompletion(initialAssessment.revealDetailsAfterCompletion ?? false);
       } else {
         setTitle('');

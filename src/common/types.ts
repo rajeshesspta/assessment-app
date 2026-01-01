@@ -265,7 +265,10 @@ export interface Assessment extends BaseEntity {
 	collectionId?: string;
 	tags?: string[];
 	metadata?: Record<string, any>;
-	itemIds: string[];
+	/** IDs of live items (used during authoring); may be empty for published assessments */
+	itemIds?: string[];
+	/** Snapshot IDs created at publish/assignment time; assessments that rely on immutable content should use these */
+	itemSnapshotIds?: string[];
 	allowedAttempts: number;
 	timeLimitMinutes?: number;
 	revealDetailsAfterCompletion?: boolean;

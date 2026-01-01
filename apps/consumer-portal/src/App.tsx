@@ -17,6 +17,7 @@ import { LearnerDashboard } from './components/LearnerDashboard';
 import { ContentAuthorDashboard } from './components/ContentAuthorDashboard';
 import { Breadcrumb } from './components/Breadcrumb';
 import { TaxonomyConfigPage } from './components/TaxonomyConfigPage';
+import { SnapshotReportsPage } from './components/SnapshotReportsPage';
 import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
 import { usePortalAuth } from './hooks/usePortalAuth';
@@ -44,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'cohorts', label: 'Cohorts', path: '/cohorts', requiresContentAuthor: true },
   { id: 'users', label: 'Users', path: '/users', requiresTenantAdmin: true },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
+  { id: 'snapshot-reports', label: 'Snapshot Reports', path: '/snapshot-reports', requiresTenantAdmin: true },
   { id: 'resources', label: 'Resources', path: '/resources' },
   { id: 'settings', label: 'Settings', requiresTenantAdmin: true, children: [
     { id: 'taxonomy-config', label: 'Taxonomy Config', path: '/taxonomy-config' }
@@ -764,6 +766,10 @@ export default function App() {
               element={isTenantAdmin ? <UsersPage api={api} brandPrimary={themedBrandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route
+              path="/snapshot-reports"
+              element={isTenantAdmin && api ? <SnapshotReportsPage api={api} brandPrimary={themedBrandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
+            />
             <Route path="/resources" element={<ResourcesPage />} />
             <Route path="/taxonomy-config" element={<TaxonomyConfigPage api={api} brandPrimary={themedBrandPrimary} />} />
             <Route path="/assessment/:id" element={<AssessmentDetailPage />} />
