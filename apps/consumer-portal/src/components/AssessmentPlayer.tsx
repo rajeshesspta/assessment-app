@@ -203,6 +203,7 @@ export function AssessmentPlayer({ attemptId, api, brandPrimary = '#f97316', onC
                 item={currentItem}
                 response={responses[currentItem.id] || {}}
                 brandPrimary={brandPrimary}
+                attemptId={attemptId}
                 onChange={(update) => handleResponseChange(currentItem.id, update)}
               />
             </div>
@@ -262,7 +263,7 @@ export function AssessmentPlayer({ attemptId, api, brandPrimary = '#f97316', onC
   );
 }
 
-function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; response: any; brandPrimary: string; onChange: (update: any) => void }) {
+function ItemInput({ item, response, brandPrimary, onChange, attemptId }: { item: Item; response: any; brandPrimary: string; onChange: (update: any) => void; attemptId: string }) {
   switch (item.kind) {
     case 'MCQ':
     case 'TRUE_FALSE': {
