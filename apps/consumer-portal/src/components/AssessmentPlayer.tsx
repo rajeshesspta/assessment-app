@@ -3,6 +3,34 @@ import { ChevronLeft, ChevronRight, Clock, Save, Send } from 'lucide-react';
 import type { Assessment, AttemptResponse, Item, ItemKind } from '../utils/api';
 import { LoadingState } from './LoadingState';
 
+function hashStringToUint32(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function mulberry32(seed: number): () => number {
+  return () => {
+    let t = (seed += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededShuffle<T>(input: readonly T[], seed: string): T[] {
+  const rng = mulberry32(hashStringToUint32(seed));
+  const arr = [...input];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 interface AssessmentPlayerProps {
   attemptId: string;
   api: any;
@@ -312,6 +340,7 @@ function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; res
       const prompts = item.prompts || [];
       const targets = item.targets || [];
       const currentMatches = response.matchingAnswers || [];
+      const shuffledTargets = seededShuffle(targets, `attempt:${attemptId}:item:${item.id}:matching-targets`);
 
       return (
         <div className="space-y-6">
@@ -332,7 +361,7 @@ function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; res
                   className="rounded-lg border border-slate-200 px-4 py-2 focus:border-brand-500 focus:ring-brand-500"
                 >
                   <option value="">Select a match...</option>
-                  {targets.map((target) => (
+                  {shuffledTargets.map((target) => (
                     <option key={target.id} value={target.id}>{target.text}</option>
                   ))}
                 </select>
