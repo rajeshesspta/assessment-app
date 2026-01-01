@@ -344,3 +344,14 @@ export interface TaxonomyConfig {
 	};
 	metadataFields: TaxonomyField[];
 }
+
+export interface ItemSnapshot extends BaseEntity {
+	/** original item id from the item bank */
+	originalItemId: string;
+	/** optional semantic version or incrementing number for the item */
+	itemVersion?: number | string;
+	/** full serialized item content at time of snapshot (JSON) */
+	snapshotJson: Record<string, any>;
+	/** optional actor who created the snapshot */
+	createdBy?: string;
+}
