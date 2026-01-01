@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Plus, Search, Filter, FileText, CheckCircle2, ListOrdered, Type, Hash, Image as ImageIcon, MousePointer2, Code } from 'lucide-react';
+import { Plus, Search, Filter, FileText, CheckCircle2, ListOrdered, Type, Hash, Image as ImageIcon, MousePointer2, Code, RefreshCw } from 'lucide-react';
 import type { Item, ItemKind } from '../utils/api';
 import { LoadingState } from './LoadingState';
 import { CreateItemModal } from './CreateItemModal';
@@ -36,6 +36,7 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [previewItem, setPreviewItem] = useState<Item | null>(null);
+  const [refreshAfterClose, setRefreshAfterClose] = useState(false);
 
   const loadItems = async () => {
     setLoading(true);
@@ -60,7 +61,7 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
     } else {
       await api.createItem(itemData);
     }
-    await loadItems();
+    setRefreshAfterClose(true);
   };
 
   const handleEditClick = (item: Item) => {
@@ -71,6 +72,10 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
   const handleCloseModal = () => {
     setIsCreateModalOpen(false);
     setEditingItem(null);
+    if (refreshAfterClose) {
+      void loadItems();
+      setRefreshAfterClose(false);
+    }
   };
 
   const allCategories = useMemo(() => {
@@ -122,15 +127,28 @@ export function ItemBankPage({ api, brandPrimary, brandLabelStyle }: ItemBankPag
           <h2 className="text-2xl font-bold text-slate-900">Item Bank</h2>
           <p className="text-sm text-slate-500">Manage and reuse assessment content across your tenant.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
-          style={{ backgroundColor: brandPrimary }}
-        >
-          <Plus className="h-4 w-4" />
-          Create Item
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { void loadItems(); }}
+            aria-label="Refresh items"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
+            style={{ backgroundColor: brandPrimary }}
+          >
+            <Plus className="h-4 w-4" />
+            Create Item
+          </button>
+        </div>
       </div>
 
       <CreateItemModal

@@ -213,7 +213,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
-    setSuccessMessage(null);
+    // Keep successMessage until new result
 
     if (kind === 'MCQ' && correctIndexes.length === 0) {
       setIsSubmitting(false);
@@ -397,13 +397,15 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
 
       await onSave(itemData);
       if (initialItem) {
-        onClose();
+        setSuccessMessage('Item updated successfully!');
+        setTimeout(() => onClose(), 1500);
       } else {
         resetForm();
         setSuccessMessage('Item saved! You can keep adding more or close when finished.');
       }
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

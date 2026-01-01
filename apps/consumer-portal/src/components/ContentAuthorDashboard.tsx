@@ -470,13 +470,17 @@ export function ContentAuthorDashboard({ api, brandPrimary }: ContentAuthorDashb
         isOpen={isCreateItemModalOpen}
         onClose={handleCloseModal}
         onSave={async (itemData) => {
-          if (editingItem) {
+          const isEditing = Boolean(editingItem);
+          if (isEditing && editingItem) {
             await api.updateItem(editingItem.id, itemData);
           } else {
             await api.createItem(itemData);
           }
-          setIsCreateItemModalOpen(false);
-          setEditingItem(null);
+
+          if (isEditing) {
+            setIsCreateItemModalOpen(false);
+            setEditingItem(null);
+          }
           // Optionally refresh data
         }}
         initialItem={editingItem}
