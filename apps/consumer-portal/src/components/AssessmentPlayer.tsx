@@ -420,11 +420,14 @@ function ItemInput({ item, response, brandPrimary, onChange }: { item: Item; res
           <input
             type="number"
             value={response.numericAnswer?.value ?? ''}
-            onChange={(e) => onChange({ numericAnswer: { value: parseFloat(e.target.value), unit: item.units } })}
+            onChange={(e) => {
+              const v = e.target.value === '' ? undefined : parseFloat(e.target.value);
+              onChange({ numericAnswer: { value: v, unit: item.units?.symbol ?? item.units?.label } });
+            }}
             className="w-48 rounded-lg border border-slate-200 px-4 py-2 focus:border-brand-500 focus:ring-brand-500"
             placeholder="0.00"
           />
-          {item.units && <span className="text-slate-600 font-medium">{item.units}</span>}
+          {item.units && <span className="text-slate-600 font-medium">{item.units.symbol ?? item.units.label}</span>}
         </div>
       );
     }

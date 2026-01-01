@@ -73,7 +73,7 @@ export function ItemPreview({ isOpen, onClose, item, brandPrimary }: ItemPreview
               placeholder="Enter numeric answer..."
               className="w-48 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm"
             />
-            {item.units && <span className="text-sm font-semibold text-slate-500">{item.units}</span>}
+            {item.units && <span className="text-sm font-semibold text-slate-500">{item.units.symbol ?? item.units.label}</span>}
           </div>
         );
       case 'SHORT_ANSWER':
