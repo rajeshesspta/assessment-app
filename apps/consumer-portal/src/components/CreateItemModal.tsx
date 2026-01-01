@@ -213,6 +213,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
+    setSuccessMessage(null);
 
     if (kind === 'MCQ' && correctIndexes.length === 0) {
       setIsSubmitting(false);
