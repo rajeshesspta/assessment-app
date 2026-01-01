@@ -199,6 +199,38 @@ export function registerItemPutRoute(app: FastifyInstance, repository: ItemRepos
           tags: parsed.tags,
           metadata: parsed.metadata,
         });
+      } else if (parsed.kind === 'MATCHING') {
+        const promptIds = new Set(parsed.prompts.map((p: any) => p.id));
+        const targetIds = new Set(parsed.targets.map((t: any) => t.id));
+        if (promptIds.size !== parsed.prompts.length) {
+          reply.code(400);
+          return { error: 'Prompt ids must be unique' };
+        }
+        if (targetIds.size !== parsed.targets.length) {
+          reply.code(400);
+          return { error: 'Target ids must be unique' };
+        }
+        if (parsed.targets.length < parsed.prompts.length) {
+          reply.code(400);
+          return { error: 'Targets must include at least as many entries as prompts' };
+        }
+        const invalidReference = parsed.prompts.find((prompt: any) => !targetIds.has(prompt.correctTargetId));
+        if (invalidReference) {
+          reply.code(400);
+          return { error: `Unknown target id: ${invalidReference.correctTargetId}` };
+        }
+        item = createItem({
+          id,
+          tenantId,
+          kind: 'MATCHING',
+          prompt: parsed.prompt,
+          prompts: parsed.prompts,
+          targets: parsed.targets,
+          scoring: parsed.scoring,
+          categories: parsed.categories,
+          tags: parsed.tags,
+          metadata: parsed.metadata,
+        });
       } else {
         reply.code(400);
         return { error: 'Update not yet implemented for this item kind' };

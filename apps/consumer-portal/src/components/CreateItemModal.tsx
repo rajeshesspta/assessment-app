@@ -21,9 +21,9 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
     { text: '' },
   ]);
   const [correctIndexes, setCorrectIndexes] = useState<number[]>([0]);
-  const [matchingPairs, setMatchingPairs] = useState<{ prompt: string; target: string }[]>([
-    { prompt: '', target: '' },
-    { prompt: '', target: '' },
+  const [matchingPairs, setMatchingPairs] = useState<{ promptId: string; targetId: string; prompt: string; target: string }[]>([
+    { promptId: 'p-1', targetId: 't-1', prompt: '', target: '' },
+    { promptId: 'p-2', targetId: 't-2', prompt: '', target: '' },
   ]);
   const [orderingOptions, setOrderingOptions] = useState<string[]>(['', '']);
   const [numericValue, setNumericValue] = useState<number | ''>('');
@@ -71,7 +71,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
     setPrompt('');
     setChoices([{ text: '' }, { text: '' }]);
     setCorrectIndexes([0]);
-    setMatchingPairs([{ prompt: '', target: '' }, { prompt: '', target: '' }]);
+    setMatchingPairs([{ promptId: 'p-1', targetId: 't-1', prompt: '', target: '' }, { promptId: 'p-2', targetId: 't-2', prompt: '', target: '' }]);
     setOrderingOptions(['', '']);
     setNumericValue('');
     setNumericTolerance(0);
@@ -116,6 +116,8 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
         const targets = ((initialItem as any).targets || []) as Array<{ id: string; text: string }>;
         setMatchingPairs(
           prompts.map((p) => ({
+            promptId: p.id,
+            targetId: p.correctTargetId,
             prompt: p.text,
             target: targets.find(t => t.id === p.correctTargetId)?.text ?? '',
           })),
@@ -239,36 +241,15 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           answerIsTrue: correctIndexes[0] === 0,
         };
       } else if (kind === 'MATCHING') {
-        const existingPrompts = ((initialItem as any)?.prompts || []) as Array<{ id: string; correctTargetId: string }>;
-        const existingTargets = ((initialItem as any)?.targets || []) as Array<{ id: string; text: string }>;
-        const existingTargetsById = new Map(existingTargets.map(t => [t.id, t] as const));
-        const usedTargetIds = new Set<string>();
-
-        const prompts = matchingPairs.map((pair, index) => {
-          const id = existingPrompts[index]?.id ?? `p-${index + 1}`;
-          const correctTargetId = existingPrompts[index]?.correctTargetId ?? `t-${index + 1}`;
-          usedTargetIds.add(correctTargetId);
-          return {
-            id,
-            text: pair.prompt,
-            correctTargetId,
-          };
-        });
-
-        const targets = matchingPairs.map((pair, index) => {
-          const id = existingPrompts[index]?.correctTargetId ?? `t-${index + 1}`;
-          return {
-            id,
-            text: pair.target,
-          };
-        });
-
-        for (const [id, existingTarget] of existingTargetsById.entries()) {
-          if (!usedTargetIds.has(id)) {
-            targets.push({ id, text: existingTarget.text });
-          }
-        }
-
+        const prompts = matchingPairs.map(pair => ({
+          id: pair.promptId,
+          text: pair.prompt,
+          correctTargetId: pair.targetId,
+        }));
+        const targets = matchingPairs.map(pair => ({
+          id: pair.targetId,
+          text: pair.target,
+        }));
         itemData = {
           kind: 'MATCHING',
           prompt,
@@ -404,7 +385,8 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
         setSuccessMessage('Item saved! You can keep adding more or close when finished.');
       }
     } catch (err) {
-      const message = (err as Error).message;
+      const message = (err as Error).message || 'Unable to save this item at the moment.';
+      setSuccessMessage(null);
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -660,7 +642,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
                 <label className="text-sm font-semibold text-slate-900">Matching Pairs</label>
                 <button
                   type="button"
-                  onClick={() => setMatchingPairs([...matchingPairs, { prompt: '', target: '' }])}
+                  onClick={() => setMatchingPairs([...matchingPairs, { promptId: `p-${Date.now()}`, targetId: `t-${Date.now()}`, prompt: '', target: '' }])}
                   className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700"
                   style={{ color: brandPrimary }}
                 >
