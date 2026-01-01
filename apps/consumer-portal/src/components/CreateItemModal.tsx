@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import type { ItemKind, Item } from '../utils/api';
 import { useTenantConfig } from '../context/TenantConfigContext';
@@ -13,6 +13,7 @@ interface CreateItemModalProps {
 }
 
 export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPrimary }: CreateItemModalProps) {
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [kind, setKind] = useState<ItemKind>('MCQ');
   const [prompt, setPrompt] = useState('');
   const [choices, setChoices] = useState<{ text: string }[]>([
@@ -54,10 +55,46 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
   const [categories, setCategories] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [metadata, setMetadata] = useState<Record<string, any>>({});
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const { config } = useTenantConfig();
 
   useEffect(() => {
+    if (!isOpen) return;
+    if (successMessage || error) {
+      formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [successMessage, error, isOpen]);
+
+  const resetForm = useCallback(() => {
+    setKind('MCQ');
+    setPrompt('');
+    setChoices([{ text: '' }, { text: '' }]);
+    setCorrectIndexes([0]);
+    setMatchingPairs([{ prompt: '', target: '' }, { prompt: '', target: '' }]);
+    setOrderingOptions(['', '']);
+    setNumericValue('');
+    setNumericTolerance(0);
+    setNumericUnits('');
+    setSampleAnswer('');
+    setRubricKeywords([]);
+    setRubricKeywordsInput('');
+    setEssayRubric([{ section: 'Content', points: 5 }, { section: 'Grammar', points: 5 }]);
+    setMinWords('');
+    setMaxWords('');
+    setBlanks([{ key: 'blank1', correctValue: '' }]);
+    setHotspotImage('');
+    setHotspotPolygons([]);
+    setDragTokens([{ id: 't1', text: '' }]);
+    setDragZones([{ id: 'z1', label: '', correctTokenIds: [] }]);
+    setScenarioTemplate('');
+    setCategories([]);
+    setTags([]);
+    setMetadata({});
+  }, []);
+
+  useEffect(() => {
+    setSuccessMessage(null);
     if (initialItem) {
       setKind(initialItem.kind);
       setPrompt(initialItem.prompt);
@@ -99,34 +136,10 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
       } else if (initialItem.kind === 'SCENARIO_TASK') {
         setScenarioTemplate(initialItem.workspaceTemplate || '');
       }
-    } else {
-      // Reset to defaults for new item
-      setKind('MCQ');
-      setPrompt('');
-      setChoices([{ text: '' }, { text: '' }]);
-      setCorrectIndexes([0]);
-      setMatchingPairs([{ prompt: '', target: '' }, { prompt: '', target: '' }]);
-      setOrderingOptions(['', '']);
-      setNumericValue('');
-      setNumericTolerance(0);
-      setNumericUnits('');
-      setSampleAnswer('');
-      setRubricKeywords([]);
-      setRubricKeywordsInput('');
-      setEssayRubric([{ section: 'Content', points: 5 }, { section: 'Grammar', points: 5 }]);
-      setMinWords('');
-      setMaxWords('');
-      setBlanks([{ key: 'blank1', correctValue: '' }]);
-      setHotspotImage('');
-      setHotspotPolygons([]);
-      setDragTokens([{ id: 't1', text: '' }]);
-      setDragZones([{ id: 'z1', label: '', correctTokenIds: [] }]);
-      setScenarioTemplate('');
-      setCategories([]);
-      setTags([]);
-      setMetadata({});
+    } else if (isOpen) {
+      resetForm();
     }
-  }, [initialItem, isOpen]);
+  }, [initialItem, isOpen, resetForm]);
 
   if (!isOpen) return null;
 
@@ -138,7 +151,7 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
     if (choices.length <= 2) return;
     const newChoices = choices.filter((_, i) => i !== index);
     setChoices(newChoices);
-    setCorrectIndexes(correctIndexes.filter(i => i !== index).map(i => i > index ? i - 1 : i));
+    setCorrectIndexes(correctIndexes.filter(i => i !== index).map(i => (i > index ? i - 1 : i)));
   };
 
   const handleToggleCorrect = (index: number) => {
@@ -159,6 +172,12 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
+
+    if (kind === 'MCQ' && correctIndexes.length === 0) {
+      setIsSubmitting(false);
+      setError('Select at least one correct answer before saving this question.');
+      return;
+    }
 
     try {
       let itemData: any;
@@ -258,7 +277,12 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
       itemData.metadata = Object.keys(metadata).length > 0 ? metadata : undefined;
 
       await onSave(itemData);
-      onClose();
+      if (initialItem) {
+        onClose();
+      } else {
+        resetForm();
+        setSuccessMessage('Item saved! You can keep adding more or close when finished.');
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -278,10 +302,15 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           {error && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
               {error}
+            </div>
+          )}
+          {!error && successMessage && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+              {successMessage}
             </div>
           )}
 

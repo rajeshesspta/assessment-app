@@ -46,6 +46,7 @@ export interface Item {
   metadata?: Record<string, any>;
   choices?: { text: string }[];
   answerMode?: 'single' | 'multiple';
+  correctIndexes?: number[];
   blanks?: { id: string }[];
   prompts?: { id: string; text: string }[];
   targets?: { id: string; text: string }[];
