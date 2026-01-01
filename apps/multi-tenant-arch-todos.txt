@@ -31,9 +31,7 @@ Persistence/migration updates
 Scoring logic (where applicable)
 Seeds/tests (unit + route)
 Docs/readme entry
-
-
-
+ 
 Implementation Plan
 
 Role Hierarchy & Permissions
@@ -461,5 +459,15 @@ Goal: Provide tenant admins with a UI to configure taxonomy fields (categories, 
 - [ ] Remove stale taxonomy data from config bundles.
 - [ ] Test end-to-end flows for taxonomy management.
 - [ ] Update documentation to reflect the new architecture.
+
+**Iteration 36: Assessment Item Snapshotting**
+Goal: Ensure assessments are not affected by future edits to items by snapshotting item content at publish/assignment time.
+
+	36.1 [ ] Design item snapshot table/model
+	36.2 [ ] Update assessment schema to reference snapshots
+	36.3 [ ] Implement snapshot creation logic on assessment publish
+	36.4 [ ] Serve items from snapshots in assessment attempts
+	36.5 [ ] Update author/admin UI to reflect snapshot behavior
+	36.6 [ ] Add audit and reporting for snapshots
 
 

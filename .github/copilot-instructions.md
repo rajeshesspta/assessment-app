@@ -36,6 +36,7 @@
 ## Conventions
 
 - Use dependency-injected repositories and avoid importing concrete implementations inside modules (other than top-level wiring in `src/app.ts`).
+- **Before implementing features:** Check `apps/multi-tenant-arch-todos.txt` and add a new iteration for the feature there; treat that file as the single source-of-truth for planned work and add iterations to it before implementation begins.
 - Keep migrations idempotent, sorted numerically, and ensure inserts/updates happen without manual BEGIN/COMMIT (sql.js auto-wraps statements). When adding new item shapes, include schema/storage guidance for choice JSON plus the shape-specific columns (`blank_schema_json`, `matching_schema_json`, `ordering_schema_json`, `short_answer_schema_json`, `essay_schema_json`, `numeric_schema_json`, `hotspot_schema_json`, `drag_drop_schema_json`, `scenario_schema_json`).
 - Random seeding (`scripts/sqlite/seed-random-data.ts`) must continue generating every item kind (including hotspot, drag-and-drop, and scenario tasks) so analytics/tests have coverage; update attempt mocks/scoring logic in tandem when introducing new response formats or deferred-scoring workflows (scenario tasks emit `ScenarioEvaluationRequested`).
 - When extending API surface, update both route tests, type definitions, and seed scripts to keep tooling (CLI + default data) aligned. User management endpoints (`/tenants/:id/admins`, `/users`) must also update `src/common/types.ts`, repository bundles, and seeding/CLI utilities when fields change.
