@@ -105,36 +105,71 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
         setChoices(initialItem.choices || []);
         setCorrectIndexes(initialItem.correctIndexes || []);
       } else if (initialItem.kind === 'TRUE_FALSE') {
-        setCorrectIndexes([initialItem.answerIsTrue ? 0 : 1]);
+        setCorrectIndexes([(initialItem as any).answerIsTrue ? 0 : 1]);
       } else if (initialItem.kind === 'MATCHING') {
-        setMatchingPairs((initialItem.prompts || []).map((p: string, i: number) => ({
-          prompt: p,
-          target: (initialItem.targets || [])[i] || ''
-        })));
+        const prompts = ((initialItem as any).prompts || []) as Array<{ id: string; text: string; correctTargetId: string }>;
+        const targets = ((initialItem as any).targets || []) as Array<{ id: string; text: string }>;
+        setMatchingPairs(
+          prompts.map((p) => ({
+            prompt: p.text,
+            target: targets.find(t => t.id === p.correctTargetId)?.text ?? '',
+          })),
+        );
       } else if (initialItem.kind === 'ORDERING') {
-        setOrderingOptions(initialItem.options || []);
+        const options = ((initialItem as any).options || []) as Array<{ id: string; text: string }>;
+        const correctOrder = ((initialItem as any).correctOrder || []) as string[];
+        if (correctOrder.length === options.length) {
+          const byId = new Map(options.map(o => [o.id, o] as const));
+          setOrderingOptions(correctOrder.map(id => byId.get(id)?.text ?? ''));
+        } else {
+          setOrderingOptions(options.map(o => o.text));
+        }
       } else if (initialItem.kind === 'NUMERIC_ENTRY') {
-        setNumericValue(initialItem.correctValue ?? '');
-        setNumericTolerance(initialItem.tolerance || 0);
-        setNumericUnits(initialItem.units || '');
+        const validation = (initialItem as any).validation as
+          | { mode: 'exact'; value: number; tolerance?: number }
+          | { mode: 'range'; min: number; max: number }
+          | undefined;
+        if (validation?.mode === 'exact') {
+          setNumericValue(validation.value ?? '');
+          setNumericTolerance(validation.tolerance ?? 0);
+        } else {
+          setNumericValue('');
+          setNumericTolerance(0);
+        }
+        const units = (initialItem as any).units as { label?: string; symbol?: string } | undefined;
+        setNumericUnits(units?.symbol ?? units?.label ?? '');
       } else if (initialItem.kind === 'SHORT_ANSWER') {
-        setSampleAnswer(initialItem.sampleAnswer || '');
-        setRubricKeywords(initialItem.rubric?.keywords || []);
-        setRubricKeywordsInput((initialItem.rubric?.keywords || []).join(', '));
+        const rubric = (initialItem as any).rubric as { keywords?: string[]; sampleAnswer?: string } | undefined;
+        setSampleAnswer(rubric?.sampleAnswer || '');
+        setRubricKeywords(rubric?.keywords || []);
+        setRubricKeywordsInput((rubric?.keywords || []).join(', '));
       } else if (initialItem.kind === 'ESSAY') {
-        setEssayRubric(initialItem.rubric?.sections || []);
-        setMinWords(initialItem.lengthExpectation?.minWords ?? '');
-        setMaxWords(initialItem.lengthExpectation?.maxWords ?? '');
+        const sections = ((initialItem as any).rubric?.sections || []) as Array<{ title: string; maxScore: number }>;
+        setEssayRubric(sections.map((s) => ({ section: s.title, points: s.maxScore })));
+        const length = (initialItem as any).length as { minWords?: number; maxWords?: number } | undefined;
+        setMinWords(length?.minWords ?? '');
+        setMaxWords(length?.maxWords ?? '');
       } else if (initialItem.kind === 'FILL_IN_THE_BLANK') {
-        setBlanks(initialItem.blanks || []);
+        const blanks = ((initialItem as any).blanks || []) as Array<{ id: string; acceptableAnswers: Array<{ type: string; value?: string }> }>;
+        setBlanks(
+          blanks.map((b, index) => ({
+            key: b.id || `blank${index + 1}`,
+            correctValue: b.acceptableAnswers?.find(a => a.type === 'exact')?.value ?? '',
+          })),
+        );
       } else if (initialItem.kind === 'HOTSPOT') {
-        setHotspotImage(initialItem.imageUri || '');
-        setHotspotPolygons(initialItem.polygons || []);
+        const image = (initialItem as any).image as { url: string } | undefined;
+        setHotspotImage(image?.url || '');
+        const hotspots = ((initialItem as any).hotspots || []) as Array<{ id: string; points: Array<{ x: number; y: number }> }>;
+        setHotspotPolygons(hotspots.map(h => ({ id: h.id, points: h.points })));
       } else if (initialItem.kind === 'DRAG_AND_DROP') {
-        setDragTokens(initialItem.tokens || []);
-        setDragZones(initialItem.zones || []);
+        const tokens = ((initialItem as any).tokens || []) as Array<{ id: string; label: string }>;
+        const zones = ((initialItem as any).zones || []) as Array<{ id: string; label?: string; correctTokenIds: string[] }>;
+        setDragTokens(tokens.map(t => ({ id: t.id, text: t.label })));
+        setDragZones(zones.map(z => ({ id: z.id, label: z.label ?? '', correctTokenIds: z.correctTokenIds ?? [] })));
       } else if (initialItem.kind === 'SCENARIO_TASK') {
-        setScenarioTemplate(initialItem.workspaceTemplate || '');
+        const workspaceInstructions = (((initialItem as any).workspace?.instructions || []) as string[]);
+        setScenarioTemplate(workspaceInstructions.length ? workspaceInstructions.join('\n') : ((initialItem as any).brief || ''));
       }
     } else if (isOpen) {
       resetForm();
@@ -197,77 +232,154 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
           answerIsTrue: correctIndexes[0] === 0,
         };
       } else if (kind === 'MATCHING') {
+        const existingPrompts = ((initialItem as any)?.prompts || []) as Array<{ id: string; correctTargetId: string }>;
+        const existingTargets = ((initialItem as any)?.targets || []) as Array<{ id: string; text: string }>;
+        const existingTargetsById = new Map(existingTargets.map(t => [t.id, t] as const));
+        const usedTargetIds = new Set<string>();
+
+        const prompts = matchingPairs.map((pair, index) => {
+          const id = existingPrompts[index]?.id ?? `p-${index + 1}`;
+          const correctTargetId = existingPrompts[index]?.correctTargetId ?? `t-${index + 1}`;
+          usedTargetIds.add(correctTargetId);
+          return {
+            id,
+            text: pair.prompt,
+            correctTargetId,
+          };
+        });
+
+        const targets = matchingPairs.map((pair, index) => {
+          const id = existingPrompts[index]?.correctTargetId ?? `t-${index + 1}`;
+          return {
+            id,
+            text: pair.target,
+          };
+        });
+
+        for (const [id, existingTarget] of existingTargetsById.entries()) {
+          if (!usedTargetIds.has(id)) {
+            targets.push({ id, text: existingTarget.text });
+          }
+        }
+
         itemData = {
           kind: 'MATCHING',
           prompt,
-          prompts: matchingPairs.map(p => p.prompt),
-          targets: matchingPairs.map(p => p.target),
-          scoring: { mode: 'all' }
+          prompts,
+          targets,
+          scoring: { mode: 'all' },
         };
       } else if (kind === 'ORDERING') {
+        const existingOptions = ((initialItem as any)?.options || []) as Array<{ id: string }>;
+        const options = orderingOptions.map((text, index) => ({
+          id: existingOptions[index]?.id ?? `opt-${index + 1}`,
+          text,
+        }));
         itemData = {
           kind: 'ORDERING',
           prompt,
-          options: orderingOptions,
-          correctOrder: orderingOptions.map((_, i) => i),
-          scoring: { mode: 'all' }
+          options,
+          correctOrder: options.map(o => o.id),
+          scoring: { mode: 'all' },
         };
       } else if (kind === 'NUMERIC_ENTRY') {
+        if (numericValue === '' || Number.isNaN(Number(numericValue))) {
+          throw new Error('Numeric items require a valid numeric value.');
+        }
         itemData = {
           kind: 'NUMERIC_ENTRY',
           prompt,
-          correctValue: Number(numericValue),
-          tolerance: numericTolerance,
-          units: numericUnits || undefined,
+          validation: {
+            mode: 'exact',
+            value: Number(numericValue),
+            tolerance: numericTolerance || undefined,
+          },
+          units: numericUnits ? { symbol: numericUnits } : undefined,
         };
       } else if (kind === 'SHORT_ANSWER') {
         itemData = {
           kind: 'SHORT_ANSWER',
           prompt,
-          sampleAnswer,
-          rubric: { keywords: rubricKeywords },
-          scoring: { mode: 'manual' }
+          rubric: {
+            keywords: rubricKeywords,
+            sampleAnswer: sampleAnswer || undefined,
+          },
+          scoring: { mode: 'manual', maxScore: 3 },
         };
       } else if (kind === 'ESSAY') {
+        const rubricSections = essayRubric.map((section, index) => ({
+          id: `sec-${index + 1}`,
+          title: section.section,
+          maxScore: section.points,
+        }));
+        const maxScore = rubricSections.reduce((sum, section) => sum + (Number.isFinite(section.maxScore) ? section.maxScore : 0), 0) || 10;
         itemData = {
           kind: 'ESSAY',
           prompt,
-          rubric: { sections: essayRubric },
-          lengthExpectation: {
+          rubric: { sections: rubricSections },
+          length: {
             minWords: minWords === '' ? undefined : Number(minWords),
             maxWords: maxWords === '' ? undefined : Number(maxWords),
           },
-          scoring: { mode: 'manual' }
+          scoring: { mode: 'manual', maxScore },
         };
       } else if (kind === 'FILL_IN_THE_BLANK') {
         itemData = {
           kind: 'FILL_IN_THE_BLANK',
           prompt,
-          blanks,
-          scoring: { mode: 'all' }
+          blanks: blanks.map((blank, index) => ({
+            id: blank.key || `blank-${index + 1}`,
+            acceptableAnswers: [
+              { type: 'exact', value: blank.correctValue, caseSensitive: false },
+            ],
+          })),
+          scoring: { mode: 'all' },
         };
       } else if (kind === 'HOTSPOT') {
+        if (!hotspotImage) {
+          throw new Error('Hotspot items require an image URL.');
+        }
+        if (!hotspotPolygons.length) {
+          throw new Error('Hotspot items require at least one region polygon.');
+        }
         itemData = {
           kind: 'HOTSPOT',
           prompt,
-          imageUri: hotspotImage,
-          polygons: hotspotPolygons,
-          scoring: { mode: 'all' }
+          image: {
+            url: hotspotImage,
+            width: 1000,
+            height: 1000,
+          },
+          hotspots: hotspotPolygons.map(p => ({ id: p.id, points: p.points })),
+          scoring: { mode: 'all' },
         };
       } else if (kind === 'DRAG_AND_DROP') {
+        if (dragTokens.some(t => !t.text.trim())) {
+          throw new Error('Drag & Drop tokens cannot be blank.');
+        }
+        if (dragZones.some(z => z.correctTokenIds.length === 0)) {
+          throw new Error('Each Drag & Drop zone must specify at least one correct token id.');
+        }
         itemData = {
           kind: 'DRAG_AND_DROP',
           prompt,
-          tokens: dragTokens,
-          zones: dragZones,
-          scoring: { mode: 'all' }
+          tokens: dragTokens.map(t => ({ id: t.id, label: t.text })),
+          zones: dragZones.map(z => ({
+            id: z.id,
+            label: z.label || undefined,
+            correctTokenIds: z.correctTokenIds,
+            evaluation: 'set',
+          })),
+          scoring: { mode: 'all' },
         };
       } else if (kind === 'SCENARIO_TASK') {
         itemData = {
           kind: 'SCENARIO_TASK',
           prompt,
-          workspaceTemplate: scenarioTemplate,
-          scoring: { mode: 'manual' }
+          brief: (scenarioTemplate || '').trim() || 'Complete the scenario task.',
+          workspace: scenarioTemplate ? { instructions: [scenarioTemplate] } : undefined,
+          evaluation: { mode: 'manual' },
+          scoring: { maxScore: 10 },
         };
       }
 
@@ -439,9 +551,13 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
                           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
                         >
                           <option value="">Select...</option>
-                          {field.allowedValues.map(val => (
-                            <option key={val} value={val}>{val}</option>
-                          ))}
+                          {field.allowedValues.map(val => {
+                            const optionValue: string | number =
+                              typeof val === 'boolean' ? (val ? 'true' : 'false') : val;
+                            return (
+                              <option key={optionValue} value={optionValue}>{String(optionValue)}</option>
+                            );
+                          })}
                         </select>
                       )}
                       {field.description && (

@@ -40,14 +40,14 @@ export function ItemPreview({ isOpen, onClose, item, brandPrimary }: ItemPreview
             <div className="space-y-3">
               {item.prompts?.map((p, i) => (
                 <div key={i} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  {p}
+                  {(p as any).text ?? String(p)}
                 </div>
               ))}
             </div>
             <div className="space-y-3">
               {item.targets?.map((t, i) => (
                 <div key={i} className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  {t}
+                  {(t as any).text ?? String(t)}
                 </div>
               ))}
             </div>
@@ -59,7 +59,7 @@ export function ItemPreview({ isOpen, onClose, item, brandPrimary }: ItemPreview
             {item.options?.map((opt, i) => (
               <div key={i} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
                 <span className="text-xs font-bold text-slate-400">{i + 1}.</span>
-                <span className="text-sm text-slate-700">{opt}</span>
+                <span className="text-sm text-slate-700">{(opt as any).text ?? String(opt)}</span>
               </div>
             ))}
           </div>
