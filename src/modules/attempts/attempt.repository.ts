@@ -41,17 +41,18 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
     save(attempt) {
       const db = client.getConnection(attempt.tenantId);
       db.prepare(`
-        INSERT INTO attempts (id, tenant_id, assessment_id, user_id, status, responses_json, score, max_score, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          assessment_id = excluded.assessment_id,
-          user_id = excluded.user_id,
-          status = excluded.status,
-          responses_json = excluded.responses_json,
-          score = excluded.score,
-          max_score = excluded.max_score,
-          created_at = excluded.created_at,
-          updated_at = excluded.updated_at
+        INSERT INTO attempts (id, tenant_id, assessment_id, user_id, status, responses_json, item_version_ids_json, score, max_score, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              assessment_id = excluded.assessment_id,
+              user_id = excluded.user_id,
+              status = excluded.status,
+              responses_json = excluded.responses_json,
+              item_version_ids_json = excluded.item_version_ids_json,
+              score = excluded.score,
+              max_score = excluded.max_score,
+              created_at = excluded.created_at,
+              updated_at = excluded.updated_at
       `).run(
         attempt.id,
         attempt.tenantId,
@@ -59,6 +60,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
         attempt.userId,
         attempt.status,
         JSON.stringify(attempt.responses),
+        attempt.itemVersionIds ? JSON.stringify(attempt.itemVersionIds) : null,
         attempt.score ?? null,
         attempt.maxScore ?? null,
         attempt.createdAt,
@@ -69,10 +71,10 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
     getById(tenantId, id) {
       const db = client.getConnection(tenantId);
       const row = db.prepare(`
-        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
-        FROM attempts
-        WHERE id = ? AND tenant_id = ?
-      `).get(id, tenantId);
+          SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, item_version_ids_json as itemVersionIdsJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
+          FROM attempts
+          WHERE id = ? AND tenant_id = ?
+        `).get(id, tenantId);
       if (!row) {
         return undefined;
       }
@@ -83,6 +85,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
         userId: row.userId,
         status: row.status as Attempt['status'],
         responses: JSON.parse(row.responsesJson) ?? [],
+        itemVersionIds: row.itemVersionIdsJson ? (JSON.parse(row.itemVersionIdsJson) as string[]) : undefined,
         score: row.score ?? undefined,
         maxScore: row.maxScore ?? undefined,
         createdAt: row.createdAt,
@@ -93,7 +96,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
     listByAssessment(tenantId, assessmentId) {
       const db = client.getConnection(tenantId);
       const rows = db.prepare(`
-        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
+        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, item_version_ids_json as itemVersionIdsJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
         FROM attempts
         WHERE assessment_id = ? AND tenant_id = ?
       `).all(assessmentId, tenantId);
@@ -105,6 +108,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
           userId: row.userId,
           status: row.status as Attempt['status'],
           responses: JSON.parse(row.responsesJson) ?? [],
+          itemVersionIds: row.itemVersionIdsJson ? (JSON.parse(row.itemVersionIdsJson) as string[]) : undefined,
           score: row.score ?? undefined,
           maxScore: row.maxScore ?? undefined,
           createdAt: row.createdAt,
@@ -116,7 +120,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
     listByLearner(tenantId, assessmentId, userId) {
       const db = client.getConnection(tenantId);
       const rows = db.prepare(`
-        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
+        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, item_version_ids_json as itemVersionIdsJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
         FROM attempts
         WHERE tenant_id = ? AND assessment_id = ? AND user_id = ?
         ORDER BY created_at ASC
@@ -129,6 +133,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
           userId: row.userId,
           status: row.status as Attempt['status'],
           responses: JSON.parse(row.responsesJson) ?? [],
+          itemVersionIds: row.itemVersionIdsJson ? (JSON.parse(row.itemVersionIdsJson) as string[]) : undefined,
           score: row.score ?? undefined,
           maxScore: row.maxScore ?? undefined,
           createdAt: row.createdAt,
@@ -140,7 +145,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
     listByUser(tenantId, userId) {
       const db = client.getConnection(tenantId);
       const rows = db.prepare(`
-        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
+        SELECT id, tenant_id as tenantId, assessment_id as assessmentId, user_id as userId, status, responses_json as responsesJson, item_version_ids_json as itemVersionIdsJson, score, max_score as maxScore, created_at as createdAt, updated_at as updatedAt
         FROM attempts
         WHERE tenant_id = ? AND user_id = ?
         ORDER BY created_at DESC
@@ -153,6 +158,7 @@ export function createSQLiteAttemptRepository(client: SQLiteTenantClient): Attem
           userId: row.userId,
           status: row.status as Attempt['status'],
           responses: JSON.parse(row.responsesJson) ?? [],
+          itemVersionIds: row.itemVersionIdsJson ? (JSON.parse(row.itemVersionIdsJson) as string[]) : undefined,
           score: row.score ?? undefined,
           maxScore: row.maxScore ?? undefined,
           createdAt: row.createdAt,

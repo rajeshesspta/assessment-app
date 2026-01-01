@@ -178,6 +178,8 @@ describe('attemptRoutes', () => {
     expect(body.items[0].correctIndexes).toBeUndefined();
     expect(body.createdAt).toBeDefined();
     expect(body.updatedAt).toBeDefined();
+    expect(body.itemVersionIds).toEqual(['item-1']);
+    expect(mocks.attemptStore.get('attempt-1')?.itemVersionIds).toEqual(['item-1']);
     expect(mocks.publishMock).toHaveBeenCalledWith(expect.objectContaining({
       type: 'AttemptStarted',
       payload: { attemptId: 'attempt-1' },

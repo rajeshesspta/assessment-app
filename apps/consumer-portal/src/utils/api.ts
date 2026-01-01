@@ -29,6 +29,7 @@ export interface AttemptResponse {
   maxScore?: number;
   items?: Item[];
   responses?: AttemptResponseItem[];
+  itemVersionIds?: string[];
   createdAt: string;
   updatedAt: string;
 }

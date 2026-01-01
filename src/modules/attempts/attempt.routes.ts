@@ -96,7 +96,7 @@ function normalizeTextAnswers(textAnswer?: string, textAnswers?: string[]): stri
 export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutesOptions) {
   const { attemptRepository, assessmentRepository, itemRepository, cohortRepository, userRepository, itemSnapshotRepository } = options;
 
-  const loadAssessmentItems = (tenantId: string, assessment: any) => {
+  const loadAssessmentItems = (tenantId: string, assessment: any): Item[] => {
     // If the assessment has snapshot IDs, load immutable snapshots and override item id
     if (itemSnapshotRepository && Array.isArray(assessment.itemSnapshotIds) && assessment.itemSnapshotIds.length > 0) {
       return (assessment.itemSnapshotIds || [])
@@ -112,6 +112,26 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       return (assessment.itemIds || [])
         .map((itemId: string) => itemRepository.getById(tenantId, itemId))
         .filter((i: Item | undefined): i is Item => !!i);
+  };
+  const loadAttemptItems = (tenantId: string, assessment: any, attemptItemVersionIds?: string[]): Item[] => {
+    if (attemptItemVersionIds && attemptItemVersionIds.length > 0) {
+      const versionedItems = attemptItemVersionIds
+        .map(itemId => {
+          if (itemSnapshotRepository) {
+            const snap = itemSnapshotRepository.getById(tenantId, itemId);
+            if (snap) {
+              const item = snap.snapshotJson as Item;
+              return { ...item, id: snap.id, tenantId: snap.tenantId } as Item;
+            }
+          }
+          return itemRepository.getById(tenantId, itemId);
+        })
+        .filter((item): item is Item => Boolean(item));
+      if (versionedItems.length === attemptItemVersionIds.length) {
+        return versionedItems;
+      }
+    }
+    return loadAssessmentItems(tenantId, assessment);
   };
   app.post('/', { schema: { body: startBodySchema }, attachValidation: true, validatorCompiler: passThroughValidator }, async (req, reply) => {
     if (!ensureAttemptAccess(req, reply)) return;
@@ -162,12 +182,13 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       reply.code(409);
       return { error: 'Attempt limit reached' };
     }
+    const items = loadAssessmentItems(tenantId, assessment);
+    const itemVersionIds = items.map(item => item.id);
     const id = uuid();
-    const attempt = createAttempt({ id, tenantId, assessmentId: assessment.id, userId: learner.id });
+    const attempt = createAttempt({ id, tenantId, assessmentId: assessment.id, userId: learner.id, itemVersionIds });
     attemptRepository.save(attempt);
     eventBus.publish({ id: uuid(), type: 'AttemptStarted', occurredAt: new Date().toISOString(), tenantId, payload: { attemptId: id } });
     
-    const items = loadAssessmentItems(tenantId, assessment);
     const sanitizedItems = items.map(sanitizeItemForLearner);
     
     reply.code(201);
@@ -345,7 +366,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       workspace?: ScenarioWorkspaceTemplate;
       response?: AttemptResponse['scenarioAnswer'];
     }> = [];
-    const items = loadAssessmentItems(tenantId, assessment);
+    const items = loadAttemptItems(tenantId, assessment, attempt.itemVersionIds);
     for (const item of items) {
       const response = attempt.responses.find(r => r.itemId === item.id);
       if (item.kind === 'FILL_IN_THE_BLANK') {
@@ -522,7 +543,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
 
     const assessment = assessmentRepository.getById(tenantId, attempt.assessmentId);
     if (assessment) {
-      const items = loadAssessmentItems(tenantId, assessment);
+      const items = loadAttemptItems(tenantId, assessment, attempt.itemVersionIds);
       
       // Check if learner can see full details
       const isManager = ['CONTENT_AUTHOR', 'TENANT_ADMIN'].some(role => roles.includes(role as UserRole));
@@ -582,7 +603,7 @@ export async function attemptRoutes(app: FastifyInstance, options: AttemptRoutes
       return { error: 'Access denied' };
     }
 
-    const items = loadAssessmentItems(tenantId, assessment);
+    const items = loadAttemptItems(tenantId, assessment, attempt.itemVersionIds);
     return items;
   });
 }

@@ -307,6 +307,7 @@ export interface Attempt extends BaseEntity {
 	userId: string;
 	status: 'in_progress' | 'submitted' | 'scored';
 	responses: AttemptResponse[];
+	itemVersionIds?: string[];
 	score?: number;
 	maxScore?: number;
 	items?: Item[];
