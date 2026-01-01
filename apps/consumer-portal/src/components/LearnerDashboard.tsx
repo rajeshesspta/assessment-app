@@ -169,7 +169,7 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
       {/* Stats Grid */}
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map(stat => (
-          <article key={stat.title} className="rounded-2xl border border-brand-50 bg-white p-5">
+          <article key={stat.title} className="portal-surface p-5">
             <div className="flex items-center gap-3">
               <div className={`rounded-xl p-2 ${stat.bgColor}`}>
                 <stat.icon className={`h-5 w-5 ${stat.color}`} />
@@ -184,7 +184,7 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
       </section>
 
       {/* Recent Activity */}
-      <section className="rounded-2xl border border-brand-50 bg-white p-6">
+      <section className="portal-panel">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Recent Activity</h2>
         {dashboardStats.recentAttempts > 0 ? (
           <div className="flex items-center gap-3 text-sm text-slate-600">
@@ -202,7 +202,7 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
       </section>
 
       {/* Quick Actions / Assigned Assessments Preview */}
-      <section className="rounded-2xl border border-brand-50 bg-white p-6">
+      <section className="portal-panel">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Assigned Assessments</h2>
         {dashboardStats.availableAssessments > 0 ? (
           <p className="text-sm text-slate-600 mb-4">
@@ -216,7 +216,7 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
         <button
           type="button"
           onClick={() => window.location.href = '/my-assessments'}
-          className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+          className="portal-btn-primary"
         >
           View All Assessments
         </button>
@@ -224,7 +224,7 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
 
       {/* Completed Assessments */}
       {dashboardStats.completedAssessments > 0 && (
-        <section className="rounded-2xl border border-brand-50 bg-white p-6">
+        <section className="portal-panel">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Completed Assessments</h2>
           <p className="text-sm text-slate-600 mb-4">
             You have completed {dashboardStats.completedAssessments} assessment{dashboardStats.completedAssessments !== 1 ? 's' : ''}.
@@ -243,7 +243,7 @@ export function LearnerDashboard({ api, userId, attempts, onStartAttempt }: Lear
                 </div>
                 <button
                   onClick={() => window.location.href = `/assessment/${item.assessmentId}/result`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                  className="portal-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
                 >
                   View Results
                 </button>

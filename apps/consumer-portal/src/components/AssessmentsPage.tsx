@@ -76,8 +76,7 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
             setSelectedAssessment(null);
             setIsCreateModalOpen(true);
           }}
-          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
-          style={{ backgroundColor: brandPrimary }}
+          className="portal-btn-primary px-4 py-2.5"
         >
           <Plus className="h-4 w-4" />
           Create Assessment
@@ -107,13 +106,13 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
         brandPrimary={brandPrimary}
       />
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-brand-50 bg-white p-4 md:flex-row md:items-center">
+      <div className="portal-panel-tight flex flex-col gap-4 md:flex-row md:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search assessments or tags..."
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+            className="portal-input bg-slate-50 pl-10 pr-4"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -122,7 +121,7 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
           <select
             value={selectedCollection}
             onChange={e => setSelectedCollection(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+            className="portal-input bg-slate-50 px-4 py-2"
           >
             <option value="all">All Collections</option>
             {collections.map(c => (
@@ -152,7 +151,7 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
           filteredAssessments.map(assessment => (
             <div
               key={assessment.id}
-              className="group flex items-center justify-between rounded-2xl border border-brand-50 bg-white p-4 transition hover:border-brand-200 hover:shadow-sm"
+              className="portal-panel-tight group flex items-center justify-between transition hover:border-brand-200"
             >
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600" style={{ backgroundColor: `${brandPrimary}15`, color: brandPrimary }}>
@@ -192,7 +191,7 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
                     setSelectedAssessment(assessment);
                     setIsCreateModalOpen(true);
                   }}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
+                  className="portal-btn-secondary px-3 py-1.5 text-xs"
                 >
                   Edit
                 </button>
@@ -202,7 +201,7 @@ export function AssessmentsPage({ api, brandPrimary, brandLabelStyle }: Assessme
                     setSelectedAssessment(assessment);
                     setIsScheduleModalOpen(true);
                   }}
-                  className="rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                  className="portal-btn-secondary bg-slate-50 px-3 py-1.5 text-xs hover:bg-slate-100"
                 >
                   Schedule
                 </button>

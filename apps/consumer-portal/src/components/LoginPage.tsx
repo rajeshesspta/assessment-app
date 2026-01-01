@@ -93,7 +93,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sunrise-50 via-white to-sunrise-100 px-4 py-12 text-slate-900">
-      <div className="w-full max-w-4xl rounded-3xl border-2 border-brand-100 bg-white/95 p-8 backdrop-blur" style={heroBorderStyle}>
+      <div className="w-full max-w-4xl rounded-3xl border-2 border-brand-100 bg-white/95 p-8 shadow-sm ring-1 ring-slate-100/70 backdrop-blur" style={heroBorderStyle}>
         <div className="flex flex-col gap-2 text-center">
           {branding?.logoUrl && (
             <img src={branding.logoUrl} alt={`${tenantName} logo`} className="mx-auto h-12 w-auto object-contain" />
@@ -103,12 +103,12 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
           <p className="text-sm text-slate-600">Use a federated login or enter your learner credentials to access cohort assignments.</p>
         </div>
         <div className="mt-8 grid gap-6 md:grid-cols-2">
-          <div className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6">
+          <div className="portal-panel space-y-4">
             <p className="text-sm font-semibold text-slate-700">Single sign-on</p>
             <div className="space-y-2">
               <button
                 type="button"
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
+                className="portal-btn-secondary w-full px-4 py-3"
                 onClick={() => handleProviderLogin('google')}
               >
                 <GoogleIcon />
@@ -118,7 +118,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             <div className="space-y-2">
               <button
                 type="button"
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
+                className="portal-btn-secondary w-full px-4 py-3"
                 onClick={() => handleProviderLogin('microsoft')}
               >
                 <MicrosoftIcon />
@@ -128,7 +128,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             <div className="space-y-2">
               <button
                 type="button"
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-600"
+                className="portal-btn-secondary w-full px-4 py-3"
                 onClick={() => handleProviderLogin('enterprise')}
               >
                 <EnterpriseIcon />
@@ -137,7 +137,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
               <label className="text-xs font-medium text-slate-500">
                 Enterprise identity (optional)
                 <input
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                  className="portal-input mt-1"
                   type="email"
                   inputMode="email"
                   placeholder="you@enterprise.com"
@@ -148,7 +148,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             </div>
           </div>
           <form
-            className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6"
+            className="portal-panel space-y-4"
             onSubmit={event => {
               event.preventDefault();
               if (!name.trim() || !email.trim()) {
@@ -161,7 +161,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             <label className="text-sm font-medium text-slate-700">
               Full name
               <input
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                className="portal-input mt-2"
                 value={name}
                 onChange={event => setName(event.target.value)}
                 placeholder="Ada Learner"
@@ -170,7 +170,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             <label className="text-sm font-medium text-slate-700">
               Work email
               <input
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200/40"
+                className="portal-input mt-2"
                 type="email"
                 value={email}
                 onChange={event => setEmail(event.target.value)}
@@ -202,7 +202,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             </div>
             <button
               type="submit"
-              className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-600"
+              className="w-full portal-btn-primary py-3"
             >
               Sign in
             </button>

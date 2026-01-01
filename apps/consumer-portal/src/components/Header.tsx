@@ -4,7 +4,7 @@ interface HeaderProps {
 
 export function Header({ environmentLabel = 'Consumer Tenant Portal' }: HeaderProps) {
   return (
-    <header className="rounded-2xl bg-white/80 p-6 ring-1 ring-slate-100 backdrop-blur">
+    <header className="portal-surface p-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-600">

@@ -21,6 +21,7 @@ import { useTenantSession } from './hooks/useTenantSession';
 import { useApiClient } from './hooks/useApiClient';
 import { usePortalAuth } from './hooks/usePortalAuth';
 import { useTenantConfig } from './context/TenantConfigContext';
+import { usePortalTheme } from './hooks/usePortalTheme';
 import { buildBffUrl, isBffEnabled } from './utils/bff';
 import { LoginPage } from './components/LoginPage';
 import AssessmentResultPage from './pages/AssessmentResultPage';
@@ -68,6 +69,7 @@ function withAlpha(hex: string, alpha: number) {
 
 export default function App() {
   const { user, loginWithProvider, loginCustom, logout, checkingSession } = usePortalAuth();
+  const { themeId: portalThemeId, setTheme: setPortalTheme, options: portalThemeOptions } = usePortalTheme();
   const { session, saveSession, clearSession } = useTenantSession();
   const { config, loading: tenantConfigLoading, error: tenantConfigError } = useTenantConfig();
   const api = useApiClient(session);
@@ -92,18 +94,28 @@ export default function App() {
 
   const tenantName = config?.name ?? 'Assessment App';
   const supportEmail = config?.supportEmail ?? 'support@example.com';
-  const brandPrimary = config?.branding.primaryColor ?? '#f97316';
-  const brandAccent = config?.branding.accentColor ?? '#fb923c';
-  const brandLabelStyle = useMemo(() => ({ color: brandPrimary }), [brandPrimary]);
-  const brandBadgeStyle = useMemo(() => ({
-    borderColor: withAlpha(brandPrimary, 0.24),
-    backgroundColor: withAlpha(brandPrimary, 0.08),
-    color: brandPrimary,
-  }), [brandPrimary]);
-  const brandButtonStyle = useMemo(() => ({
-    backgroundColor: brandPrimary,
-    borderColor: brandPrimary,
-  }), [brandPrimary]);
+  const brandPrimary = config?.branding.primaryColor ?? '#4f46e5';
+  const brandAccent = config?.branding.accentColor ?? '#6366f1';
+  const isTenantTheme = portalThemeId === 'tenant';
+  const themedBrandPrimary = isTenantTheme ? brandPrimary : 'var(--portal-primary)';
+  const brandLabelStyle = useMemo<React.CSSProperties>(
+    () => ({ color: themedBrandPrimary }),
+    [themedBrandPrimary],
+  );
+  const brandBadgeStyle = useMemo<React.CSSProperties>(
+    () => isTenantTheme
+      ? {
+          borderColor: withAlpha(brandPrimary, 0.24),
+          backgroundColor: withAlpha(brandPrimary, 0.08),
+          color: brandPrimary,
+        }
+      : {
+          borderColor: 'color-mix(in srgb, var(--portal-primary) 24%, transparent)',
+          backgroundColor: 'color-mix(in srgb, var(--portal-primary) 10%, transparent)',
+          color: 'var(--portal-primary)',
+        },
+    [brandPrimary, isTenantTheme],
+  );
   const shouldShowConfigWarning = Boolean(tenantConfigError);
 
   const isTenantAdmin = useMemo(() => {
@@ -318,7 +330,7 @@ export default function App() {
       return (
         <ContentAuthorDashboard
           api={api}
-          brandPrimary={brandPrimary}
+          brandPrimary={themedBrandPrimary}
         />
       );
     }
@@ -374,7 +386,7 @@ export default function App() {
 
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-brand-50 bg-white p-6">
+        <div className="portal-panel">
           <h1 className="text-2xl font-bold text-slate-900">{assessment.title}</h1>
           <p className="mt-2 text-slate-600">{assessment.description}</p>
         </div>
@@ -384,7 +396,7 @@ export default function App() {
             <p className="text-slate-500">No attempts yet.</p>
           ) : (
             assessmentAttempts.map(attempt => (
-              <div key={attempt.id} className="rounded-2xl border border-slate-100 p-4">
+              <div key={attempt.id} className="portal-panel-tight">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold">Attempt #{attempt.id}</p>
@@ -402,7 +414,7 @@ export default function App() {
                     {attempt.status === 'in_progress' && (
                       <button
                         onClick={() => setActiveAttemptId(attempt.id)}
-                        className="px-4 py-2 bg-brand-600 text-white rounded-lg"
+                        className="portal-btn-primary"
                       >
                         Continue
                       </button>
@@ -410,7 +422,7 @@ export default function App() {
                     {(attempt.status === 'submitted' || attempt.status === 'scored') && (
                       <button
                         onClick={() => setViewingAttemptId(attempt.id)}
-                        className="px-4 py-2 bg-slate-600 text-white rounded-lg"
+                        className="portal-btn bg-slate-900 text-white hover:bg-slate-800"
                       >
                         View Results
                       </button>
@@ -423,7 +435,7 @@ export default function App() {
           {canStartNew && (
             <button
               onClick={() => startAttempt(id)}
-              className="w-full py-3 bg-brand-600 text-white rounded-lg font-semibold"
+              className="w-full portal-btn-primary py-3"
             >
               Start New Attempt
             </button>
@@ -434,14 +446,14 @@ export default function App() {
   };
 
   const AnalyticsPage = () => (
-    <section className="rounded-2xl border border-brand-50 bg-white p-6">
+    <section className="portal-panel">
       <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
       <p className="mt-2 text-sm text-slate-600">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
     </section>
   );
 
   const ResourcesPage = () => (
-    <section className="space-y-4 rounded-2xl border border-brand-50 bg-white p-6">
+    <section className="portal-panel space-y-4">
       <h2 className="text-lg font-semibold text-slate-900">Resources</h2>
       <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
         <li>Assessment guidebook and best practices.</li>
@@ -453,7 +465,7 @@ export default function App() {
 
   if (tenantConfigLoading || checkingSession) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-sunrise-50 text-slate-700">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sunrise-50 via-white to-sunrise-100 text-slate-700">
         <LoadingState label={tenantConfigLoading ? 'Loading tenant configuration' : 'Restoring session'} />
       </div>
     );
@@ -474,12 +486,12 @@ export default function App() {
   const isSidebarVisible = sidebarPinned || sidebarOpen;
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-sunrise-50 via-white to-sunrise-100 text-slate-900">
+    <div className="flex min-h-screen text-slate-900">
       {activeAttemptId && (
         <AssessmentPlayer
           attemptId={activeAttemptId}
           api={api}
-          brandPrimary={brandPrimary}
+          brandPrimary={themedBrandPrimary}
           onComplete={(attempt) => {
             setAttempts(prev => prev.map(a => a.id === attempt.id ? attempt : a));
             setActiveAttemptId(null);
@@ -491,7 +503,7 @@ export default function App() {
         <AttemptResult
           attemptId={viewingAttemptId}
           api={api}
-          brandPrimary={brandPrimary}
+          brandPrimary={themedBrandPrimary}
           onExit={() => setViewingAttemptId(null)}
         />
       )}
@@ -630,9 +642,26 @@ export default function App() {
               </a>
             </p>
           )}
+
+          <div className="mt-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Theme</p>
+            <select
+              className="portal-input mt-2 bg-white"
+              value={portalThemeId}
+              onChange={event => setPortalTheme(event.target.value as any)}
+              aria-label="Select UI theme"
+            >
+              {portalThemeOptions.map(option => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <button
             type="button"
-            className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700"
+            className="portal-btn-secondary mt-4 w-full"
             onClick={() => {
               combinedLogout();
               setAnalytics(null);
@@ -716,29 +745,29 @@ export default function App() {
             <Route path="/my-assessments/completed" element={<CompletedAssessmentsPage />} />
             <Route
               path="/item-bank"
-              element={(isContentAuthor || isTenantAdmin) ? <ItemBankPage api={api} brandPrimary={brandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
+              element={(isContentAuthor || isTenantAdmin) ? <ItemBankPage api={api} brandPrimary={themedBrandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route
               path="/manage-assessments"
-              element={(isContentAuthor || isTenantAdmin) ? <AssessmentsPage api={api} brandPrimary={brandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
+              element={(isContentAuthor || isTenantAdmin) ? <AssessmentsPage api={api} brandPrimary={themedBrandPrimary} brandLabelStyle={brandLabelStyle} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route
               path="/learners"
-              element={(isContentAuthor || isTenantAdmin) ? <LearnersPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
+              element={(isContentAuthor || isTenantAdmin) ? <LearnersPage api={api} brandPrimary={themedBrandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route
               path="/cohorts"
-              element={(isContentAuthor || isTenantAdmin) ? <CohortsPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
+              element={(isContentAuthor || isTenantAdmin) ? <CohortsPage api={api} brandPrimary={themedBrandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route
               path="/users"
-              element={isTenantAdmin ? <UsersPage api={api} brandPrimary={brandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
+              element={isTenantAdmin ? <UsersPage api={api} brandPrimary={themedBrandPrimary} /> : <Navigate to={LANDING_PATH} replace />}
             />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/resources" element={<ResourcesPage />} />
-            <Route path="/taxonomy-config" element={<TaxonomyConfigPage api={api} brandPrimary={brandPrimary} />} />
+            <Route path="/taxonomy-config" element={<TaxonomyConfigPage api={api} brandPrimary={themedBrandPrimary} />} />
             <Route path="/assessment/:id" element={<AssessmentDetailPage />} />
-            <Route path="/assessment/:id/result" element={<AssessmentResultPage api={api} brandPrimary={brandPrimary} />} />
+            <Route path="/assessment/:id/result" element={<AssessmentResultPage api={api} brandPrimary={themedBrandPrimary} />} />
             <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
           </Routes>
         </main>

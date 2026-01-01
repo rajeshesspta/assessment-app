@@ -4,6 +4,12 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
 import { TenantConfigProvider } from './context/TenantConfigContext';
+import { initPortalTheme } from './theme/portalTheme';
+
+initPortalTheme();
+import { applyPortalTheme, getStoredPortalTheme } from './utils/portalTheme';
+
+applyPortalTheme(getStoredPortalTheme());
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

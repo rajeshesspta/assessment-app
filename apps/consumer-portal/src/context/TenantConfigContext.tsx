@@ -48,8 +48,8 @@ type TenantConfigState = {
 };
 
 const DEFAULT_BRANDING: TenantBranding = {
-  primaryColor: '#f97316',
-  accentColor: '#fb923c',
+  primaryColor: '#4f46e5',
+  accentColor: '#6366f1',
 };
 
 const DEFAULT_CONFIG: TenantConfig = {
@@ -73,6 +73,10 @@ function applyBranding(branding?: TenantBranding) {
     return;
   }
   const root = document.documentElement;
+  const activeTheme = root.dataset.portalTheme ?? 'tenant';
+  if (activeTheme !== 'tenant') {
+    return;
+  }
   const primary = branding?.primaryColor ?? DEFAULT_BRANDING.primaryColor!;
   const accent = branding?.accentColor ?? DEFAULT_BRANDING.accentColor!;
   root.style.setProperty('--tenant-brand-primary', primary);
@@ -124,6 +128,18 @@ export function TenantConfigProvider({ children }: { children: React.ReactNode }
         document.title = `${config.name} Portal`;
       }
     }
+  }, [config]);
+
+  useEffect(() => {
+    function handleThemeChange(event: Event) {
+      const nextTheme = (event as CustomEvent<string>).detail;
+      if (nextTheme === 'tenant' && config) {
+        applyBranding(config.branding);
+      }
+    }
+
+    window.addEventListener('portal-theme-change', handleThemeChange as EventListener);
+    return () => window.removeEventListener('portal-theme-change', handleThemeChange as EventListener);
   }, [config]);
 
   const value = useMemo<TenantConfigState>(() => ({ config, loading, error, refresh: fetchConfig }), [config, loading, error, fetchConfig]);

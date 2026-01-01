@@ -49,7 +49,7 @@ export function TenantSessionForm({ value, onSave, onClear, user }: TenantSessio
 
   return (
     <form
-      className="rounded-3xl border border-brand-50 bg-white p-6 text-slate-900"
+      className="portal-panel text-slate-900"
       onSubmit={handleSubmit}
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -61,7 +61,7 @@ export function TenantSessionForm({ value, onSave, onClear, user }: TenantSessio
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
+            className="portal-btn-secondary rounded-full px-4 py-2 text-sm font-medium"
           >
             Clear session
           </button>
@@ -71,7 +71,7 @@ export function TenantSessionForm({ value, onSave, onClear, user }: TenantSessio
         <label className="text-sm font-medium text-slate-700">
           BFF API Base URL
           <input
-            className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+            className="portal-input mt-2"
             type="text"
             placeholder="http://localhost:4000"
             value={formState.apiBaseUrl}
@@ -81,7 +81,7 @@ export function TenantSessionForm({ value, onSave, onClear, user }: TenantSessio
         <label className="text-sm font-medium text-slate-700">
           Tenant Id
           <input
-            className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+            className="portal-input mt-2"
             type="text"
             placeholder="tenant-123"
             value={formState.tenantId}
@@ -91,7 +91,7 @@ export function TenantSessionForm({ value, onSave, onClear, user }: TenantSessio
         <label className="text-sm font-medium text-slate-700">
           Learner Id
           <input
-            className="mt-2 w-full rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500"
+            className="portal-input mt-2"
             type="text"
             placeholder="learner-123"
             value={formState.userId}
@@ -125,7 +125,7 @@ export function TenantSessionForm({ value, onSave, onClear, user }: TenantSessio
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex items-center rounded-full bg-brand-500 px-6 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className="portal-btn-primary rounded-full px-6 py-2"
         >
           Save session
         </button>
