@@ -94,8 +94,13 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
   }, []);
 
   useEffect(() => {
-    setSuccessMessage(null);
+    if (!isOpen) {
+      setSuccessMessage(null);
+      return;
+    }
+
     if (initialItem) {
+      setSuccessMessage(null);
       setKind(initialItem.kind);
       setPrompt(initialItem.prompt);
       setCategories(initialItem.categories || []);
@@ -171,9 +176,10 @@ export function CreateItemModal({ isOpen, onClose, onSave, initialItem, brandPri
         const workspaceInstructions = (((initialItem as any).workspace?.instructions || []) as string[]);
         setScenarioTemplate(workspaceInstructions.length ? workspaceInstructions.join('\n') : ((initialItem as any).brief || ''));
       }
-    } else if (isOpen) {
-      resetForm();
+      return;
     }
+
+    resetForm();
   }, [initialItem, isOpen, resetForm]);
 
   if (!isOpen) return null;
