@@ -3,7 +3,7 @@ import type { PortalAuthProvider } from '../hooks/usePortalAuth';
 
 interface LoginPageProps {
   onProviderLogin(provider: PortalAuthProvider, roles: string[], profile?: { name?: string; email?: string }): void;
-  onCustomLogin(details: { name: string; email: string; roles: string[] }): void;
+  onCustomLogin(details: { email: string; password: string; roles: string[] }): void;
   tenantName?: string;
   supportEmail?: string;
   branding?: {
@@ -42,8 +42,8 @@ const EnterpriseIcon = () => (
 );
 
 export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assessment Portal', supportEmail, branding }: LoginPageProps) {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['CONTENT_AUTHOR']);
   const [enterpriseIdentity, setEnterpriseIdentity] = useState('');
   const accentStyle = useMemo(() => (
@@ -151,30 +151,33 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             className="portal-panel space-y-4"
             onSubmit={event => {
               event.preventDefault();
-              if (!name.trim() || !email.trim()) {
+              if (!email.trim() || !password.trim()) {
                 return;
               }
-              onCustomLogin({ name: name.trim(), email: email.trim(), roles: selectedRoles });
+              onCustomLogin({ email: email.trim(), password: password.trim(), roles: selectedRoles });
             }}
           >
             <p className="text-sm font-semibold text-slate-700">Tenant credentials</p>
             <label className="text-sm font-medium text-slate-700">
-              Full name
-              <input
-                className="portal-input mt-2"
-                value={name}
-                onChange={event => setName(event.target.value)}
-                placeholder="Ada Learner"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Work email
+              Email
               <input
                 className="portal-input mt-2"
                 type="email"
                 value={email}
                 onChange={event => setEmail(event.target.value)}
                 placeholder="ada@example.com"
+                required
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Password
+              <input
+                className="portal-input mt-2"
+                type="password"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                placeholder="Enter your password"
+                required
               />
             </label>
             <div>

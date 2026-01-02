@@ -159,9 +159,22 @@ type SessionPayload = {
   email: string;
   name?: string;
   picture?: string;
-  provider: 'google';
+  provider: 'google' | 'microsoft' | 'local';
   tenantId: string;
 };
+
+function selectMicrosoftRedirectUrl(tenant: TenantRuntime, hostHeader?: string) {
+  if (hostHeader) {
+    const normalizedHost = normalizeHost(hostHeader);
+    if (normalizedHost && tenant.microsoftRedirectHostMap) {
+      const match = tenant.microsoftRedirectHostMap.get(normalizedHost);
+      if (match) {
+        return match;
+      }
+    }
+  }
+  return (tenant.microsoftRedirectUrls && tenant.microsoftRedirectUrls[0]) ?? tenant.googleRedirectUrls[0];
+}
 
 function createStateToken(tenantId: string) {
   const value = randomBytes(16).toString('hex');
@@ -488,16 +501,25 @@ app.get('/auth/google/callback', async (request, reply) => {
     return { error: 'Google account is missing an email claim' };
   }
 
-  // Look up user in headless API to get their UUID if they exist
+  // Lookup user in the headless user table and enforce their allowed login method.
   let headlessUserId = profile.sub;
   try {
-    const headlessUser = await callHeadless<{ id: string }>(tenant, `/users/by-email/${profile.email}`, reply);
-    if (headlessUser && headlessUser.id) {
-      headlessUserId = headlessUser.id;
+    const headlessUser = await callHeadless<{ id?: string; loginMethod?: string }>(tenant, `/users/by-email/${profile.email}`, reply);
+    if (!headlessUser || !headlessUser.id) {
+      reply.code(403);
+      return { error: 'User not registered for this tenant' };
     }
+    // Enforce user's permitted login method
+    const method = (headlessUser.loginMethod ?? '').toString();
+    if (method !== 'SIDP-GOOGLE') {
+      reply.code(403);
+      return { error: 'User is not allowed to authenticate via Google' };
+    }
+    headlessUserId = headlessUser.id;
   } catch (err) {
-    // If not found or error, fallback to Google sub
-    request.log.info({ email: profile.email }, 'User not found in headless API, falling back to Google sub');
+    request.log.info({ email: profile.email, err }, 'User not allowed or headless lookup failed');
+    reply.code(403);
+    return { error: 'User not allowed' };
   }
 
   const sessionToken = await createSessionToken({
@@ -517,6 +539,132 @@ app.get('/auth/google/callback', async (request, reply) => {
       maxAge: env.SESSION_TTL_SECONDS,
     })
     .redirect(tenant.landingRedirectUrl);
+});
+
+const microsoftCallbackSchema = z.object({
+  code: z.string().optional(),
+  state: z.string().optional(),
+  error: z.string().optional(),
+});
+
+app.get('/auth/microsoft/login', async (request, reply) => {
+  const tenant = request.tenant;
+  const redirectTarget = selectMicrosoftRedirectUrl(tenant, request.headers.host);
+  const state = createStateToken(tenant.tenantId);
+  const authUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
+  authUrl.search = new URLSearchParams({
+    client_id: tenant.auth.microsoft.clientId,
+    redirect_uri: redirectTarget.toString(),
+    response_type: 'code',
+    scope: 'openid email profile',
+    response_mode: 'query',
+    state,
+  }).toString();
+  reply.redirect(authUrl.toString());
+});
+
+app.get('/auth/microsoft/callback', async (request, reply) => {
+  const parsed = microsoftCallbackSchema.safeParse(request.query ?? {});
+  if (!parsed.success) {
+    reply.code(400);
+    return { error: 'Invalid callback response' };
+  }
+  const { code, state, error } = parsed.data;
+  if (error) {
+    reply.code(400);
+    return { error };
+  }
+  const tenantIdFromState = consumeStateTenantId(state);
+  if (!code || !tenantIdFromState) {
+    reply.code(400);
+    return { error: 'Invalid OAuth state' };
+  }
+  const tenantFromState = requireTenantById(tenantIdFromState);
+  const hostTenant = request.tenant;
+  if (hostTenant && hostTenant.tenantId !== tenantFromState.tenantId) {
+    reply.code(400);
+    return { error: 'Tenant mismatch detected for OAuth callback' };
+  }
+
+  const redirectTarget = selectMicrosoftRedirectUrl(tenantFromState, request.headers.host);
+
+  const tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: tenantFromState.auth.microsoft.clientId,
+      client_secret: tenantFromState.auth.microsoft.clientSecret,
+      code,
+      redirect_uri: redirectTarget.toString(),
+      grant_type: 'authorization_code',
+    }).toString(),
+  });
+
+  if (!tokenResponse.ok) {
+    const details = await tokenResponse.text();
+    reply.code(502);
+    return { error: 'Failed to exchange Microsoft authorization code', details };
+  }
+
+  const tokens = await tokenResponse.json() as { access_token?: string };
+  if (!tokens.access_token) {
+    reply.code(502);
+    return { error: 'Microsoft token response missing access token' };
+  }
+
+  const profileResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+
+  if (!profileResponse.ok) {
+    const details = await profileResponse.text();
+    reply.code(502);
+    return { error: 'Failed to fetch Microsoft profile', details };
+  }
+
+  const profile = await profileResponse.json() as { id?: string; mail?: string; userPrincipalName?: string; displayName?: string };
+  const email = profile.mail ?? profile.userPrincipalName;
+  if (!email) {
+    reply.code(400);
+    return { error: 'Microsoft account is missing an email claim' };
+  }
+
+  // Lookup user in the headless user table and enforce their allowed login method.
+  let headlessUserId = profile.id ?? '';
+  try {
+    const headlessUser = await callHeadless<{ id?: string; loginMethod?: string }>(tenantFromState, `/users/by-email/${email}`, reply);
+    if (!headlessUser || !headlessUser.id) {
+      reply.code(403);
+      return { error: 'User not registered for this tenant' };
+    }
+    const method = (headlessUser.loginMethod ?? '').toString();
+    if (method !== 'SIDP-MS') {
+      reply.code(403);
+      return { error: 'User is not allowed to authenticate via Microsoft' };
+    }
+    headlessUserId = headlessUser.id;
+  } catch (err) {
+    request.log.info({ email, err }, 'User not allowed or headless lookup failed');
+    reply.code(403);
+    return { error: 'User not allowed' };
+  }
+
+  const sessionToken = await createSessionToken({
+    sub: headlessUserId,
+    email,
+    name: profile.displayName ?? email,
+    provider: 'microsoft',
+    tenantId: tenantFromState.tenantId,
+  });
+  reply
+    .setCookie(SESSION_COOKIE, sessionToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProduction,
+      path: '/',
+      maxAge: env.SESSION_TTL_SECONDS,
+    })
+    .redirect(tenantFromState.landingRedirectUrl);
 });
 
 app.get('/auth/session', async (request, reply) => {

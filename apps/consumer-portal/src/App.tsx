@@ -69,6 +69,18 @@ function withAlpha(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function deriveNameFromEmail(address: string) {
+  const localPart = address.split('@')[0] ?? '';
+  if (!localPart) {
+    return undefined;
+  }
+  return localPart
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export default function App() {
   const { user, loginWithProvider, loginCustom, logout, checkingSession } = usePortalAuth();
   const { themeId: portalThemeId, setTheme: setPortalTheme, options: portalThemeOptions } = usePortalTheme();
@@ -480,7 +492,10 @@ export default function App() {
         supportEmail={supportEmail}
         branding={config?.branding}
         onProviderLogin={loginWithProvider}
-        onCustomLogin={({ name, email, roles }) => loginCustom(name, email, roles)}
+        onCustomLogin={({ email, password, roles }) => {
+          const displayName = deriveNameFromEmail(email) ?? email;
+          loginCustom(displayName, email, roles);
+        }}
       />
     );
   }

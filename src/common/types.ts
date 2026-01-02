@@ -10,12 +10,16 @@ export type TenantUserRole = (typeof TENANT_USER_ROLES)[number];
 
 export type UserStatus = 'active' | 'invited' | 'disabled';
 
+export type LoginMethod = 'SIDP-GOOGLE' | 'SIDP-MS' | 'UPWD';
+
 export interface User extends BaseEntity {
 	roles: UserRole[];
 	email: string;
 	displayName?: string;
 	status: UserStatus;
 	createdBy?: string;
+	// Single allowed login method for the user
+	loginMethod?: LoginMethod;
 }
 
 export type MCQChoice = { text: string };
