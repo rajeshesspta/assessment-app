@@ -168,6 +168,48 @@ Multi-tenant BFF + Portal Plan
 - [ ] Stage env with multiple tenants hitting control-plane-powered BFF.
 - [ ] Feature flag gating for gradual rollout (shared stack first, then premium).
 
+Iteration 39 — Testing Roadmap (Iterations)
+
+Goal: Establish an automated, low-touch test and release pipeline so we can ship with confidence while minimizing on-call burden.
+
+Iteration T0 — CI foundations (PR checks)
+- [ ] Add standard scripts: `test:unit`, `test:integration`, `test:regression`, `test:e2e`.
+- [ ] Enforce lint → typecheck → unit tests in PR pipeline (fail fast).
+- [ ] Add a fast integration smoke job to PRs that runs a handful of critical route tests (auth, attempt creation, analytics summary).
+- [ ] Ensure artifacts (test logs, jest/vitest output) are uploaded on failure.
+
+Iteration T1 — Full integration coverage
+- [ ] Expand integration tests to cover all critical modules (items, attempts, cohorts, analytics, users) using in-memory SQLite.
+- [ ] Add migration + seeding tests that run migrations end-to-end and validate seeded fixtures (dev-tenant users present).
+- [ ] Add Cosmos Emulator job in CI for Cosmos adapter integration tests (optional per repo config).
+- [ ] Add contract tests for BFF↔headless interactions (headers, status codes, payload shapes).
+
+Iteration T2 — Regression & E2E (Playwright)
+- [ ] Add Playwright and a small smoke E2E test suite for critical user journeys: login (local/SSO), deep-link auth, start/submit attempt, view results, analytics load.
+- [ ] Run Playwright smoke suite in nightly and pre-deploy pipelines; keep a short, fast subset for PRs.
+- [ ] Capture traces, screenshots, and videos for failed runs and upload as artifacts for debugging.
+
+Iteration T3 — Post-deploy & Canary checks
+- [ ] Add post-deploy smoke checks against staging that must pass before promoting to production (health, auth, sample assessment flow).
+- [ ] Implement synthetic monitors that poll critical endpoints and alert on failures (auth, attempts, analytics summary).
+- [ ] Add rollback automation or manual gates when post-deploy checks fail.
+
+Iteration T4 — Performance & Load
+- [ ] Add lightweight load tests targeting headless APIs and Cosmos partitions to validate RU consumption and hotspots.
+- [ ] Run performance tests regularly before major releases and after significant schema/aggregation changes.
+
+Iteration T5 — Observability, Security & Resilience
+- [ ] Integrate SAST/vulnerability scanning and enforce no critical vulns in PRs.
+- [ ] Add periodic mutation or chaos tests (low frequency) to validate resilience of critical flows.
+- [ ] Add synthetic checks that include observability captures (trace IDs, request diagnostics) for post-mortem ease.
+
+Notes & Acceptance Criteria
+- Each iteration should add small, verifiable CI jobs and a few representative tests rather than a large monolith.
+- Failures must upload artifacts (logs, SQL dumps, Playwright traces) to simplify debugging by a single engineer.
+- Use environment-specific seeds (dev-tenant) and unique tenant IDs per test to preserve isolation.
+
+Add these tasks into the backlog and link them to the release milestone so the team can prioritize incremental automation work.
+
 
 ==============================
 Analytics Roadmap (Iterations)
