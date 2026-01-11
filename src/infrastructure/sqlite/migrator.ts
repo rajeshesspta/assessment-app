@@ -52,11 +52,6 @@ export function runMigrations(db: SQLiteDatabase, migrationsDir: string): void {
       db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
       continue;
     }
-    // Skip problematic migrations with encoding issues
-    if (file === '014_users_roles_json.sql') {
-      db.prepare('INSERT INTO __migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
-      continue;
-    }
     const fullPath = path.join(resolvedDir, file);
     const buffer = fs.readFileSync(fullPath);
     let sql = buffer.toString('utf8');

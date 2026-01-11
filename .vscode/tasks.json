@@ -1,0 +1,241 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "curl: headless user lookup",
+			"type": "shell",
+			"command": "curl.exe",
+			"args": [
+				"-sS",
+				"-i",
+				"-H",
+				"x-api-key: dev-key",
+				"-H",
+				"x-tenant-id: dev-tenant",
+				"-H",
+				"x-actor-roles: TENANT_ADMIN",
+				"http://localhost:3000/users/by-email/learner-1@rubicstricks.com",
+				"--max-time",
+				"5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "netstat:3000",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"netstat -ano | findstr :3000"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "taskkill:8472",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"taskkill /PID 8472 /F"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "netstat:3000 (recheck)",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"netstat -ano | findstr :3000"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "taskkill:5036",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"taskkill /PID 5036 /F"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "netstat:3000 (final check)",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"netstat -ano | findstr :3000"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "dev: headless api (3000)",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "netstat:3000 (after start)",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"timeout /t 2 >NUL & netstat -ano | findstr :3000"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "curl: headless user lookup (learner-1)",
+			"type": "shell",
+			"command": "curl.exe",
+			"args": [
+				"-sS",
+				"-i",
+				"-H",
+				"x-api-key: dev-key",
+				"-H",
+				"x-tenant-id: dev-tenant",
+				"-H",
+				"x-actor-roles: TENANT_ADMIN",
+				"http://localhost:3000/users/by-email/learner-1@rubicstricks.com",
+				"--max-time",
+				"5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "curl: bff auth local (learner-1)",
+			"type": "shell",
+			"command": "curl.exe",
+			"args": [
+				"-sS",
+				"-i",
+				"-X",
+				"POST",
+				"-H",
+				"Content-Type: application/json",
+				"-d",
+				"{\"email\":\"learner-1@rubicstricks.com\"}",
+				"http://localhost:4000/auth/local",
+				"--max-time",
+				"5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "curl(bff): auth local learner-1",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"curl.exe -sS -i -X POST -H \"Content-Type: application/json\" -d \"{\\\"email\\\":\\\"learner-1@rubicstricks.com\\\"}\" http://localhost:4000/auth/local --max-time 5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "curl(bff): auth local learner-1 (ps passthru)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"curl.exe --% -sS -i -X POST -H \"Content-Type: application/json\" -d \"{\\\"email\\\":\\\"learner-1@rubicstricks.com\\\"}\" http://localhost:4000/auth/local --max-time 5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "bff auth local via file",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Set-Content -Path tmp-auth.json -Value '{\"email\":\"learner-1@rubicstricks.com\"}' -Encoding ascii; curl.exe -sS -i -H \"Content-Type: application/json\" --data-binary \"@tmp-auth.json\" http://localhost:4000/auth/local --max-time 5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "bff auth local via file (escaped)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Set-Content -Path tmp-auth.json -Value \"{\\\"email\\\":\\\"learner-1@rubicstricks.com\\\"}\" -Encoding ascii; curl.exe -sS -i -H \"Content-Type: application/json\" --data-binary \"@tmp-auth.json\" http://localhost:4000/auth/local --max-time 5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "bff auth local (curl -v)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"curl.exe -v -X POST -H \"Content-Type: application/json\" --data-binary \"@tmp-auth.json\" http://localhost:4000/auth/local --max-time 5"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "bff auth local (curl -v stderr)",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"curl.exe -v -X POST -H \"Content-Type: application/json\" --data-binary \"@tmp-auth.json\" http://localhost:4000/auth/local --max-time 5 2>&1"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "bff auth local via Invoke-WebRequest",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Invoke-WebRequest -Method Post -Uri http://localhost:4000/auth/local -ContentType 'application/json' -Body '{\"email\":\"learner-1@rubicstricks.com\"}' | Format-List StatusCode,Headers,Content"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		}
+	]
+}

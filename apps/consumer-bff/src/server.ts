@@ -159,8 +159,9 @@ type SessionPayload = {
   email: string;
   name?: string;
   picture?: string;
-  provider: 'google' | 'microsoft' | 'local';
+  provider: 'google' | 'microsoft' | 'custom';
   tenantId: string;
+  roles: string[];
 };
 
 function selectMicrosoftRedirectUrl(tenant: TenantRuntime, hostHeader?: string) {
@@ -522,13 +523,17 @@ app.get('/auth/google/callback', async (request, reply) => {
     return { error: 'User not allowed' };
   }
 
+  const googleRoles = Array.isArray(headlessUser.roles) && headlessUser.roles.length > 0
+    ? headlessUser.roles
+    : tenant.headless.actorRoles;
   const sessionToken = await createSessionToken({
     sub: headlessUserId,
     email: profile.email,
-    name: profile.name ?? profile.email,
+    name: headlessUser.displayName ?? profile.name ?? profile.email,
     picture: profile.picture,
     provider: 'google',
     tenantId: tenant.tenantId,
+    roles: googleRoles,
   });
   reply
     .setCookie(SESSION_COOKIE, sessionToken, {
@@ -545,6 +550,11 @@ const microsoftCallbackSchema = z.object({
   code: z.string().optional(),
   state: z.string().optional(),
   error: z.string().optional(),
+});
+
+const localLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().optional(),
 });
 
 app.get('/auth/microsoft/login', async (request, reply) => {
@@ -649,12 +659,16 @@ app.get('/auth/microsoft/callback', async (request, reply) => {
     return { error: 'User not allowed' };
   }
 
+  const microsoftRoles = Array.isArray(headlessUser.roles) && headlessUser.roles.length > 0
+    ? headlessUser.roles
+    : tenantFromState.headless.actorRoles;
   const sessionToken = await createSessionToken({
     sub: headlessUserId,
     email,
-    name: profile.displayName ?? email,
+    name: headlessUser.displayName ?? profile.displayName ?? email,
     provider: 'microsoft',
     tenantId: tenantFromState.tenantId,
+    roles: microsoftRoles,
   });
   reply
     .setCookie(SESSION_COOKIE, sessionToken, {
@@ -665,6 +679,61 @@ app.get('/auth/microsoft/callback', async (request, reply) => {
       maxAge: env.SESSION_TTL_SECONDS,
     })
     .redirect(tenantFromState.landingRedirectUrl);
+});
+
+app.post('/auth/local', async (request, reply) => {
+  const payload = localLoginSchema.safeParse(request.body ?? {});
+  if (!payload.success) {
+    reply.code(400);
+    return { error: 'Invalid payload', issues: payload.error.issues }; 
+  }
+  const tenant = request.tenant;
+  const normalizedEmail = payload.data.email.trim();
+  try {
+    const headlessUser = await callHeadless<{
+      id?: string;
+      email: string;
+      displayName?: string;
+      roles?: string[];
+      loginMethod?: string;
+    }>(tenant, `/users/by-email/${normalizedEmail}`, reply);
+    if (!headlessUser?.id) {
+      reply.code(404);
+      return { error: 'User not found' };
+    }
+    const allowedMethod = (headlessUser.loginMethod ?? 'UPWD').toString();
+    if (allowedMethod !== 'UPWD') {
+      reply.code(403);
+      return { error: 'User is not allowed to authenticate via password' };
+    }
+    const roles = Array.isArray(headlessUser.roles) && headlessUser.roles.length > 0
+      ? headlessUser.roles
+      : tenant.headless.actorRoles;
+    const sessionToken = await createSessionToken({
+      sub: headlessUser.id,
+      email: headlessUser.email,
+      name: headlessUser.displayName ?? headlessUser.email,
+      provider: 'custom',
+      tenantId: tenant.tenantId,
+      roles,
+    });
+    reply
+      .setCookie(SESSION_COOKIE, sessionToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: isProduction,
+        path: '/',
+        maxAge: env.SESSION_TTL_SECONDS,
+      })
+      .send({ status: 'signed_in' });
+    return;
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
 });
 
 app.get('/auth/session', async (request, reply) => {

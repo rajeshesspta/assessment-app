@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface CosmosConfig {
   endpoint: string;
@@ -65,6 +66,7 @@ function readBooleanFromEnv(envName: string, defaultValue: boolean): boolean {
 }
 
 export function loadConfig(): AppConfig {
+  const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
   const endpoint = process.env.COSMOS_ENDPOINT || 'https://localhost:8081';
   const key = process.env.COSMOS_KEY || 'C2y6yDjf5/R+ob0N8A7Cgv30VRDjEwef4zE3DUdh2PQ==';
   const databaseId = process.env.COSMOS_DATABASE_ID || 'assessment-app';
@@ -72,9 +74,9 @@ export function loadConfig(): AppConfig {
   const throughput = readIntFromEnv('COSMOS_THROUGHPUT');
   const cacheTtlMs = readIntFromEnv('API_KEY_CACHE_TTL_MS') ?? 60_000;
   const provider = readProviderFromEnv('DB_PROVIDER');
-  const dbRoot = process.env.SQLITE_DB_ROOT || path.resolve(process.cwd(), 'data', 'sqlite');
+  const dbRoot = process.env.SQLITE_DB_ROOT || path.resolve(projectRoot, 'data', 'sqlite');
   const filePattern = process.env.SQLITE_DB_FILE_PATTERN || '{tenantId}.db';
-  const migrationsDir = process.env.SQLITE_MIGRATIONS_DIR || path.resolve(process.cwd(), 'migrations', 'sqlite');
+  const migrationsDir = process.env.SQLITE_MIGRATIONS_DIR || path.resolve(projectRoot, 'migrations', 'sqlite');
   const seedDefaultTenant = readBooleanFromEnv('SQLITE_SEED_DEFAULT_TENANT', true);
   const authProvider = readAuthProviderFromEnv('AUTH_PROVIDER');
 

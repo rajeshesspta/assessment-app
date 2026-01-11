@@ -25,6 +25,21 @@ Headless assessment platform MVP in TypeScript + Fastify.
 - Analytics (attempt count + average score)
 - Event Bus (in-memory pub/sub)
 
+## Local Development & Seed Data
+
+When running in development mode (`npm run dev`), the system automatically provisions and seeds the default tenants (including `dev-tenant`) with sample items, assessments, and the following test users:
+
+| Display Name | Email | Default Role | Login Method |
+| :--- | :--- | :--- | :--- |
+| **Learner One** | `learner-1@rubicstricks.com` | `LEARNER` | `UPWD` (Email only) |
+| **Author One** | `ca-1@rubicstricks.com` | `CONTENT_AUTHOR` | `UPWD` (Email only) |
+| **Tenant Admin** | `ta-1@rubicstricks.com` | `TENANT_ADMIN` | `UPWD` (Email only) |
+
+To reset the data for a specific tenant, use:
+```bash
+npm run db:reset -- --tenant=dev-tenant
+```
+
 ## Domain Roles & Cohorts
 
 - Super Admin: oversees the platform, provisions new tenants, and enforces global governance/compliance controls.

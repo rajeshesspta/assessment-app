@@ -3,7 +3,7 @@ import type { PortalAuthProvider } from '../hooks/usePortalAuth';
 
 interface LoginPageProps {
   onProviderLogin(provider: PortalAuthProvider, roles: string[], profile?: { name?: string; email?: string }): void;
-  onCustomLogin(details: { email: string; password: string; roles: string[] }): void;
+  onCustomLogin(details: { email: string; password?: string; roles: string[] }): Promise<void>;
   tenantName?: string;
   supportEmail?: string;
   branding?: {
@@ -11,6 +11,7 @@ interface LoginPageProps {
     primaryColor?: string;
     accentColor?: string;
   };
+  loginError?: string | null;
 }
 
 const ROLE_OPTIONS = ['LEARNER', 'CONTENT_AUTHOR', 'TENANT_ADMIN'];
@@ -41,11 +42,12 @@ const EnterpriseIcon = () => (
   </svg>
 );
 
-export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assessment Portal', supportEmail, branding }: LoginPageProps) {
+export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assessment Portal', supportEmail, branding, loginError }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['CONTENT_AUTHOR']);
   const [enterpriseIdentity, setEnterpriseIdentity] = useState('');
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
   const accentStyle = useMemo(() => (
     branding?.primaryColor ? { color: branding.primaryColor } : undefined
   ), [branding?.primaryColor]);
@@ -149,12 +151,18 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
           </div>
           <form
             className="portal-panel space-y-4"
-            onSubmit={event => {
+            onSubmit={async event => {
               event.preventDefault();
-              if (!email.trim() || !password.trim()) {
+              const trimmedEmail = email.trim();
+              if (!trimmedEmail) {
                 return;
               }
-              onCustomLogin({ email: email.trim(), password: password.trim(), roles: selectedRoles });
+              setIsSubmittingLocal(true);
+              try {
+                await onCustomLogin({ email: trimmedEmail, password: password.trim() || undefined, roles: selectedRoles });
+              } finally {
+                setIsSubmittingLocal(false);
+              }
             }}
           >
             <p className="text-sm font-semibold text-slate-700">Tenant credentials</p>
@@ -166,20 +174,21 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
                 value={email}
                 onChange={event => setEmail(event.target.value)}
                 placeholder="ada@example.com"
-                required
               />
             </label>
             <label className="text-sm font-medium text-slate-700">
-              Password
+              One-time password (optional)
               <input
                 className="portal-input mt-2"
                 type="password"
                 value={password}
                 onChange={event => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                required
+                placeholder="Enter your one-time password"
               />
             </label>
+            {loginError && (
+              <p className="text-xs text-rose-500">{loginError}</p>
+            )}
             <div>
               <p className="text-sm font-semibold text-slate-700">Role selection</p>
               <p className="text-xs text-slate-500">Choose at least one role to preview available surfaces.</p>
@@ -206,6 +215,7 @@ export function LoginPage({ onProviderLogin, onCustomLogin, tenantName = 'Assess
             <button
               type="submit"
               className="w-full portal-btn-primary py-3"
+              disabled={isSubmittingLocal}
             >
               Sign in
             </button>

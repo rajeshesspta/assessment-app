@@ -69,18 +69,6 @@ function withAlpha(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function deriveNameFromEmail(address: string) {
-  const localPart = address.split('@')[0] ?? '';
-  if (!localPart) {
-    return undefined;
-  }
-  return localPart
-    .split(/[._-]/)
-    .filter(Boolean)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
 export default function App() {
   const { user, loginWithProvider, loginCustom, logout, checkingSession } = usePortalAuth();
   const { themeId: portalThemeId, setTheme: setPortalTheme, options: portalThemeOptions } = usePortalTheme();
@@ -105,6 +93,22 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user && loginError) {
+      setLoginError(null);
+    }
+  }, [user, loginError]);
+
+  const handleCustomLogin = useCallback(async (details: { email: string; password?: string; roles: string[] }) => {
+    setLoginError(null);
+    try {
+      await loginCustom(details);
+    } catch (error) {
+      setLoginError((error as Error)?.message ?? 'Unable to sign in');
+    }
+  }, [loginCustom]);
 
   const tenantName = config?.name ?? 'Assessment App';
   const supportEmail = config?.supportEmail ?? 'support@example.com';
@@ -492,10 +496,8 @@ export default function App() {
         supportEmail={supportEmail}
         branding={config?.branding}
         onProviderLogin={loginWithProvider}
-        onCustomLogin={({ email, password, roles }) => {
-          const displayName = deriveNameFromEmail(email) ?? email;
-          loginCustom(displayName, email, roles);
-        }}
+        onCustomLogin={handleCustomLogin}
+        loginError={loginError}
       />
     );
   }

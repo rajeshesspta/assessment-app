@@ -398,6 +398,13 @@ Assessment Module Iteration Checklist
 - Goal: Monitor assessment assembly and publishing progress.
 - [x] UI: List recent assessments with item count, cohort count, status, and publish controls.
 - [x] UI: Display total assessments metric.
+
+**Iteration 29: Local Authentication & Credentials**
+- Goal: Let tenant users sign in with tenant-scoped email/password (password optional for now) and keep portal/session state aligned with headless roles.
+- [x] BFF: Add `/auth/local` that validates `email`, enforces `loginMethod = UPWD` (or no restriction), issues the session cookie with persisted roles, and returns a steady success response.
+- [x] BFF: Extend session payload to include `roles` so the portal can snap actor roles once `/auth/session` completes.
+- [x] Portal: Replace the mock `loginCustom` flow with a call to `/auth/local`, surface validation feedback, and store the returned roles locally.
+- [x] Seeds: Insert the `learner-1@rubicstricks.com`, `ca-1@rubicstricks.com`, and `ta-1@rubicstricks.com` accounts into `dev-tenant` with `UPWD` so the portal can test email/password login.
 - [x] BFF: Surface assessment metadata via proxy routes.
 
 **Iteration 29: Content Author Dashboard - Cohorts and Learners Snapshot** [x] COMPLETE
