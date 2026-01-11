@@ -138,7 +138,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const SESSION_COOKIE = 'consumer_portal_session';
 const STATE_TTL_MS = 5 * 60 * 1000;
-const stateStore = new Map<string, { createdAt: number; tenantId: string }>();
+const stateStore = new Map<string, { createdAt: number; tenantId: string; returnUrl?: string }>();
 const sessionSecret = new TextEncoder().encode(env.SESSION_SECRET);
 const tenantConfigResponse = (tenant: TenantRuntime) => ({
   tenantId: tenant.tenantId,
@@ -159,17 +159,31 @@ type SessionPayload = {
   email: string;
   name?: string;
   picture?: string;
-  provider: 'google';
+  provider: 'google' | 'microsoft' | 'custom';
   tenantId: string;
+  roles: string[];
 };
 
-function createStateToken(tenantId: string) {
+function selectMicrosoftRedirectUrl(tenant: TenantRuntime, hostHeader?: string) {
+  if (hostHeader) {
+    const normalizedHost = normalizeHost(hostHeader);
+    if (normalizedHost && tenant.microsoftRedirectHostMap) {
+      const match = tenant.microsoftRedirectHostMap.get(normalizedHost);
+      if (match) {
+        return match;
+      }
+    }
+  }
+  return (tenant.microsoftRedirectUrls && tenant.microsoftRedirectUrls[0]) ?? tenant.googleRedirectUrls[0];
+}
+
+function createStateToken(tenantId: string, returnUrl?: string) {
   const value = randomBytes(16).toString('hex');
-  stateStore.set(value, { createdAt: Date.now(), tenantId });
+  stateStore.set(value, { createdAt: Date.now(), tenantId, returnUrl });
   return value;
 }
 
-function consumeStateTenantId(state?: string | null) {
+function consumeState(state?: string | null) {
   if (!state) {
     return undefined;
   }
@@ -181,7 +195,7 @@ function consumeStateTenantId(state?: string | null) {
   if (Date.now() - entry.createdAt > STATE_TTL_MS) {
     return undefined;
   }
-  return entry.tenantId;
+  return entry;
 }
 
 async function createSessionToken(payload: SessionPayload) {
@@ -395,8 +409,9 @@ app.get('/health', () => ({ status: 'ok' }));
 
 app.get('/auth/google/login', async (request, reply) => {
   const tenant = request.tenant;
+  const returnUrl = (request.query as any).returnUrl as string | undefined;
   const redirectTarget = selectGoogleRedirectUrl(tenant, request.headers.host);
-  const state = createStateToken(tenant.tenantId);
+  const state = createStateToken(tenant.tenantId, returnUrl);
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authUrl.search = new URLSearchParams({
     client_id: tenant.auth.google.clientId,
@@ -427,12 +442,12 @@ app.get('/auth/google/callback', async (request, reply) => {
     reply.code(400);
     return { error };
   }
-  const tenantIdFromState = consumeStateTenantId(state);
-  if (!code || !tenantIdFromState) {
+  const stateEntry = consumeState(state);
+  if (!code || !stateEntry) {
     reply.code(400);
     return { error: 'Invalid OAuth state' };
   }
-  const tenantFromState = requireTenantById(tenantIdFromState);
+  const tenantFromState = requireTenantById(stateEntry.tenantId);
   const hostTenant = request.tenant;
   if (hostTenant && hostTenant.tenantId !== tenantFromState.tenantId) {
     reply.code(400);
@@ -488,25 +503,48 @@ app.get('/auth/google/callback', async (request, reply) => {
     return { error: 'Google account is missing an email claim' };
   }
 
-  // Look up user in headless API to get their UUID if they exist
+  // Lookup user in the headless user table and enforce their allowed login method.
   let headlessUserId = profile.sub;
+  let headlessUser: { id?: string; loginMethod?: string; roles?: string[]; displayName?: string } | undefined;
   try {
-    const headlessUser = await callHeadless<{ id: string }>(tenant, `/users/by-email/${profile.email}`, reply);
-    if (headlessUser && headlessUser.id) {
-      headlessUserId = headlessUser.id;
+    headlessUser = await callHeadless<{ id?: string; loginMethod?: string; roles?: string[]; displayName?: string }>(
+      tenant,
+      `/users/by-email/${profile.email}`,
+      reply,
+    );
+    if (!headlessUser || !headlessUser.id) {
+      reply.code(403);
+      return { error: 'User not registered for this tenant' };
     }
+    // Enforce user's permitted login method
+    const method = (headlessUser.loginMethod ?? '').toString();
+    if (method !== 'SIDP-GOOGLE') {
+      reply.code(403);
+      return { error: 'User is not allowed to authenticate via Google' };
+    }
+    headlessUserId = headlessUser.id;
   } catch (err) {
-    // If not found or error, fallback to Google sub
-    request.log.info({ email: profile.email }, 'User not found in headless API, falling back to Google sub');
+    request.log.info({ email: profile.email, err }, 'User not allowed or headless lookup failed');
+    reply.code(403);
+    return { error: 'User not allowed' };
   }
 
+  if (!headlessUser) {
+    reply.code(403);
+    return { error: 'User not allowed' };
+  }
+
+  const googleRoles = Array.isArray(headlessUser.roles) && headlessUser.roles.length > 0
+    ? headlessUser.roles
+    : tenant.headless.actorRoles;
   const sessionToken = await createSessionToken({
     sub: headlessUserId,
     email: profile.email,
-    name: profile.name ?? profile.email,
+    name: headlessUser.displayName ?? profile.name ?? profile.email,
     picture: profile.picture,
     provider: 'google',
     tenantId: tenant.tenantId,
+    roles: googleRoles,
   });
   reply
     .setCookie(SESSION_COOKIE, sessionToken, {
@@ -515,8 +553,228 @@ app.get('/auth/google/callback', async (request, reply) => {
       secure: isProduction,
       path: '/',
       maxAge: env.SESSION_TTL_SECONDS,
-    })
-    .redirect(tenant.landingRedirectUrl);
+    });
+
+  const finalRedirect = (stateEntry?.returnUrl && stateEntry.returnUrl.startsWith('/'))
+    ? new URL(stateEntry.returnUrl, tenant.clientApp.baseUrl).toString()
+    : tenant.landingRedirectUrl;
+
+  reply.redirect(finalRedirect);
+});
+
+const microsoftCallbackSchema = z.object({
+  code: z.string().optional(),
+  state: z.string().optional(),
+  error: z.string().optional(),
+});
+
+const localLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().optional(),
+});
+
+app.get('/auth/microsoft/login', async (request, reply) => {
+  const tenant = request.tenant;
+  if (!tenant.auth.microsoft) {
+    reply.code(501);
+    return { error: 'Microsoft authentication is not configured for this tenant' };
+  }
+  const returnUrl = (request.query as any).returnUrl as string | undefined;
+  const redirectTarget = selectMicrosoftRedirectUrl(tenant, request.headers.host);
+  const state = createStateToken(tenant.tenantId, returnUrl);
+  const authUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
+  authUrl.search = new URLSearchParams({
+    client_id: tenant.auth.microsoft.clientId,
+    redirect_uri: redirectTarget.toString(),
+    response_type: 'code',
+    scope: 'openid email profile',
+    response_mode: 'query',
+    state,
+  }).toString();
+  reply.redirect(authUrl.toString());
+});
+
+app.get('/auth/microsoft/callback', async (request, reply) => {
+  const parsed = microsoftCallbackSchema.safeParse(request.query ?? {});
+  if (!parsed.success) {
+    reply.code(400);
+    return { error: 'Invalid callback response' };
+  }
+  const { code, state, error } = parsed.data;
+  if (error) {
+    reply.code(400);
+    return { error };
+  }
+  const stateEntry = consumeState(state);
+  if (!code || !stateEntry) {
+    reply.code(400);
+    return { error: 'Invalid OAuth state' };
+  }
+  const tenantFromState = requireTenantById(stateEntry.tenantId);
+  const hostTenant = request.tenant;
+  if (hostTenant && hostTenant.tenantId !== tenantFromState.tenantId) {
+    reply.code(400);
+    return { error: 'Tenant mismatch detected for OAuth callback' };
+  }
+
+  if (!tenantFromState.auth.microsoft) {
+    reply.code(501);
+    return { error: 'Microsoft authentication is not configured for this tenant' };
+  }
+
+  const redirectTarget = selectMicrosoftRedirectUrl(tenantFromState, request.headers.host);
+
+  const tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: tenantFromState.auth.microsoft.clientId,
+      client_secret: tenantFromState.auth.microsoft.clientSecret,
+      code,
+      redirect_uri: redirectTarget.toString(),
+      grant_type: 'authorization_code',
+    }).toString(),
+  });
+
+  if (!tokenResponse.ok) {
+    const details = await tokenResponse.text();
+    reply.code(502);
+    return { error: 'Failed to exchange Microsoft authorization code', details };
+  }
+
+  const tokens = await tokenResponse.json() as { access_token?: string };
+  if (!tokens.access_token) {
+    reply.code(502);
+    return { error: 'Microsoft token response missing access token' };
+  }
+
+  const profileResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+
+  if (!profileResponse.ok) {
+    const details = await profileResponse.text();
+    reply.code(502);
+    return { error: 'Failed to fetch Microsoft profile', details };
+  }
+
+  const profile = await profileResponse.json() as { id?: string; mail?: string; userPrincipalName?: string; displayName?: string };
+  const email = profile.mail ?? profile.userPrincipalName;
+  if (!email) {
+    reply.code(400);
+    return { error: 'Microsoft account is missing an email claim' };
+  }
+
+  // Lookup user in the headless user table and enforce their allowed login method.
+  let headlessUserId = profile.id ?? '';
+  let headlessUser: { id?: string; loginMethod?: string; roles?: string[]; displayName?: string } | undefined;
+  try {
+    headlessUser = await callHeadless<{ id?: string; loginMethod?: string; roles?: string[]; displayName?: string }>(
+      tenantFromState,
+      `/users/by-email/${email}`,
+      reply,
+    );
+    if (!headlessUser || !headlessUser.id) {
+      reply.code(403);
+      return { error: 'User not registered for this tenant' };
+    }
+    const method = (headlessUser.loginMethod ?? '').toString();
+    if (method !== 'SIDP-MS') {
+      reply.code(403);
+      return { error: 'User is not allowed to authenticate via Microsoft' };
+    }
+    headlessUserId = headlessUser.id;
+  } catch (err) {
+    request.log.info({ email, err }, 'User not allowed or headless lookup failed');
+    reply.code(403);
+    return { error: 'User not allowed' };
+  }
+
+  if (!headlessUser) {
+    reply.code(403);
+    return { error: 'User not allowed' };
+  }
+
+  const microsoftRoles = Array.isArray(headlessUser.roles) && headlessUser.roles.length > 0
+    ? headlessUser.roles
+    : tenantFromState.headless.actorRoles;
+  const sessionToken = await createSessionToken({
+    sub: headlessUserId,
+    email,
+    name: headlessUser.displayName ?? profile.displayName ?? email,
+    provider: 'microsoft',
+    tenantId: tenantFromState.tenantId,
+    roles: microsoftRoles,
+  });
+  reply
+    .setCookie(SESSION_COOKIE, sessionToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProduction,
+      path: '/',
+      maxAge: env.SESSION_TTL_SECONDS,
+    });
+
+  const finalRedirect = (stateEntry?.returnUrl && stateEntry.returnUrl.startsWith('/'))
+    ? new URL(stateEntry.returnUrl, tenantFromState.clientApp.baseUrl).toString()
+    : tenantFromState.landingRedirectUrl;
+
+  reply.redirect(finalRedirect);
+});
+
+app.post('/auth/local', async (request, reply) => {
+  const payload = localLoginSchema.safeParse(request.body ?? {});
+  if (!payload.success) {
+    reply.code(400);
+    return { error: 'Invalid payload', issues: payload.error.issues }; 
+  }
+  const tenant = request.tenant;
+  const normalizedEmail = payload.data.email.trim();
+  try {
+    const headlessUser = await callHeadless<{
+      id?: string;
+      email: string;
+      displayName?: string;
+      roles?: string[];
+      loginMethod?: string;
+    }>(tenant, `/users/by-email/${normalizedEmail}`, reply);
+    if (!headlessUser?.id) {
+      reply.code(404);
+      return { error: 'User not found' };
+    }
+    const allowedMethod = (headlessUser.loginMethod ?? 'UPWD').toString();
+    if (allowedMethod !== 'UPWD') {
+      reply.code(403);
+      return { error: 'User is not allowed to authenticate via password' };
+    }
+    const roles = Array.isArray(headlessUser.roles) && headlessUser.roles.length > 0
+      ? headlessUser.roles
+      : tenant.headless.actorRoles;
+    const sessionToken = await createSessionToken({
+      sub: headlessUser.id,
+      email: headlessUser.email,
+      name: headlessUser.displayName ?? headlessUser.email,
+      provider: 'custom',
+      tenantId: tenant.tenantId,
+      roles,
+    });
+    reply
+      .setCookie(SESSION_COOKIE, sessionToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: isProduction,
+        path: '/',
+        maxAge: env.SESSION_TTL_SECONDS,
+      })
+      .send({ status: 'signed_in' });
+    return;
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
 });
 
 app.get('/auth/session', async (request, reply) => {
@@ -578,6 +836,68 @@ app.get('/api/analytics/assessments/:id', async (request, reply) => {
   const tenant = request.tenant;
   try {
     return await callHeadless(tenant, `/analytics/assessments/${assessmentId}`, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/summary', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  const query = request.query as Record<string, unknown> | undefined;
+  const queryString = query ? new URLSearchParams(query as Record<string, string>).toString() : '';
+  const path = `/analytics/assessments/${assessmentId}/summary${queryString ? `?${queryString}` : ''}`;
+  try {
+    return await callHeadless(tenant, path, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/funnel', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/analytics/assessments/${assessmentId}/funnel`, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/attempts-usage', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/analytics/assessments/${assessmentId}/attempts-usage`, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/items/most-missed', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  const query = request.query as Record<string, unknown> | undefined;
+  const queryString = query ? new URLSearchParams(query as Record<string, string>).toString() : '';
+  const path = `/analytics/assessments/${assessmentId}/items/most-missed${queryString ? `?${queryString}` : ''}`;
+  try {
+    return await callHeadless(tenant, path, reply, undefined, request);
   } catch (error) {
     if (error instanceof HeadlessRequestError) {
       reply.code(error.statusCode);

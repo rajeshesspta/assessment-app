@@ -34,7 +34,10 @@ import {
   createSQLiteTaxonomyRepository,
   type TaxonomyRepository,
 } from '../modules/taxonomy-config/taxonomy.repository.js';
+import { TENANT_DIRECTORY_ID } from '../modules/tenants/tenant.repository.sqlite.js';
 import { createSQLiteTenantClient } from './sqlite/client.js';
+import type { SQLiteTenantClient } from './sqlite/client.js';
+import { seedDefaultTenantData } from './sqlite/seeds.js';
 
 export interface RepositoryBundle {
   item: ItemRepository;
@@ -62,6 +65,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
 
 export function createSQLiteRepositoryBundle(config: AppConfig): RepositoryBundle {
   const client = createSQLiteTenantClient(config.persistence.sqlite);
+  seedDefaultTenantsForConfig(config, client);
   return {
     item: createSQLiteItemRepository(client),
     assessment: createSQLiteAssessmentRepository(client),
@@ -72,6 +76,21 @@ export function createSQLiteRepositoryBundle(config: AppConfig): RepositoryBundl
     snapshot: createSQLiteItemSnapshotRepository(client),
     dispose: () => client.closeAll(),
   };
+}
+
+function seedDefaultTenantsForConfig(config: AppConfig, client: SQLiteTenantClient): void {
+  if (!config.persistence.sqlite.seedDefaultTenant) {
+    return;
+  }
+  const seeded = new Set<string>();
+  for (const { tenantId } of config.auth.seedKeys) {
+    if (!tenantId || seeded.has(tenantId) || tenantId === config.auth.superAdminTenantId || tenantId === TENANT_DIRECTORY_ID) {
+      continue;
+    }
+    seeded.add(tenantId);
+    const db = client.getConnection(tenantId);
+    seedDefaultTenantData(db, tenantId);
+  }
 }
 
 export function createCosmosRepositoryBundle(_config: AppConfig): RepositoryBundle {

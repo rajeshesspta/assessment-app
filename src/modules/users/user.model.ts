@@ -9,6 +9,7 @@ export interface UserInput {
   displayName?: string;
   status?: UserStatus;
   createdBy?: string;
+  loginMethod?: import('../../common/types.js').LoginMethod;
 }
 
 function normalizeEmail(email: string): string {
@@ -38,6 +39,7 @@ export function createUser(input: UserInput): User {
     roles,
     email: normalizeEmail(input.email),
     displayName: input.displayName?.trim() || undefined,
+    loginMethod: input.loginMethod,
     status: input.status ?? 'invited',
     createdBy: input.createdBy,
     createdAt: now,
@@ -62,6 +64,9 @@ export function updateUser(existing: User, patch: Partial<Omit<UserInput, 'tenan
   }
   if (patch.createdBy !== undefined) {
     next.createdBy = patch.createdBy;
+  }
+  if (patch.loginMethod !== undefined) {
+    next.loginMethod = patch.loginMethod as User['loginMethod'];
   }
   next.updatedAt = new Date().toISOString();
   return next;

@@ -51,8 +51,15 @@ const tenantGoogleAuthSchema = z.object({
   redirectUris: z.array(z.string().url()).min(1),
 });
 
+const tenantMicrosoftAuthSchema = z.object({
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
+  redirectUris: z.array(z.string().url()).min(1),
+});
+
 const tenantAuthSchema = z.object({
   google: tenantGoogleAuthSchema,
+  microsoft: tenantMicrosoftAuthSchema.optional(),
 });
 
 export const tenantConfigSchema = z.object({

@@ -168,6 +168,57 @@ Multi-tenant BFF + Portal Plan
 - [ ] Stage env with multiple tenants hitting control-plane-powered BFF.
 - [ ] Feature flag gating for gradual rollout (shared stack first, then premium).
 
+
+==============================
+Analytics Roadmap (Iterations)
+==============================
+
+Goal: ship role-aware analytics with tenant isolation. Start with an MVP slice that uses existing attempt + assessment data, then expand into item psychometrics, rater ops, and integrity signals.
+
+Iteration 0 — MVP Analytics (ship first)
+- [ ] Headless API: add/extend analytics endpoints for:
+	- Participation funnel: assigned → started → submitted → scored (plus completion rate)
+	- Score distribution + pass rate (per assessment, per cohort when applicable)
+	- Attempts used vs allowed (per learner + aggregate)
+	- “Most missed items” (per assessment) + basic item difficulty
+	- Time metrics: time-to-start, time-to-submit, time-per-item (if timestamps available)
+- [ ] Authorization: restrict to tenant-scoped analytics roles (Tenant Admin + Content Author), explicitly reject Super Admin.
+- [ ] Storage/queries: implement efficient aggregate queries (avoid cross-partition patterns if Cosmos later).
+- [ ] Tests: route tests for happy paths + authorization + tenant isolation.
+- [ ] Docs: update analytics README with endpoint shapes + examples.
+- [ ] Consumer portal: support deep-linking analytics routes (e.g., `/analytics?assessmentId=...`) for shareable dashboards.
+
+Iteration 1 — Learner-facing analytics
+- [ ] Learner dashboard endpoints (self-only): progress, attempts used, score history, strengths/weaknesses by taxonomy.
+- [ ] Privacy rules: learners can only see their own aggregates.
+- [ ] Portal: “My Progress” view (feature-flagged).
+
+Iteration 2 — Cohort/segment analytics
+- [ ] Compare cohorts and segments (department/location tags if metadata exists).
+- [ ] Trends over time (weekly/monthly completion + pass rate).
+- [ ] Export: CSV endpoints for admin reporting.
+
+Iteration 3 — Item analytics (author tooling)
+- [ ] Distractor selection rates, omission rate, time-per-item distributions.
+- [ ] Discrimination (point-biserial / correlation with total score) where statistically valid.
+- [ ] Version comparison (before/after item edit).
+
+Iteration 4 — Reliability + assessment quality
+- [ ] Cronbach’s alpha/KR-20 (as applicable), standard error/confidence bands.
+- [ ] Blueprint coverage reporting (taxonomy/category/tag heatmaps).
+
+Iteration 5 — Rater ops analytics (manual scoring)
+- [ ] Queue depth, SLA/turnaround time, agreement/override metrics.
+- [ ] Calibration workflows and drift detection (basic).
+
+Iteration 6 — Integrity/anomaly signals
+- [ ] Very fast completions, repeated answer patterns, suspicious similarity clusters.
+- [ ] Unusual score jumps across attempts.
+
+Iteration 7 — Platform/Super Admin analytics
+- [ ] Cross-tenant usage + health (requests, latency, error rate), cost/RU dashboards (when Cosmos enabled).
+- [ ] Feature adoption + noisy-neighbor detection.
+
 This checklist keeps headless agnostic, lets the shared BFF/portal serve many tenants safely, and still supports separate deployments for premium customers when needed.
 
 
@@ -398,6 +449,13 @@ Assessment Module Iteration Checklist
 - Goal: Monitor assessment assembly and publishing progress.
 - [x] UI: List recent assessments with item count, cohort count, status, and publish controls.
 - [x] UI: Display total assessments metric.
+
+**Iteration 29: Local Authentication & Credentials**
+- Goal: Let tenant users sign in with tenant-scoped email/password (password optional for now) and keep portal/session state aligned with headless roles.
+- [x] BFF: Add `/auth/local` that validates `email`, enforces `loginMethod = UPWD` (or no restriction), issues the session cookie with persisted roles, and returns a steady success response.
+- [x] BFF: Extend session payload to include `roles` so the portal can snap actor roles once `/auth/session` completes.
+- [x] Portal: Replace the mock `loginCustom` flow with a call to `/auth/local`, surface validation feedback, and store the returned roles locally.
+- [x] Seeds: Insert the `learner-1@rubicstricks.com`, `ca-1@rubicstricks.com`, and `ta-1@rubicstricks.com` accounts into `dev-tenant` with `UPWD` so the portal can test email/password login.
 - [x] BFF: Surface assessment metadata via proxy routes.
 
 **Iteration 29: Content Author Dashboard - Cohorts and Learners Snapshot** [x] COMPLETE

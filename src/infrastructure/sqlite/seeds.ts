@@ -540,160 +540,160 @@ function tenantSampleItems(seedTenantId: string) {
 export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): void {
   const sampleItems = tenantSampleItems(tenantId);
   const existing = getItemById(db, tenantId, sampleItems[0].id);
-  if (existing) {
-    console.log('Seed data already exists for tenant:', tenantId);
-    return;
-  }
   const now = new Date().toISOString();
-  for (const item of sampleItems) {
-    if (item.kind === 'FILL_IN_THE_BLANK') {
+  if (!existing) {
+    for (const item of sampleItems) {
+      if (item.kind === 'FILL_IN_THE_BLANK') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'FILL_IN_THE_BLANK',
+          prompt: item.prompt,
+          blanks: item.blanks,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'MATCHING') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'MATCHING',
+          prompt: item.prompt,
+          prompts: item.prompts,
+          targets: item.targets,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'ORDERING') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'ORDERING',
+          prompt: item.prompt,
+          options: item.options,
+          correctOrder: item.correctOrder,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'SHORT_ANSWER') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'SHORT_ANSWER',
+          prompt: item.prompt,
+          rubric: item.rubric,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'ESSAY') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'ESSAY',
+          prompt: item.prompt,
+          rubric: item.rubric,
+          length: item.length,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'NUMERIC_ENTRY') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'NUMERIC_ENTRY',
+          prompt: item.prompt,
+          validation: item.validation,
+          units: item.units,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'HOTSPOT') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'HOTSPOT',
+          prompt: item.prompt,
+          image: item.image,
+          hotspots: item.hotspots,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'DRAG_AND_DROP') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'DRAG_AND_DROP',
+          prompt: item.prompt,
+          tokens: item.tokens,
+          zones: item.zones,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      if (item.kind === 'SCENARIO_TASK') {
+        insertItem(db, {
+          id: item.id,
+          tenantId,
+          kind: 'SCENARIO_TASK',
+          prompt: item.prompt,
+          brief: item.brief,
+          attachments: item.attachments,
+          workspace: item.workspace,
+          evaluation: item.evaluation,
+          scoring: item.scoring,
+          createdAt: now,
+          updatedAt: now,
+        } as Item);
+        continue;
+      }
+      const choices = item.choices ?? (item.kind === 'TRUE_FALSE' ? [{ text: 'True' }, { text: 'False' }] : []);
+      const correctIndexes = item.correctIndexes ?? [];
       insertItem(db, {
         id: item.id,
         tenantId,
-        kind: 'FILL_IN_THE_BLANK',
+        kind: item.kind,
         prompt: item.prompt,
-        blanks: item.blanks,
-        scoring: item.scoring,
+        choices,
+        answerMode: correctIndexes.length > 1 ? 'multiple' : 'single',
+        correctIndexes,
         createdAt: now,
         updatedAt: now,
-      } as Item);
-      continue;
+      });
     }
-    if (item.kind === 'MATCHING') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'MATCHING',
-        prompt: item.prompt,
-        prompts: item.prompts,
-        targets: item.targets,
-        scoring: item.scoring,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    if (item.kind === 'ORDERING') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'ORDERING',
-        prompt: item.prompt,
-        options: item.options,
-        correctOrder: item.correctOrder,
-        scoring: item.scoring,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    if (item.kind === 'SHORT_ANSWER') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'SHORT_ANSWER',
-        prompt: item.prompt,
-        rubric: item.rubric,
-        scoring: item.scoring,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    if (item.kind === 'ESSAY') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'ESSAY',
-        prompt: item.prompt,
-        rubric: item.rubric,
-        length: item.length,
-        scoring: item.scoring,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    if (item.kind === 'NUMERIC_ENTRY') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'NUMERIC_ENTRY',
-        prompt: item.prompt,
-        validation: item.validation,
-        units: item.units,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    if (item.kind === 'HOTSPOT') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'HOTSPOT',
-        prompt: item.prompt,
-        image: item.image,
-        hotspots: item.hotspots,
-        scoring: item.scoring,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    if (item.kind === 'DRAG_AND_DROP') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'DRAG_AND_DROP',
-        prompt: item.prompt,
-        tokens: item.tokens,
-        zones: item.zones,
-        scoring: item.scoring,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    if (item.kind === 'SCENARIO_TASK') {
-      insertItem(db, {
-        id: item.id,
-        tenantId,
-        kind: 'SCENARIO_TASK',
-        prompt: item.prompt,
-        brief: item.brief,
-        attachments: item.attachments,
-        workspace: item.workspace,
-        evaluation: item.evaluation,
-        scoring: item.scoring,
-        createdAt: now,
-        updatedAt: now,
-      } as Item);
-      continue;
-    }
-    const choices = item.choices ?? (item.kind === 'TRUE_FALSE' ? [{ text: 'True' }, { text: 'False' }] : []);
-    const correctIndexes = item.correctIndexes ?? [];
-    insertItem(db, {
-      id: item.id,
+    insertAssessment(db, {
+      id: 'sample-assessment-1',
       tenantId,
-      kind: item.kind,
-      prompt: item.prompt,
-      choices,
-      answerMode: correctIndexes.length > 1 ? 'multiple' : 'single',
-      correctIndexes,
+      title: 'Sample Assessment',
+      itemIds: sampleItems.map(item => item.id),
+      allowedAttempts: 1,
       createdAt: now,
       updatedAt: now,
     });
+  } else {
+    console.log('Seed data already exists for tenant:', tenantId);
   }
-  insertAssessment(db, {
-    id: 'sample-assessment-1',
-    tenantId,
-    title: 'Sample Assessment',
-    itemIds: sampleItems.map(item => item.id),
-    allowedAttempts: 1,
-    createdAt: now,
-    updatedAt: now,
-  });
 
   const adminExists = db
     .prepare('SELECT id FROM users WHERE tenant_id = ? AND role = ? LIMIT 1')
@@ -706,6 +706,45 @@ export function seedDefaultTenantData(db: SQLiteDatabase, tenantId: string): voi
       email: `seed-admin+${tenantId}@example.com`,
       displayName: `Seed Admin (${tenantId})`,
       status: 'active',
+      createdBy: 'seed-script',
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  const localTenants = [
+    {
+      email: 'learner-1@rubicstricks.com',
+      displayName: 'Learner One',
+      roles: ['LEARNER'] as User['roles'],
+    },
+    {
+      email: 'ca-1@rubicstricks.com',
+      displayName: 'Author One',
+      roles: ['CONTENT_AUTHOR'] as User['roles'],
+    },
+    {
+      email: 'ta-1@rubicstricks.com',
+      displayName: 'Tenant Admin',
+      roles: ['TENANT_ADMIN'] as User['roles'],
+    },
+  ];
+
+  for (const seedUser of localTenants) {
+    const existing = db
+      .prepare('SELECT id FROM users WHERE tenant_id = ? AND LOWER(email) = LOWER(?) LIMIT 1')
+      .get(tenantId, seedUser.email) as { id: string } | undefined;
+    if (existing) {
+      continue;
+    }
+    const safeId = `seed-user-${seedUser.email.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    insertUser(db, {
+      id: safeId,
+      tenantId,
+      roles: seedUser.roles,
+      email: seedUser.email,
+      displayName: seedUser.displayName,
+      status: 'active',
+      loginMethod: 'UPWD',
       createdBy: 'seed-script',
       createdAt: now,
       updatedAt: now,

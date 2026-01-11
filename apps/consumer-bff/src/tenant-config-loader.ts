@@ -13,6 +13,8 @@ export type TenantRuntime = TenantConfig & {
   landingRedirectUrl: string;
   googleRedirectUrls: URL[];
   googleRedirectHostMap: Map<string, URL>;
+  microsoftRedirectUrls?: URL[];
+  microsoftRedirectHostMap?: Map<string, URL>;
 };
 
 export type TenantRuntimeBundle = {
@@ -96,6 +98,8 @@ export function buildTenantRuntimeBundle(bundle: TenantConfigBundle): TenantRunt
     const landingRedirectUrl = new URL(tenant.clientApp.landingPath, clientAppUrl).toString();
     const googleRedirectUrls = tenant.auth.google.redirectUris.map(uri => new URL(uri));
     const googleRedirectHostMap = new Map<string, URL>();
+    const microsoftRedirectUrls = tenant.auth.microsoft?.redirectUris?.map((uri: string) => new URL(uri)) ?? [];
+    const microsoftRedirectHostMap = new Map<string, URL>();
     for (const redirectUrl of googleRedirectUrls) {
       const normalizedHost = normalizeHost(redirectUrl.host);
       if (!normalizedHost) {
@@ -108,6 +112,18 @@ export function buildTenantRuntimeBundle(bundle: TenantConfigBundle): TenantRunt
       googleRedirectHostMap.set(normalizedHost, redirectUrl);
     }
 
+    for (const redirectUrl of microsoftRedirectUrls) {
+      const normalizedHost = normalizeHost(redirectUrl.host);
+      if (!normalizedHost) {
+        continue;
+      }
+      const existing = microsoftRedirectHostMap.get(normalizedHost);
+      if (existing && existing.toString() !== redirectUrl.toString()) {
+        throw new Error(`Duplicate Microsoft redirect host mapping detected for ${normalizedHost}`);
+      }
+      microsoftRedirectHostMap.set(normalizedHost, redirectUrl);
+    }
+
     const runtimeTenant: TenantRuntime = {
       ...tenant,
       clientAppUrl,
@@ -115,6 +131,8 @@ export function buildTenantRuntimeBundle(bundle: TenantConfigBundle): TenantRunt
       landingRedirectUrl,
       googleRedirectUrls,
       googleRedirectHostMap,
+      microsoftRedirectUrls,
+      microsoftRedirectHostMap,
     };
 
     if (tenantsById.has(runtimeTenant.tenantId)) {

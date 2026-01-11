@@ -14,6 +14,7 @@ const createBodySchema = z.object({
   displayName: z.string().min(1).max(120).optional(),
   roles: z.array(z.enum(TENANT_USER_ROLES)).nonempty(),
   status: z.enum(allowedStatuses).optional(),
+  loginMethod: z.enum(['SIDP-GOOGLE', 'SIDP-MS', 'UPWD']).optional(),
 });
 
 const legacyBodySchema = z.object({
@@ -29,6 +30,7 @@ const updateBodySchema = z.object({
   displayName: z.string().min(1).max(120).optional(),
   roles: z.array(z.enum(TENANT_USER_ROLES)).nonempty().optional(),
   status: z.enum(allowedStatuses).optional(),
+  loginMethod: z.enum(['SIDP-GOOGLE', 'SIDP-MS', 'UPWD']).optional(),
 });
 
 type CreateUserPayload = z.infer<typeof createSchema>;
@@ -125,6 +127,7 @@ export async function userRoutes(app: FastifyInstance, options: UserRoutesOption
       email: parsed.email,
       displayName: parsed.displayName,
       status: (parsed.status as AllowedStatus | undefined) ?? 'invited',
+      loginMethod: (parsed as any).loginMethod,
     });
     repository.save(user);
     reply.code(201);

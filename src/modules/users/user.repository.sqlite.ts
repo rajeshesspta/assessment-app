@@ -13,6 +13,7 @@ interface UserRow {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  login_method?: string | null;
 }
 
 function mapRow(row?: UserRow): User | undefined {
@@ -41,6 +42,7 @@ function mapRow(row?: UserRow): User | undefined {
     displayName: row.display_name ?? undefined,
     status: row.status as User['status'],
     createdBy: row.created_by ?? undefined,
+    loginMethod: (row.login_method as User['loginMethod']) ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -51,8 +53,8 @@ export function createSQLiteUserRepository(client: SQLiteTenantClient): UserRepo
     save(user) {
       const db = client.getConnection(user.tenantId);
       db.prepare(`
-        INSERT INTO users (id, tenant_id, role, roles_json, email, display_name, status, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, tenant_id, role, roles_json, email, display_name, status, created_by, created_at, updated_at, login_method)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           role = excluded.role,
           roles_json = excluded.roles_json,
@@ -61,7 +63,8 @@ export function createSQLiteUserRepository(client: SQLiteTenantClient): UserRepo
           status = excluded.status,
           created_by = excluded.created_by,
           created_at = excluded.created_at,
-          updated_at = excluded.updated_at
+          updated_at = excluded.updated_at,
+          login_method = excluded.login_method
       `).run(
         user.id,
         user.tenantId,
@@ -73,6 +76,7 @@ export function createSQLiteUserRepository(client: SQLiteTenantClient): UserRepo
         user.createdBy ?? null,
         user.createdAt,
         user.updatedAt,
+        user.loginMethod ?? null,
       );
       return user;
     },

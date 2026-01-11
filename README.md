@@ -25,6 +25,21 @@ Headless assessment platform MVP in TypeScript + Fastify.
 - Analytics (attempt count + average score)
 - Event Bus (in-memory pub/sub)
 
+## Local Development & Seed Data
+
+When running in development mode (`npm run dev`), the system automatically provisions and seeds the default tenants (including `dev-tenant`) with sample items, assessments, and the following test users:
+
+| Display Name | Email | Default Role | Login Method |
+| :--- | :--- | :--- | :--- |
+| **Learner One** | `learner-1@rubicstricks.com` | `LEARNER` | `UPWD` (Email only) |
+| **Author One** | `ca-1@rubicstricks.com` | `CONTENT_AUTHOR` | `UPWD` (Email only) |
+| **Tenant Admin** | `ta-1@rubicstricks.com` | `TENANT_ADMIN` | `UPWD` (Email only) |
+
+To reset the data for a specific tenant, use:
+```bash
+npm run db:reset -- --tenant=dev-tenant
+```
+
 ## Domain Roles & Cohorts
 
 - Super Admin: oversees the platform, provisions new tenants, and enforces global governance/compliance controls.
@@ -238,6 +253,10 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - POST /attempts/:id/submit
 - GET /attempts/:id
 - GET /analytics/assessments/:id
+- GET /analytics/assessments/:id/summary
+- GET /analytics/assessments/:id/funnel
+- GET /analytics/assessments/:id/attempts-usage
+- GET /analytics/assessments/:id/items/most-missed
 - POST /tenants/:id/admins (Super Admin only; creates tenant admins while impersonating the tenant)
 - POST /users (Tenant Admin contexts; invites Content Authors, Learners, or Raters via a non-empty `roles[]` payload)
 - GET /users/roles (lists tenant-manageable roles: `CONTENT_AUTHOR`, `LEARNER`, `RATER`)
