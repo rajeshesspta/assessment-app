@@ -141,9 +141,22 @@ export function usePortalAuth() {
     provider: PortalAuthProvider,
     roles: string[] = DEFAULT_ROLES,
     profile?: ProviderProfile,
+    returnUrl?: string,
   ) => {
     if (provider === 'google' && BFF_ENABLED) {
-      window.location.href = buildBffUrl('/auth/google/login');
+      const url = new URL(buildBffUrl('/auth/google/login'));
+      if (returnUrl) {
+        url.searchParams.set('returnUrl', returnUrl);
+      }
+      window.location.href = url.toString();
+      return;
+    }
+    if (provider === 'microsoft' && BFF_ENABLED) {
+      const url = new URL(buildBffUrl('/auth/microsoft/login'));
+      if (returnUrl) {
+        url.searchParams.set('returnUrl', returnUrl);
+      }
+      window.location.href = url.toString();
       return;
     }
     const now = new Date();

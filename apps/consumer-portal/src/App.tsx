@@ -225,16 +225,23 @@ export default function App() {
     if (!user) {
       return;
     }
-    if (location.pathname === '/') {
+
+    const searchParams = new URLSearchParams(location.search);
+    const returnUrl = searchParams.get('returnUrl');
+
+    if (returnUrl && returnUrl.startsWith('/')) {
+      navigate(returnUrl, { replace: true });
+    } else if (location.pathname === '/' || location.pathname === '/login') {
       navigate(LANDING_PATH, { replace: true });
     }
-  }, [user, location.pathname, navigate]);
+  }, [user, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!checkingSession && !user && location.pathname !== '/login') {
-      navigate('/login', { replace: true });
+      const returnUrl = encodeURIComponent(location.pathname + location.search);
+      navigate(`/login?returnUrl=${returnUrl}`, { replace: true });
     }
-  }, [checkingSession, user, location.pathname, navigate]);
+  }, [checkingSession, user, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     console.log('Session save effect:', { user: !!user, isBffEnabled: isBffEnabled(), configHeadlessTenantId: config?.headlessTenantId, session: !!session });
@@ -495,7 +502,11 @@ export default function App() {
         tenantName={tenantName}
         supportEmail={supportEmail}
         branding={config?.branding}
-        onProviderLogin={loginWithProvider}
+        onProviderLogin={(provider, roles, profile) => {
+          const searchParams = new URLSearchParams(location.search);
+          const returnUrl = searchParams.get('returnUrl') || '/';
+          loginWithProvider(provider, roles, profile, returnUrl);
+        }}
         onCustomLogin={handleCustomLogin}
         loginError={loginError}
       />

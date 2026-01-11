@@ -138,7 +138,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const SESSION_COOKIE = 'consumer_portal_session';
 const STATE_TTL_MS = 5 * 60 * 1000;
-const stateStore = new Map<string, { createdAt: number; tenantId: string }>();
+const stateStore = new Map<string, { createdAt: number; tenantId: string; returnUrl?: string }>();
 const sessionSecret = new TextEncoder().encode(env.SESSION_SECRET);
 const tenantConfigResponse = (tenant: TenantRuntime) => ({
   tenantId: tenant.tenantId,
@@ -177,13 +177,13 @@ function selectMicrosoftRedirectUrl(tenant: TenantRuntime, hostHeader?: string) 
   return (tenant.microsoftRedirectUrls && tenant.microsoftRedirectUrls[0]) ?? tenant.googleRedirectUrls[0];
 }
 
-function createStateToken(tenantId: string) {
+function createStateToken(tenantId: string, returnUrl?: string) {
   const value = randomBytes(16).toString('hex');
-  stateStore.set(value, { createdAt: Date.now(), tenantId });
+  stateStore.set(value, { createdAt: Date.now(), tenantId, returnUrl });
   return value;
 }
 
-function consumeStateTenantId(state?: string | null) {
+function consumeState(state?: string | null) {
   if (!state) {
     return undefined;
   }
@@ -195,7 +195,7 @@ function consumeStateTenantId(state?: string | null) {
   if (Date.now() - entry.createdAt > STATE_TTL_MS) {
     return undefined;
   }
-  return entry.tenantId;
+  return entry;
 }
 
 async function createSessionToken(payload: SessionPayload) {
@@ -409,8 +409,9 @@ app.get('/health', () => ({ status: 'ok' }));
 
 app.get('/auth/google/login', async (request, reply) => {
   const tenant = request.tenant;
+  const returnUrl = (request.query as any).returnUrl as string | undefined;
   const redirectTarget = selectGoogleRedirectUrl(tenant, request.headers.host);
-  const state = createStateToken(tenant.tenantId);
+  const state = createStateToken(tenant.tenantId, returnUrl);
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authUrl.search = new URLSearchParams({
     client_id: tenant.auth.google.clientId,
@@ -441,12 +442,12 @@ app.get('/auth/google/callback', async (request, reply) => {
     reply.code(400);
     return { error };
   }
-  const tenantIdFromState = consumeStateTenantId(state);
-  if (!code || !tenantIdFromState) {
+  const stateEntry = consumeState(state);
+  if (!code || !stateEntry) {
     reply.code(400);
     return { error: 'Invalid OAuth state' };
   }
-  const tenantFromState = requireTenantById(tenantIdFromState);
+  const tenantFromState = requireTenantById(stateEntry.tenantId);
   const hostTenant = request.tenant;
   if (hostTenant && hostTenant.tenantId !== tenantFromState.tenantId) {
     reply.code(400);
@@ -542,8 +543,13 @@ app.get('/auth/google/callback', async (request, reply) => {
       secure: isProduction,
       path: '/',
       maxAge: env.SESSION_TTL_SECONDS,
-    })
-    .redirect(tenant.landingRedirectUrl);
+    });
+
+  const finalRedirect = (stateEntry?.returnUrl && stateEntry.returnUrl.startsWith('/'))
+    ? new URL(stateEntry.returnUrl, tenant.clientApp.baseUrl).toString()
+    : tenant.landingRedirectUrl;
+
+  reply.redirect(finalRedirect);
 });
 
 const microsoftCallbackSchema = z.object({
@@ -559,8 +565,9 @@ const localLoginSchema = z.object({
 
 app.get('/auth/microsoft/login', async (request, reply) => {
   const tenant = request.tenant;
+  const returnUrl = (request.query as any).returnUrl as string | undefined;
   const redirectTarget = selectMicrosoftRedirectUrl(tenant, request.headers.host);
-  const state = createStateToken(tenant.tenantId);
+  const state = createStateToken(tenant.tenantId, returnUrl);
   const authUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
   authUrl.search = new URLSearchParams({
     client_id: tenant.auth.microsoft.clientId,
@@ -584,12 +591,12 @@ app.get('/auth/microsoft/callback', async (request, reply) => {
     reply.code(400);
     return { error };
   }
-  const tenantIdFromState = consumeStateTenantId(state);
-  if (!code || !tenantIdFromState) {
+  const stateEntry = consumeState(state);
+  if (!code || !stateEntry) {
     reply.code(400);
     return { error: 'Invalid OAuth state' };
   }
-  const tenantFromState = requireTenantById(tenantIdFromState);
+  const tenantFromState = requireTenantById(stateEntry.tenantId);
   const hostTenant = request.tenant;
   if (hostTenant && hostTenant.tenantId !== tenantFromState.tenantId) {
     reply.code(400);
@@ -677,8 +684,13 @@ app.get('/auth/microsoft/callback', async (request, reply) => {
       secure: isProduction,
       path: '/',
       maxAge: env.SESSION_TTL_SECONDS,
-    })
-    .redirect(tenantFromState.landingRedirectUrl);
+    });
+
+  const finalRedirect = (stateEntry?.returnUrl && stateEntry.returnUrl.startsWith('/'))
+    ? new URL(stateEntry.returnUrl, tenantFromState.clientApp.baseUrl).toString()
+    : tenantFromState.landingRedirectUrl;
+
+  reply.redirect(finalRedirect);
 });
 
 app.post('/auth/local', async (request, reply) => {
