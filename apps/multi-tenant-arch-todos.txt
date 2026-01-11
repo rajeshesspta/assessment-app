@@ -168,9 +168,7 @@ Multi-tenant BFF + Portal Plan
 - [ ] Stage env with multiple tenants hitting control-plane-powered BFF.
 - [ ] Feature flag gating for gradual rollout (shared stack first, then premium).
 
-==============================
-Testing Roadmap (Iterations)
-==============================
+Iteration 39 — Testing Roadmap (Iterations)
 
 Goal: Establish an automated, low-touch test and release pipeline so we can ship with confidence while minimizing on-call burden.
 
