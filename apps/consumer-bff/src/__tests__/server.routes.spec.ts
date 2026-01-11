@@ -180,6 +180,53 @@ describe('server routes', () => {
     });
   });
 
+  it('forwards MVP analytics endpoints to headless API', async () => {
+    const tenant = createTenantConfig({ hosts: ['tenant.test'] });
+    app = await setupServer([tenant]);
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    const requests = [
+      '/api/analytics/assessments/assessment-1/summary?passThreshold=0.8&bucketSize=0.2',
+      '/api/analytics/assessments/assessment-1/funnel',
+      '/api/analytics/assessments/assessment-1/attempts-usage',
+      '/api/analytics/assessments/assessment-1/items/most-missed?limit=5',
+    ];
+
+    for (const url of requests) {
+      const response = await app.inject({
+        method: 'GET',
+        url,
+        headers: {
+          host: 'tenant.test',
+          'x-actor-roles': 'TENANT_ADMIN',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(requests.length);
+    const calledUrls = fetchMock.mock.calls.map(call => String(call[0]));
+    expect(calledUrls.some(url => url.includes('/analytics/assessments/assessment-1/summary'))).toBe(true);
+    expect(calledUrls.some(url => url.includes('/analytics/assessments/assessment-1/funnel'))).toBe(true);
+    expect(calledUrls.some(url => url.includes('/analytics/assessments/assessment-1/attempts-usage'))).toBe(true);
+    expect(calledUrls.some(url => url.includes('/analytics/assessments/assessment-1/items/most-missed'))).toBe(true);
+
+    const initArgs = fetchMock.mock.calls.map(call => call[1]);
+    for (const initArg of initArgs) {
+      expect(initArg?.headers).toMatchObject({
+        'x-api-key': tenant.headless.apiKey,
+        'x-tenant-id': tenant.headless.tenantId,
+        'x-actor-roles': 'TENANT_ADMIN',
+      });
+    }
+  });
+
   it('forwards cohort delete requests to headless API', async () => {
     const tenant = createTenantConfig({ hosts: ['tenant.test'] });
     app = await setupServer([tenant]);

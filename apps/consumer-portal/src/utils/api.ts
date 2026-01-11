@@ -7,6 +7,55 @@ export interface AssessmentAnalytics {
   averageScore: number | null;
 }
 
+export interface AnalyticsDistribution {
+  bucketSize: number;
+  buckets: Record<string, number>;
+}
+
+export interface AnalyticsAssessmentSummary {
+  assessmentId: string;
+  scoredAttemptCount: number;
+  averageScore: number;
+  averagePercent: number;
+  medianPercent: number;
+  minPercent: number;
+  maxPercent: number;
+  passThreshold: number;
+  passRate: number;
+  distribution: AnalyticsDistribution;
+  completionTimeSeconds: { count: number; average: number; median: number };
+}
+
+export interface AnalyticsAssessmentFunnel {
+  assessmentId: string;
+  assignedLearnerCount: number;
+  startedLearnerCount: number;
+  submittedLearnerCount: number;
+  scoredLearnerCount: number;
+  attemptCount: number;
+}
+
+export interface AnalyticsAttemptsUsage {
+  assessmentId: string;
+  assignedLearnerCount: number;
+  learnersAttemptedCount: number;
+  learnersExhaustedCount: number;
+  averageAttemptsUsed: number;
+  maxAttemptsUsed: number;
+}
+
+export interface AnalyticsMostMissedItem {
+  itemId: string;
+  attemptCount: number;
+  averagePercent: number;
+  perfectRate: number;
+}
+
+export interface AnalyticsMostMissedResponse {
+  assessmentId: string;
+  items: AnalyticsMostMissedItem[];
+}
+
 export interface AttemptResponseItem {
   itemId: string;
   answerIndexes?: number[];
@@ -177,6 +226,35 @@ export function createApiClient(session: TenantSession) {
   return {
     async fetchAssessmentAnalytics(assessmentId: string): Promise<AssessmentAnalytics> {
       return request<AssessmentAnalytics>(`/analytics/assessments/${assessmentId}`);
+    },
+    async fetchAssessmentAnalyticsSummary(
+      assessmentId: string,
+      options?: { passThreshold?: number; bucketSize?: number },
+    ): Promise<AnalyticsAssessmentSummary> {
+      const query = new URLSearchParams();
+      if (typeof options?.passThreshold === 'number') query.set('passThreshold', String(options.passThreshold));
+      if (typeof options?.bucketSize === 'number') query.set('bucketSize', String(options.bucketSize));
+      const queryString = query.toString();
+      return request<AnalyticsAssessmentSummary>(
+        `/analytics/assessments/${assessmentId}/summary${queryString ? `?${queryString}` : ''}`,
+      );
+    },
+    async fetchAssessmentAnalyticsFunnel(assessmentId: string): Promise<AnalyticsAssessmentFunnel> {
+      return request<AnalyticsAssessmentFunnel>(`/analytics/assessments/${assessmentId}/funnel`);
+    },
+    async fetchAssessmentAttemptsUsage(assessmentId: string): Promise<AnalyticsAttemptsUsage> {
+      return request<AnalyticsAttemptsUsage>(`/analytics/assessments/${assessmentId}/attempts-usage`);
+    },
+    async fetchAssessmentMostMissedItems(
+      assessmentId: string,
+      options?: { limit?: number },
+    ): Promise<AnalyticsMostMissedResponse> {
+      const query = new URLSearchParams();
+      if (typeof options?.limit === 'number') query.set('limit', String(options.limit));
+      const queryString = query.toString();
+      return request<AnalyticsMostMissedResponse>(
+        `/analytics/assessments/${assessmentId}/items/most-missed${queryString ? `?${queryString}` : ''}`,
+      );
     },
     async startAttempt(assessmentId: string): Promise<AttemptResponse> {
       return request<AttemptResponse>('/attempts', {

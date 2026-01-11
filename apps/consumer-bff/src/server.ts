@@ -505,8 +505,13 @@ app.get('/auth/google/callback', async (request, reply) => {
 
   // Lookup user in the headless user table and enforce their allowed login method.
   let headlessUserId = profile.sub;
+  let headlessUser: { id?: string; loginMethod?: string; roles?: string[]; displayName?: string } | undefined;
   try {
-    const headlessUser = await callHeadless<{ id?: string; loginMethod?: string }>(tenant, `/users/by-email/${profile.email}`, reply);
+    headlessUser = await callHeadless<{ id?: string; loginMethod?: string; roles?: string[]; displayName?: string }>(
+      tenant,
+      `/users/by-email/${profile.email}`,
+      reply,
+    );
     if (!headlessUser || !headlessUser.id) {
       reply.code(403);
       return { error: 'User not registered for this tenant' };
@@ -520,6 +525,11 @@ app.get('/auth/google/callback', async (request, reply) => {
     headlessUserId = headlessUser.id;
   } catch (err) {
     request.log.info({ email: profile.email, err }, 'User not allowed or headless lookup failed');
+    reply.code(403);
+    return { error: 'User not allowed' };
+  }
+
+  if (!headlessUser) {
     reply.code(403);
     return { error: 'User not allowed' };
   }
@@ -565,6 +575,10 @@ const localLoginSchema = z.object({
 
 app.get('/auth/microsoft/login', async (request, reply) => {
   const tenant = request.tenant;
+  if (!tenant.auth.microsoft) {
+    reply.code(501);
+    return { error: 'Microsoft authentication is not configured for this tenant' };
+  }
   const returnUrl = (request.query as any).returnUrl as string | undefined;
   const redirectTarget = selectMicrosoftRedirectUrl(tenant, request.headers.host);
   const state = createStateToken(tenant.tenantId, returnUrl);
@@ -601,6 +615,11 @@ app.get('/auth/microsoft/callback', async (request, reply) => {
   if (hostTenant && hostTenant.tenantId !== tenantFromState.tenantId) {
     reply.code(400);
     return { error: 'Tenant mismatch detected for OAuth callback' };
+  }
+
+  if (!tenantFromState.auth.microsoft) {
+    reply.code(501);
+    return { error: 'Microsoft authentication is not configured for this tenant' };
   }
 
   const redirectTarget = selectMicrosoftRedirectUrl(tenantFromState, request.headers.host);
@@ -648,8 +667,13 @@ app.get('/auth/microsoft/callback', async (request, reply) => {
 
   // Lookup user in the headless user table and enforce their allowed login method.
   let headlessUserId = profile.id ?? '';
+  let headlessUser: { id?: string; loginMethod?: string; roles?: string[]; displayName?: string } | undefined;
   try {
-    const headlessUser = await callHeadless<{ id?: string; loginMethod?: string }>(tenantFromState, `/users/by-email/${email}`, reply);
+    headlessUser = await callHeadless<{ id?: string; loginMethod?: string; roles?: string[]; displayName?: string }>(
+      tenantFromState,
+      `/users/by-email/${email}`,
+      reply,
+    );
     if (!headlessUser || !headlessUser.id) {
       reply.code(403);
       return { error: 'User not registered for this tenant' };
@@ -662,6 +686,11 @@ app.get('/auth/microsoft/callback', async (request, reply) => {
     headlessUserId = headlessUser.id;
   } catch (err) {
     request.log.info({ email, err }, 'User not allowed or headless lookup failed');
+    reply.code(403);
+    return { error: 'User not allowed' };
+  }
+
+  if (!headlessUser) {
     reply.code(403);
     return { error: 'User not allowed' };
   }
@@ -807,6 +836,68 @@ app.get('/api/analytics/assessments/:id', async (request, reply) => {
   const tenant = request.tenant;
   try {
     return await callHeadless(tenant, `/analytics/assessments/${assessmentId}`, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/summary', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  const query = request.query as Record<string, unknown> | undefined;
+  const queryString = query ? new URLSearchParams(query as Record<string, string>).toString() : '';
+  const path = `/analytics/assessments/${assessmentId}/summary${queryString ? `?${queryString}` : ''}`;
+  try {
+    return await callHeadless(tenant, path, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/funnel', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/analytics/assessments/${assessmentId}/funnel`, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/attempts-usage', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  try {
+    return await callHeadless(tenant, `/analytics/assessments/${assessmentId}/attempts-usage`, reply, undefined, request);
+  } catch (error) {
+    if (error instanceof HeadlessRequestError) {
+      reply.code(error.statusCode);
+      return { error: error.message };
+    }
+    throw error;
+  }
+});
+
+app.get('/api/analytics/assessments/:id/items/most-missed', async (request, reply) => {
+  const assessmentId = (request.params as { id: string }).id;
+  const tenant = request.tenant;
+  const query = request.query as Record<string, unknown> | undefined;
+  const queryString = query ? new URLSearchParams(query as Record<string, string>).toString() : '';
+  const path = `/analytics/assessments/${assessmentId}/items/most-missed${queryString ? `?${queryString}` : ''}`;
+  try {
+    return await callHeadless(tenant, path, reply, undefined, request);
   } catch (error) {
     if (error instanceof HeadlessRequestError) {
       reply.code(error.statusCode);

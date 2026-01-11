@@ -26,6 +26,15 @@ import { usePortalTheme } from './hooks/usePortalTheme';
 import { buildBffUrl, isBffEnabled } from './utils/bff';
 import { LoginPage } from './components/LoginPage';
 import AssessmentResultPage from './pages/AssessmentResultPage';
+import type {
+  AnalyticsAssessmentFunnel,
+  AnalyticsAssessmentSummary,
+  AnalyticsAttemptsUsage,
+  AnalyticsMostMissedResponse,
+  Assessment,
+  AssessmentAnalytics,
+  AttemptResponse,
+} from './utils/api';
 
 type NavItem = {
   id: string;
@@ -44,7 +53,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'learners', label: 'Learners', path: '/learners', requiresContentAuthor: true },
   { id: 'cohorts', label: 'Cohorts', path: '/cohorts', requiresContentAuthor: true },
   { id: 'users', label: 'Users', path: '/users', requiresTenantAdmin: true },
-  { id: 'analytics', label: 'Analytics', path: '/analytics' },
+  { id: 'analytics', label: 'Analytics', path: '/analytics', requiresContentAuthor: true },
   { id: 'snapshot-reports', label: 'Snapshot Reports', path: '/snapshot-reports', requiresTenantAdmin: true },
   { id: 'resources', label: 'Resources', path: '/resources' },
   { id: 'settings', label: 'Settings', requiresTenantAdmin: true, children: [
@@ -470,12 +479,271 @@ export default function App() {
     );
   };
 
-  const AnalyticsPage = () => (
-    <section className="portal-panel">
-      <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
-      <p className="mt-2 text-sm text-slate-600">Live dashboards are coming soon. In the meantime, use the My Assessments tab to fetch attempt-level metrics.</p>
-    </section>
-  );
+  const AnalyticsPage = () => {
+    const [assessments, setAssessments] = useState<Assessment[]>([]);
+    const [selectedAssessmentId, setSelectedAssessmentId] = useState<string>('');
+    const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [summary, setSummary] = useState<AnalyticsAssessmentSummary | null>(null);
+    const [funnel, setFunnel] = useState<AnalyticsAssessmentFunnel | null>(null);
+    const [attemptsUsage, setAttemptsUsage] = useState<AnalyticsAttemptsUsage | null>(null);
+    const [mostMissed, setMostMissed] = useState<AnalyticsMostMissedResponse | null>(null);
+
+    const percentLabel = useCallback((value: number) => `${Math.round(value * 100)}%`, []);
+
+    useEffect(() => {
+      if (!api) return;
+      if (!isContentAuthor && !isTenantAdmin) return;
+
+      let cancelled = false;
+      api.fetchAssessments()
+        .then((items) => {
+          if (cancelled) return;
+          setAssessments(items);
+          if (!selectedAssessmentId && items.length > 0) {
+            setSelectedAssessmentId(items[0].id);
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setLoadError((err as Error)?.message ?? 'Unable to load assessments');
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [api, isContentAuthor, isTenantAdmin, selectedAssessmentId]);
+
+    const loadAnalytics = useCallback(async () => {
+      if (!api) {
+        setLoadError('API client not available');
+        return;
+      }
+      if (!selectedAssessmentId) {
+        setLoadError('Pick an assessment first');
+        return;
+      }
+
+      setLoading(true);
+      setLoadError(null);
+      setSummary(null);
+      setFunnel(null);
+      setAttemptsUsage(null);
+      setMostMissed(null);
+
+      try {
+        const [s, f, u, m] = await Promise.all([
+          api.fetchAssessmentAnalyticsSummary(selectedAssessmentId),
+          api.fetchAssessmentAnalyticsFunnel(selectedAssessmentId),
+          api.fetchAssessmentAttemptsUsage(selectedAssessmentId),
+          api.fetchAssessmentMostMissedItems(selectedAssessmentId, { limit: 10 }),
+        ]);
+        setSummary(s);
+        setFunnel(f);
+        setAttemptsUsage(u);
+        setMostMissed(m);
+      } catch (err) {
+        setLoadError((err as Error)?.message ?? 'Unable to load analytics');
+      } finally {
+        setLoading(false);
+      }
+    }, [api, selectedAssessmentId]);
+
+    const selectedAssessmentTitle = useMemo(() => {
+      return assessments.find(item => item.id === selectedAssessmentId)?.title ?? selectedAssessmentId;
+    }, [assessments, selectedAssessmentId]);
+
+    const distributionRows = useMemo(() => {
+      const buckets = summary?.distribution?.buckets ?? {};
+      const keys = Object.keys(buckets)
+        .sort((a, b) => {
+          const aStart = Number(a.split('-')[0] ?? 0);
+          const bStart = Number(b.split('-')[0] ?? 0);
+          return aStart - bStart;
+        });
+      const max = keys.reduce((acc, key) => Math.max(acc, buckets[key] ?? 0), 0);
+      return keys.map((key) => ({
+        key,
+        count: buckets[key] ?? 0,
+        widthPercent: max === 0 ? 0 : ((buckets[key] ?? 0) / max) * 100,
+      }));
+    }, [summary]);
+
+    if (!isContentAuthor && !isTenantAdmin) {
+      return (
+        <section className="portal-panel">
+          <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
+          <p className="mt-2 text-sm text-slate-600">You don't have access to analytics.</p>
+        </section>
+      );
+    }
+
+    return (
+      <section className="space-y-6">
+        <div className="portal-panel space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
+              <p className="mt-1 text-sm text-slate-600">Assessment performance, funnel, and item misses.</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Assessment
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 sm:w-80"
+                  value={selectedAssessmentId}
+                  onChange={(e) => setSelectedAssessmentId(e.target.value)}
+                >
+                  {assessments.length === 0 ? (
+                    <option value="">No assessments</option>
+                  ) : (
+                    assessments.map((assessment) => (
+                      <option key={assessment.id} value={assessment.id}>{assessment.title}</option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="portal-btn-primary"
+                onClick={loadAnalytics}
+                disabled={loading || !selectedAssessmentId}
+              >
+                {loading ? 'Loading...' : 'Load'}
+              </button>
+            </div>
+          </div>
+
+          {loadError && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {loadError}
+            </div>
+          )}
+        </div>
+
+        {(summary || funnel || attemptsUsage || mostMissed) && (
+          <div className="portal-panel">
+            <h3 className="text-base font-semibold text-slate-900">{selectedAssessmentTitle}</h3>
+            <p className="mt-1 text-xs text-slate-500">Assessment ID: {selectedAssessmentId}</p>
+          </div>
+        )}
+
+        {summary && (
+          <div className="portal-panel space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">Summary</h3>
+              <p className="text-xs text-slate-500">Scored attempts: {summary.scoredAttemptCount}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="portal-panel-tight">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Average</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-900">{percentLabel(summary.averagePercent)}</p>
+              </div>
+              <div className="portal-panel-tight">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Median</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-900">{percentLabel(summary.medianPercent)}</p>
+              </div>
+              <div className="portal-panel-tight">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pass Rate</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-900">{percentLabel(summary.passRate)}</p>
+                <p className="mt-1 text-xs text-slate-500">Threshold: {percentLabel(summary.passThreshold)}</p>
+              </div>
+              <div className="portal-panel-tight">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Completion</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-900">{Math.round(summary.completionTimeSeconds.average)}s</p>
+                <p className="mt-1 text-xs text-slate-500">Median: {Math.round(summary.completionTimeSeconds.median)}s ({summary.completionTimeSeconds.count} samples)</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-900">Score distribution</p>
+              {distributionRows.length === 0 ? (
+                <p className="text-sm text-slate-500">No scored attempts yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {distributionRows.map((row) => (
+                    <div key={row.key} className="flex items-center gap-3">
+                      <div className="w-20 text-xs text-slate-600">{row.key}%</div>
+                      <div className="flex-1">
+                        <div className="h-2 w-full rounded-full bg-slate-100">
+                          <div
+                            className="h-2 rounded-full bg-brand-500"
+                            style={{ width: `${row.widthPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="w-10 text-right text-xs text-slate-600">{row.count}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {funnel && (
+          <div className="portal-panel space-y-3">
+            <h3 className="text-base font-semibold text-slate-900">Funnel</h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Assigned</p><p className="text-xl font-semibold">{funnel.assignedLearnerCount}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Started</p><p className="text-xl font-semibold">{funnel.startedLearnerCount}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Submitted</p><p className="text-xl font-semibold">{funnel.submittedLearnerCount}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Scored</p><p className="text-xl font-semibold">{funnel.scoredLearnerCount}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Attempts</p><p className="text-xl font-semibold">{funnel.attemptCount}</p></div>
+            </div>
+          </div>
+        )}
+
+        {attemptsUsage && (
+          <div className="portal-panel space-y-3">
+            <h3 className="text-base font-semibold text-slate-900">Attempts usage</h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Assigned</p><p className="text-xl font-semibold">{attemptsUsage.assignedLearnerCount}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Attempted</p><p className="text-xl font-semibold">{attemptsUsage.learnersAttemptedCount}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Exhausted</p><p className="text-xl font-semibold">{attemptsUsage.learnersExhaustedCount}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Avg used</p><p className="text-xl font-semibold">{attemptsUsage.averageAttemptsUsed.toFixed(2)}</p></div>
+              <div className="portal-panel-tight"><p className="text-xs text-slate-500">Max used</p><p className="text-xl font-semibold">{attemptsUsage.maxAttemptsUsed}</p></div>
+            </div>
+          </div>
+        )}
+
+        {mostMissed && (
+          <div className="portal-panel space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">Most missed items</h3>
+              <p className="text-xs text-slate-500">Top {mostMissed.items.length}</p>
+            </div>
+            {mostMissed.items.length === 0 ? (
+              <p className="text-sm text-slate-500">No scored item responses yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                      <th className="py-2 pr-3">Item</th>
+                      <th className="py-2 pr-3">Attempts</th>
+                      <th className="py-2 pr-3">Avg</th>
+                      <th className="py-2 pr-3">Perfect</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mostMissed.items.map((item) => (
+                      <tr key={item.itemId} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-mono text-xs text-slate-700">{item.itemId}</td>
+                        <td className="py-2 pr-3 text-slate-700">{item.attemptCount}</td>
+                        <td className="py-2 pr-3 text-slate-700">{percentLabel(item.averagePercent)}</td>
+                        <td className="py-2 pr-3 text-slate-700">{percentLabel(item.perfectRate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    );
+  };
 
   const ResourcesPage = () => (
     <section className="portal-panel space-y-4">

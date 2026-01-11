@@ -20,6 +20,15 @@ The UI persists session details in `localStorage` to streamline demos.
 
 > Tip: copy `.env.example` to `.env.local` when you need to override `VITE_HOST`, `VITE_PORT`, or point the proxy at a remote BFF.
 
+## MVP analytics endpoints
+
+The portal calls analytics via the consumer BFF (`/api/*`) which forwards to the headless API.
+
+- `GET /api/analytics/assessments/:id/summary`
+- `GET /api/analytics/assessments/:id/funnel`
+- `GET /api/analytics/assessments/:id/attempts-usage`
+- `GET /api/analytics/assessments/:id/items/most-missed`
+
 ## Environment
 
 | Env var          | Description                                                                                      | Default                 |

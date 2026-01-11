@@ -253,6 +253,10 @@ When using the [Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/
 - POST /attempts/:id/submit
 - GET /attempts/:id
 - GET /analytics/assessments/:id
+- GET /analytics/assessments/:id/summary
+- GET /analytics/assessments/:id/funnel
+- GET /analytics/assessments/:id/attempts-usage
+- GET /analytics/assessments/:id/items/most-missed
 - POST /tenants/:id/admins (Super Admin only; creates tenant admins while impersonating the tenant)
 - POST /users (Tenant Admin contexts; invites Content Authors, Learners, or Raters via a non-empty `roles[]` payload)
 - GET /users/roles (lists tenant-manageable roles: `CONTENT_AUTHOR`, `LEARNER`, `RATER`)
