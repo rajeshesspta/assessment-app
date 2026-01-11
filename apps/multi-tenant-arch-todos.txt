@@ -186,6 +186,7 @@ Iteration 0 — MVP Analytics (ship first)
 - [ ] Storage/queries: implement efficient aggregate queries (avoid cross-partition patterns if Cosmos later).
 - [ ] Tests: route tests for happy paths + authorization + tenant isolation.
 - [ ] Docs: update analytics README with endpoint shapes + examples.
+- [ ] Consumer portal: support deep-linking analytics routes (e.g., `/analytics?assessmentId=...`) for shareable dashboards.
 
 Iteration 1 — Learner-facing analytics
 - [ ] Learner dashboard endpoints (self-only): progress, attempts used, score history, strengths/weaknesses by taxonomy.
